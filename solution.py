@@ -465,7 +465,100 @@ def _extract_visible_flags(text: str) -> list[str]:
     return found
 
 
-def _explicit_decision(pages: list[str]) -> str | None:
+def _supplementary_decision(case_id: str, pages: list[str]) -> str | None:
+    expected_id = case_id.split("-")[-1]
+    candidates: set[str] = set()
+    lower_precedence = re.compile(
+        r"registry\s+extract|fee\s+receipt|sponsor\s+attestation|"
+        r"work\s+authorization\s+intake|biometric\s+scan",
+        re.I,
+    )
+    class_patterns = {
+        "APPROVED": re.compile(r"\bAPPROVED\b", re.I),
+        "DENIED": re.compile(r"\bDENIED\b", re.I),
+        "NEEDS_REVIEW": re.compile(r"\bNEEDS[\s_-]*REVIEW\b", re.I),
+    }
+
+    for page in pages:
+        visible_ids = re.findall(r"\bMIB[- ]?(\d{6})\b", page, re.I)
+        if any(visible_id != expected_id for visible_id in visible_ids):
+            continue
+
+        exact_heading = bool(
+            re.search(r"\bManual\s+Adjudicator\s+Note\b", page, re.I)
+        )
+        if exact_heading:
+            page_candidates: set[str] = set()
+            views = re.split(
+                rf"{re.escape(_OCR_VIEW_SEPARATOR)}|"
+                rf"{re.escape(_NATIVE_VIEW_SEPARATOR)}",
+                page,
+            )
+            for view in views:
+                before_reason = re.split(r"\bReason\s*:", view, maxsplit=1, flags=re.I)[0]
+                for decision, pattern in class_patterns.items():
+                    if pattern.search(before_reason):
+                        page_candidates.add(decision)
+
+                for line in before_reason.splitlines():
+                    words = re.findall(r"[A-Za-z_]+", line)
+                    if len(words) >= 2:
+                        label_score = difflib.SequenceMatcher(
+                            None, _compact(words[-2]), "FINDING"
+                        ).ratio()
+                        value = _compact(words[-1])
+                        scored = [
+                            (
+                                difflib.SequenceMatcher(
+                                    None, value, _compact(decision)
+                                ).ratio(),
+                                decision,
+                            )
+                            for decision in ("DENIED", "APPROVED", "NEEDS_REVIEW")
+                        ]
+                        score, decision = max(scored)
+                        threshold = 0.78 if decision == "NEEDS_REVIEW" else 0.80
+                        if label_score >= 0.60 and score >= threshold:
+                            page_candidates.add(decision)
+
+                if not page_candidates:
+                    for token in re.findall(r"[A-Za-z_]{6,}", before_reason):
+                        scored = [
+                            (
+                                difflib.SequenceMatcher(
+                                    None, _compact(token), _compact(decision)
+                                ).ratio(),
+                                decision,
+                            )
+                            for decision in ("DENIED", "APPROVED")
+                        ]
+                        score, decision = max(scored)
+                        threshold = 0.83 if decision == "DENIED" else 0.87
+                        if score >= threshold:
+                            page_candidates.add(decision)
+            if len(page_candidates) == 1:
+                candidates.update(page_candidates)
+            continue
+
+        if lower_precedence.search(page):
+            continue
+        reason = re.search(r"\bReason\s*:\s*(.+)", page, re.I)
+        if not reason:
+            continue
+        reason_text = reason.group(1)
+        if re.search(
+            r"planetary[_\s-]*embargo|mandatory\s+fee\s+unpaid|"
+            r"active[_\s-]*warrant|memory[_\s-]*tampering|"
+            r"biohazard[_\s-]*red",
+            reason_text,
+            re.I,
+        ) and not re.search(r"rescinded\s+denial", reason_text, re.I):
+            candidates.add("DENIED")
+
+    return next(iter(candidates)) if len(candidates) == 1 else None
+
+
+def _explicit_decision(case_id: str, pages: list[str]) -> str | None:
     trusted_pages = []
     for page in pages:
         lower = page.lower()
@@ -527,7 +620,7 @@ def _explicit_decision(pages: list[str]) -> str | None:
         return "DENIED"
     if re.search(r"reason\s*:?.*(?:damaged|contradictory|incomplete).*(?:evidence|packet)", clean, re.I):
         return "NEEDS_REVIEW"
-    return None
+    return _supplementary_decision(case_id, pages)
 
 
 def _parse_packet(case_id: str, pages: list[str]) -> dict:
@@ -632,7 +725,7 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
         )
     }
 
-    decision = _explicit_decision(pages)
+    decision = _explicit_decision(case_id, pages)
     direct_decision = decision is not None
     if decision is None:
         if set(flags) & DISQUALIFYING:
