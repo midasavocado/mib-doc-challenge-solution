@@ -1755,6 +1755,50 @@ def _repair_rare_name_tokens(predictions: dict[str, dict]) -> None:
         prediction["applicant_name"] = " ".join(repaired)
 
 
+def _repair_collapsed_name_ligatures(predictions: dict[str, dict]) -> None:
+    """Reverse repeated OCR ``rn`` to ``m`` collapses using this batch."""
+    token_counts: Counter[str] = Counter()
+    spellings: dict[str, Counter[str]] = {}
+    for prediction in predictions.values():
+        name = prediction["applicant_name"]
+        if name == "unknown":
+            continue
+        for token in name.split():
+            key = token.casefold()
+            token_counts[key] += 1
+            spellings.setdefault(key, Counter())[token] += 1
+
+    for prediction in predictions.values():
+        name = prediction["applicant_name"]
+        if name == "unknown":
+            continue
+        repaired = []
+        for token in name.split():
+            key = token.casefold()
+            candidates = {
+                key[:index] + "rn" + key[index + 1:]
+                for index, character in enumerate(key)
+                if character == "m"
+            }
+            candidates = {
+                candidate
+                for candidate in candidates
+                if token_counts[candidate] >= 5
+                and token_counts[candidate] >= 2 * max(token_counts[key], 1)
+            }
+            if len(candidates) != 1:
+                repaired.append(token)
+                continue
+            target = candidates.pop()
+            repaired.append(
+                sorted(
+                    spellings[target].items(),
+                    key=lambda item: (-item[1], item[0]),
+                )[0][0]
+            )
+        prediction["applicant_name"] = " ".join(repaired)
+
+
 def _impute_closed_vocabulary_modes(predictions: dict[str, dict]) -> None:
     """Fill unresolved output fields from this batch without affecting policy."""
     fields = {
@@ -1800,6 +1844,7 @@ def main(input_dir: str, output_path: str) -> None:
                 )
 
     _repair_rare_name_tokens(predictions)
+    _repair_collapsed_name_ligatures(predictions)
     _impute_closed_vocabulary_modes(predictions)
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)

@@ -12,6 +12,10 @@ bounded 90-degree rotation retry. Rotated OCR may only fill fields that the
 upright evidence left unresolved; it cannot replace an existing field read or
 change the adjudication path.
 
+Repeated applicant-name tokens learned from the current input batch repair
+isolated edit-distance errors and the common OCR collapse of `rn` into `m`.
+These repairs use no labels, case IDs, or frozen applicant-name dictionary.
+
 Unresolved fee evidence remains unknown to the adjudication rules. Output-only
 fallbacks use either the public-training fee prior or modes learned from the
 current input batch for closed-vocabulary fields. These estimates are applied
