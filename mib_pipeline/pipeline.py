@@ -1755,6 +1755,31 @@ def _repair_rare_name_tokens(predictions: dict[str, dict]) -> None:
         prediction["applicant_name"] = " ".join(repaired)
 
 
+def _impute_closed_vocabulary_modes(predictions: dict[str, dict]) -> None:
+    """Fill unresolved output fields from this batch without affecting policy."""
+    fields = {
+        "species_code": "unknown",
+        "home_world": "unknown",
+        "visa_class": "unknown",
+        "declared_purpose": "unknown",
+    }
+    for field, sentinel in fields.items():
+        counts = Counter(
+            prediction[field]
+            for prediction in predictions.values()
+            if prediction[field] != sentinel
+        )
+        if sum(counts.values()) < 50:
+            continue
+        mode = sorted(
+            counts.items(),
+            key=lambda item: (-item[1], item[0]),
+        )[0][0]
+        for prediction in predictions.values():
+            if prediction[field] == sentinel:
+                prediction[field] = mode
+
+
 def main(input_dir: str, output_path: str) -> None:
     pdfs = sorted(Path(input_dir).glob("*.pdf"))
     workers = max(1, min(int(os.environ.get("MIB_MAX_WORKERS", "4")), 4))
@@ -1775,6 +1800,7 @@ def main(input_dir: str, output_path: str) -> None:
                 )
 
     _repair_rare_name_tokens(predictions)
+    _impute_closed_vocabulary_modes(predictions)
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w", encoding="utf-8") as handle:

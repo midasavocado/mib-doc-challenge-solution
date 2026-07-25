@@ -12,9 +12,10 @@ bounded 90-degree rotation retry. Rotated OCR may only fill fields that the
 upright evidence left unresolved; it cannot replace an existing field read or
 change the adjudication path.
 
-Unresolved fee evidence remains unknown to the adjudication rules. The emitted
-fee field uses the public-training modal class as a small candidate-trained
-fallback; this output estimate can never become approval evidence.
+Unresolved fee evidence remains unknown to the adjudication rules. Output-only
+fallbacks use either the public-training fee prior or modes learned from the
+current input batch for closed-vocabulary fields. These estimates are applied
+after adjudication and can never become approval evidence.
 
 Trusted visible findings and strong policy denials remain authoritative. Only
 the lower-confidence approve/review fallback is refined by a small offline
