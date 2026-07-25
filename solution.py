@@ -661,13 +661,13 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
             decision = "APPROVED"
 
     if direct_decision:
-        confidence = 0.97
+        confidence = 0.99
     elif decision == "DENIED":
-        confidence = 0.88
+        confidence = 0.94
     elif decision == "NEEDS_REVIEW":
-        confidence = 0.46
+        confidence = 0.38
     else:
-        confidence = 0.63
+        confidence = 0.58
 
     return {
         "case_id": case_id,
