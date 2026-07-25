@@ -1,5 +1,7 @@
 FROM python:3.12-slim
 
+ENV OMP_THREAD_LIMIT=1
+
 RUN apt-get update \
     && apt-get install -y --no-install-recommends poppler-utils tesseract-ocr \
     && apt-get clean \
