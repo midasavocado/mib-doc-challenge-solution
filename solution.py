@@ -11,6 +11,7 @@ from __future__ import annotations
 import concurrent.futures
 import difflib
 import json
+import math
 import os
 import re
 import subprocess
@@ -59,6 +60,11 @@ REVOKED_SPONSORS = {"SPN-0007", "SPN-0139", "SPN-4040"}
 _PRINT_LOCK = threading.Lock()
 _OCR_VIEW_SEPARATOR = "\n[OCR VIEW 6]\n"
 _NATIVE_VIEW_SEPARATOR = "\n[PIXEL-VERIFIED NATIVE TEXT]\n"
+_ADJUDICATION_MODEL = json.loads(
+    Path(__file__).with_name("adjudication_model.json").read_text(
+        encoding="utf-8"
+    )
+)
 
 
 def _normalized(text: str) -> str:
@@ -558,6 +564,111 @@ def _supplementary_decision(case_id: str, pages: list[str]) -> str | None:
     return next(iter(candidates)) if len(candidates) == 1 else None
 
 
+def _model_feature_row(
+    applicant: str | None,
+    species: str | None,
+    home_world: str | None,
+    visa: str | None,
+    sponsor: str | None,
+    arrival: str | None,
+    purpose: str | None,
+    visible_flags: list[str],
+    fee: str | None,
+    current_decision: str,
+) -> dict[str, object]:
+    arrival_age = -1
+    if arrival:
+        try:
+            reference = date.fromisoformat(
+                _ADJUDICATION_MODEL["reference_date"]
+            )
+            arrival_age = (reference - date.fromisoformat(arrival)).days
+        except ValueError:
+            pass
+    flag_set = set(visible_flags)
+    return {
+        "species": species or "unknown",
+        "home_world": home_world or "unknown",
+        "visa": visa or "unknown",
+        "purpose": purpose or "unknown",
+        "fee": fee or "unknown",
+        "current_decision": current_decision,
+        "manual_revoked": sponsor in REVOKED_SPONSORS,
+        "arrival_age": arrival_age,
+        "known_name": applicant is not None,
+        "known_species": species is not None,
+        "known_home": home_world is not None,
+        "known_visa": visa is not None,
+        "known_sponsor": sponsor is not None,
+        "known_arrival": arrival is not None,
+        "known_purpose": purpose is not None,
+        "known_fee": fee is not None,
+        "flag_count": len(flag_set),
+        **{f"flag_{flag}": flag in flag_set for flag in RISK_FLAGS},
+    }
+
+
+def _model_probabilities(features: dict[str, object]) -> list[float]:
+    vector: list[float] = []
+    for column, categories in _ADJUDICATION_MODEL["categorical"].items():
+        vector.extend(
+            float(features[column] == category) for category in categories
+        )
+    for column, median in _ADJUDICATION_MODEL["numeric_medians"].items():
+        value = features.get(column)
+        vector.append(float(median if value is None else value))
+
+    scores = list(_ADJUDICATION_MODEL["baseline"])
+    for iteration in _ADJUDICATION_MODEL["trees"]:
+        for class_index, nodes in enumerate(iteration):
+            node_index = 0
+            while True:
+                node = nodes[node_index]
+                if node["is_leaf"]:
+                    scores[class_index] += node["value"]
+                    break
+                value = vector[node["feature_idx"]]
+                if math.isnan(value):
+                    go_left = node["missing_go_to_left"]
+                else:
+                    go_left = value <= node["threshold"]
+                node_index = node["left"] if go_left else node["right"]
+
+    offset = max(scores)
+    exponentials = [math.exp(score - offset) for score in scores]
+    total = sum(exponentials)
+    return [value / total for value in exponentials]
+
+
+def _model_decision(features: dict[str, object]) -> tuple[str, float]:
+    classes = _ADJUDICATION_MODEL["classes"]
+    probabilities = _model_probabilities(features)
+    by_class = dict(zip(classes, probabilities, strict=True))
+    utilities = {
+        "APPROVED": (
+            8 * by_class["APPROVED"]
+            - 4 * by_class["DENIED"]
+            + by_class["NEEDS_REVIEW"]
+        ),
+        "DENIED": (
+            8 * by_class["DENIED"] + by_class["NEEDS_REVIEW"]
+        ),
+        "NEEDS_REVIEW": (
+            2 * by_class["APPROVED"]
+            + 2 * by_class["DENIED"]
+            + 8 * by_class["NEEDS_REVIEW"]
+        ),
+    }
+    decision = max(utilities, key=utilities.get)
+    ceiling = _ADJUDICATION_MODEL["decision"][
+        "approval_denial_ceiling"
+    ]
+    if decision == "APPROVED" and by_class["DENIED"] > ceiling:
+        decision = "NEEDS_REVIEW"
+    confidence = _ADJUDICATION_MODEL["decision"]["confidence"][decision]
+    return decision, confidence
+
+
 def _explicit_decision(case_id: str, pages: list[str]) -> str | None:
     trusted_pages = []
     for page in pages:
@@ -753,7 +864,25 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
         else:
             decision = "APPROVED"
 
-    if direct_decision:
+    modeled_confidence = None
+    if not direct_decision and decision != "DENIED":
+        model_features = _model_feature_row(
+            applicant,
+            species,
+            home_world,
+            visa,
+            sponsor,
+            arrival,
+            purpose,
+            visible_flags,
+            fee,
+            decision,
+        )
+        decision, modeled_confidence = _model_decision(model_features)
+
+    if modeled_confidence is not None:
+        confidence = modeled_confidence
+    elif direct_decision:
         confidence = 0.99
     elif decision == "DENIED":
         confidence = 0.94

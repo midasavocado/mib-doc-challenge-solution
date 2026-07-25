@@ -11,6 +11,11 @@ Unresolved fee evidence remains unknown to the adjudication rules. The emitted
 fee field uses the public-training modal class as a small candidate-trained
 fallback; this output estimate can never become approval evidence.
 
+Trusted visible findings and strong policy denials remain authoritative. Only
+the lower-confidence approve/review fallback is refined by a small offline
+candidate-trained histogram model. Its features exclude case IDs, applicant
+names, raw sponsor IDs, filenames, hashes, and document fingerprints.
+
 ## Run
 
 ```bash

@@ -6,7 +6,7 @@ RUN apt-get update \
     && find /var/lib/apt/lists -mindepth 1 -delete
 
 WORKDIR /app
-COPY run.sh solution.py /app/
+COPY run.sh solution.py adjudication_model.json /app/
 RUN chmod +x /app/run.sh
 
 ENTRYPOINT ["/app/run.sh"]
