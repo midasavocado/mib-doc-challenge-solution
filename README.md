@@ -7,6 +7,11 @@ The runtime renders every PDF page before reading it, then uses Tesseract OCR
 and deterministic evidence-resolution rules. It does not trust the native PDF
 text layer, hidden text, barcode instructions, or fake answer keys.
 
+Pages with a valid packet ID but no recognizable document heading receive a
+bounded 90-degree rotation retry. Rotated OCR may only fill fields that the
+upright evidence left unresolved; it cannot replace an existing field read or
+change the adjudication path.
+
 Unresolved fee evidence remains unknown to the adjudication rules. The emitted
 fee field uses the public-training modal class as a small candidate-trained
 fallback; this output estimate can never become approval evidence.

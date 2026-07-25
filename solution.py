@@ -200,6 +200,24 @@ def _read_pgm(path: Path) -> tuple[int, int, bytes]:
     return int(match.group(1)), int(match.group(2)), data[match.end():]
 
 
+def _rotate_pgm(source: Path, destination: Path, clockwise: bool) -> None:
+    width, height, pixels = _read_pgm(source)
+    if clockwise:
+        rotated = b"".join(
+            pixels[(height - 1) * width + column:column - 1:-width]
+            if column
+            else pixels[(height - 1) * width::-width]
+            for column in range(width)
+        )
+    else:
+        rotated = b"".join(
+            pixels[column::width] for column in range(width - 1, -1, -1)
+        )
+    destination.write_bytes(
+        f"P5\n{height} {width}\n255\n".encode() + rotated
+    )
+
+
 def _word_has_visible_ink(
     word: ET.Element,
     page_width: float,
@@ -317,7 +335,7 @@ def _render_and_ocr(pdf: Path) -> list[str]:
             }
             if any(page_id != expected_id for page_id in page_ids):
                 native_pages[index] = ""
-        return [
+        pages = [
             _ocr_page(image, 11)
             + _OCR_VIEW_SEPARATOR
             + _ocr_page(image, 6)
@@ -325,6 +343,80 @@ def _render_and_ocr(pdf: Path) -> list[str]:
             + native_pages[index]
             for index, image in enumerate(images)
         ]
+        heading = re.compile(
+            r"FORM\s+(?:I-8090|B-13)|Biometric\s+Scan\s+Slip|"
+            r"(?:Planetary\s+)?Registry\s+Extract|Sponsor\s+Attestation|"
+            r"MIB\s+Fee\s+Receipt|Manual\s+Adjudicator\s+Note",
+            re.I,
+        )
+        for index, page in enumerate(pages):
+            visible_ids = {
+                f"MIB-{match}"
+                for match in re.findall(r"\bMIB[- ]?(\d{6})\b", page, re.I)
+            }
+            if (
+                expected_id not in visible_ids
+                or any(page_id != expected_id for page_id in visible_ids)
+                or heading.search(page)
+            ):
+                continue
+            rotated_views = []
+            for label, clockwise in (("cw", True), ("ccw", False)):
+                rotated = temp_dir / f"rotated-{index}-{label}.pgm"
+                _rotate_pgm(images[index], rotated, clockwise)
+                view = _ocr_page(rotated, 12)
+                rotated_ids = {
+                    f"MIB-{match}"
+                    for match in re.findall(
+                        r"\bMIB[- ]?(\d{6})\b", view, re.I
+                    )
+                }
+                biometric_layout = bool(
+                    re.search(r"species\s+match", view, re.I)
+                    and re.search(r"observed\s+flags?", view, re.I)
+                )
+                field_count = sum(
+                    bool(re.search(pattern, view, re.I))
+                    for pattern in (
+                        r"applicant|registry\s+name",
+                        r"species\s+(?:code|match)",
+                        r"home\s+world",
+                        r"visa\s+class",
+                        r"sponsor\s+id",
+                        r"arrival\s+date",
+                        r"(?:declared\s+)?purpose",
+                        r"observed\s+flags?",
+                        r"fee\s+status",
+                        r"finding",
+                    )
+                )
+                if (
+                    expected_id in rotated_ids
+                    and not any(
+                        page_id != expected_id for page_id in rotated_ids
+                    )
+                    and (
+                        heading.search(view)
+                        or biometric_layout
+                        or field_count >= 3
+                    )
+                ):
+                    safe_lines = []
+                    for line in view.splitlines():
+                        if re.search(
+                            r"\b(?:applicant(?:\s+name)?|registry\s+name)\b|"
+                            r"\battests\s+that\b",
+                            line,
+                            re.I,
+                        ):
+                            continue
+                        safe_lines.append(line)
+                    rotated_views.append("\n".join(safe_lines))
+            if rotated_views:
+                pages[index] += "\n[ROTATED OCR VIEW]\n" + "\n".join(
+                    rotated_views
+                )
+        return pages
 
 
 def _extract_date(text: str, label: str) -> str | None:
@@ -345,7 +437,14 @@ def _extract_scoped_flags(case_id: str, pages: list[str]) -> tuple[list[str], st
     biometric_page_seen = False
     expected_id = case_id.split("-")[-1]
     for page in pages:
-        if not re.search(r"FORM\s+B-13|Biometric\s+Scan\s+Slip", page, re.I):
+        biometric_layout = bool(
+            re.search(r"FORM\s+B-13|Biometric\s+Scan\s+Slip", page, re.I)
+            or (
+                re.search(r"species\s+match", page, re.I)
+                and re.search(r"observed\s+flags?", page, re.I)
+            )
+        )
+        if not biometric_layout:
             continue
         biometric_page_seen = True
         visible_ids = re.findall(r"\bMIB[- ]?(\d{6})\b", page, re.I)
@@ -963,7 +1062,30 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
 
 def _process(pdf: Path) -> dict:
     try:
-        return _parse_packet(pdf.stem, _render_and_ocr(pdf))
+        pages = _render_and_ocr(pdf)
+        rotated_separator = "\n[ROTATED OCR VIEW]\n"
+        if not any(rotated_separator in page for page in pages):
+            return _parse_packet(pdf.stem, pages)
+
+        base_pages = [
+            page.split(rotated_separator, 1)[0] for page in pages
+        ]
+        base = _parse_packet(pdf.stem, base_pages)
+        enriched = _parse_packet(pdf.stem, pages)
+        sentinels = {
+            "applicant_name": "unknown",
+            "species_code": "unknown",
+            "home_world": "unknown",
+            "visa_class": "unknown",
+            "sponsor_id": "SPN-0000",
+            "arrival_date": "1900-01-01",
+            "declared_purpose": "unknown",
+            "risk_flags": "none",
+        }
+        for field, sentinel in sentinels.items():
+            if base[field] == sentinel and enriched[field] != sentinel:
+                base[field] = enriched[field]
+        return base
     except Exception as error:
         with _PRINT_LOCK:
             print(f"warning: {pdf.stem}: {type(error).__name__}: {error}", file=sys.stderr)
