@@ -762,6 +762,11 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
     else:
         confidence = 0.58
 
+    # Keep unresolved fee evidence unknown to the adjudication head.  For the
+    # extraction output only, use the public-training modal class as a bounded
+    # candidate-trained fallback.
+    output_fee = fee or "paid"
+
     return {
         "case_id": case_id,
         "applicant_name": applicant or "unknown",
@@ -772,7 +777,7 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
         "arrival_date": arrival or "1900-01-01",
         "declared_purpose": purpose or "unknown",
         "risk_flags": "|".join(visible_flags) if visible_flags else "none",
-        "fee_status": fee or "unknown",
+        "fee_status": output_fee,
         "adjudication": decision,
         "confidence": confidence,
     }

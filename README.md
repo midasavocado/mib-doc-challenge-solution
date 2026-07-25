@@ -7,6 +7,10 @@ The runtime renders every PDF page before reading it, then uses Tesseract OCR
 and deterministic evidence-resolution rules. It does not trust the native PDF
 text layer, hidden text, barcode instructions, or fake answer keys.
 
+Unresolved fee evidence remains unknown to the adjudication rules. The emitted
+fee field uses the public-training modal class as a small candidate-trained
+fallback; this output estimate can never become approval evidence.
+
 ## Run
 
 ```bash
