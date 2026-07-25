@@ -419,6 +419,79 @@ def _render_and_ocr(pdf: Path) -> list[str]:
         return pages
 
 
+def _high_resolution_finding(
+    pdf: Path,
+    pages: list[str],
+) -> str | None:
+    expected_id = pdf.stem.split("-")[-1]
+    candidate_pages = []
+    for index, page in enumerate(pages, 1):
+        visible_ids = re.findall(r"\bMIB[- ]?(\d{6})\b", page, re.I)
+        if expected_id not in visible_ids or any(
+            visible_id != expected_id for visible_id in visible_ids
+        ):
+            continue
+        primary_view = page.split(_OCR_VIEW_SEPARATOR, 1)[0]
+        heading_lines = [
+            _compact(line)
+            for line in primary_view.splitlines()
+            if _compact(line)
+        ][:4]
+        heading_score = max(
+            (
+                difflib.SequenceMatcher(
+                    None,
+                    line,
+                    "MANUALADJUDICATORNOTE",
+                ).ratio()
+                for line in heading_lines
+            ),
+            default=0.0,
+        )
+        if heading_score >= 0.55:
+            candidate_pages.append(index)
+
+    if not candidate_pages:
+        return None
+
+    found: set[str] = set()
+    with tempfile.TemporaryDirectory(prefix="mib-finding-") as temp:
+        temp_dir = Path(temp)
+        for page_number in candidate_pages:
+            prefix = temp_dir / f"page-{page_number}"
+            subprocess.run(
+                [
+                    "pdftoppm", "-gray", "-r", "400",
+                    "-f", str(page_number), "-l", str(page_number),
+                    "-singlefile", str(pdf), str(prefix),
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=20,
+                check=True,
+            )
+            view = _ocr_page(prefix.with_suffix(".pgm"), 6)
+            if re.search(
+                r"answer\s+key|training\s+example|sample\s+denial|"
+                r"force\s+adjudication",
+                view,
+                re.I,
+            ):
+                continue
+            matches = {
+                re.sub(r"[\s_-]+", "_", match.group(1).upper())
+                for match in re.finditer(
+                    r"\bFinding\s*:\s*"
+                    r"(APPROVED|DENIED|NEEDS[\s_-]*REVIEW)\b",
+                    view,
+                    re.I,
+                )
+            }
+            if len(matches) == 1:
+                found.update(matches)
+    return found.pop() if len(found) == 1 else None
+
+
 def _extract_date(text: str, label: str) -> str | None:
     for value in _labeled_values(text, (label,)):
         match = re.search(r"\b(20\d{2})[-/.](\d{2})[-/.](\d{2})\b", value)
@@ -477,6 +550,142 @@ def _manual_visa_correction(
         if votes >= 2
     ]
     return winners[0] if len(winners) == 1 else None
+
+
+def _manual_applicant_correction(
+    case_id: str,
+    pages: list[str],
+) -> str | None:
+    expected_id = case_id.split("-")[-1]
+    votes: Counter[str] = Counter()
+    spellings: dict[str, str] = {}
+    for page in pages:
+        views = re.split(
+            rf"{re.escape(_OCR_VIEW_SEPARATOR)}|"
+            rf"{re.escape(_NATIVE_VIEW_SEPARATOR)}|"
+            r"\n\[ROTATED OCR VIEW\]\n",
+            page,
+        )
+        for view in views:
+            visible_ids = re.findall(r"\bMIB[- ]?(\d{6})\b", view, re.I)
+            if expected_id not in visible_ids or any(
+                visible_id != expected_id for visible_id in visible_ids
+            ):
+                continue
+            if not re.search(
+                r"FORM\s+I-8090|Primary\s+intake\s+record",
+                view,
+                re.I,
+            ):
+                continue
+            candidates = {
+                " ".join(match.groups())
+                for match in re.finditer(
+                    r"manual\s+correction\s*:\s*applicant\s+is\s+"
+                    r"([A-Za-z][A-Za-z'-]+)\s+([A-Za-z][A-Za-z'-]+)\b",
+                    view,
+                    re.I,
+                )
+            }
+            if len(candidates) == 1:
+                candidate = candidates.pop()
+                key = candidate.lower()
+                votes[key] += 1
+                spellings[key] = candidate
+    winners = [key for key, count in votes.items() if count >= 2]
+    return spellings[winners[0]] if len(winners) == 1 else None
+
+
+def _manual_fee_correction(
+    case_id: str,
+    pages: list[str],
+) -> str | None:
+    expected_id = case_id.split("-")[-1]
+    votes: Counter[str] = Counter()
+    for page in pages:
+        views = re.split(
+            rf"{re.escape(_OCR_VIEW_SEPARATOR)}|"
+            rf"{re.escape(_NATIVE_VIEW_SEPARATOR)}|"
+            r"\n\[ROTATED OCR VIEW\]\n",
+            page,
+        )
+        for view in views:
+            visible_ids = re.findall(r"\bMIB[- ]?(\d{6})\b", view, re.I)
+            if expected_id not in visible_ids or any(
+                visible_id != expected_id for visible_id in visible_ids
+            ):
+                continue
+            if not re.search(
+                r"FORM\s+I-8090|Primary\s+intake\s+record",
+                view,
+                re.I,
+            ):
+                continue
+            values = {
+                match.group(1).lower()
+                for match in re.finditer(
+                    r"manual\s+correction\s*:\s*fee\s+status\s+is\s+"
+                    r"(paid|waived|unpaid|unknown)\b",
+                    view,
+                    re.I,
+                )
+            }
+            if len(values) == 1:
+                votes.update(values)
+    winners = [value for value, count in votes.items() if count >= 2]
+    return winners[0] if len(winners) == 1 else None
+
+
+def _trusted_stale_intake(case_id: str, pages: list[str]) -> bool:
+    """Apply the documented 180-day rule only to intake-bound consensus."""
+    reference_text = os.environ.get(
+        "MIB_PACKET_RECEIPT_DATE",
+        str(_ADJUDICATION_MODEL["reference_date"]),
+    )
+    try:
+        reference = date.fromisoformat(reference_text)
+    except ValueError:
+        return False
+
+    expected_id = case_id.split("-")[-1]
+    pairs: set[tuple[str, str]] = set()
+    for page in pages:
+        page_ids = re.findall(r"\bMIB[- ]?(\d{6})\b", page, re.I)
+        if expected_id not in page_ids or any(
+            visible_id != expected_id for visible_id in page_ids
+        ):
+            continue
+        if not re.search(
+            r"FORM\s+I-8090|Primary\s+intake\s+record",
+            page,
+            re.I,
+        ):
+            continue
+        if _NATIVE_VIEW_SEPARATOR not in page:
+            continue
+        native_view = page.split(_NATIVE_VIEW_SEPARATOR, 1)[1].split(
+            "\n[ROTATED OCR VIEW]\n",
+            1,
+        )[0]
+        visa = _fuzzy_closed_value(
+            native_view,
+            ("Visa Class",),
+            VISAS,
+            0.70,
+        )
+        arrival = _extract_date(native_view, "Arrival Date")
+        if visa is not None and arrival is not None:
+            pairs.add((visa, arrival))
+
+    if len(pairs) != 1:
+        return False
+    visa, arrival_text = pairs.pop()
+    if visa == "DIP-1":
+        return False
+    try:
+        return (reference - date.fromisoformat(arrival_text)).days > 180
+    except ValueError:
+        return False
 
 
 def _sponsor_attested_visa(
@@ -690,6 +899,99 @@ def _extract_scoped_flags(case_id: str, pages: list[str]) -> tuple[list[str], st
     if re.search(r"observed\s+flags?\s*:?\s*(?:\n\s*)?none\b", trusted, re.I):
         return [], "clean"
     return [], "unknown" if biometric_page_seen else "absent"
+
+
+def _risk_crop_view_candidate(text: str) -> str | None:
+    if not re.search(r"\bB-?13\b|Biometric\s+Scan\s+Slip", text, re.I):
+        return None
+    if not re.search(
+        r"\bSpecies\s+Match\b|\bSpecies\b.{0,12}\bMatch\b",
+        text,
+        re.I,
+    ):
+        return None
+
+    candidates: set[str] = set()
+    for token in re.findall(r"[A-Za-z0-9]+(?:_[A-Za-z0-9]+)+", text):
+        token_key = _compact(token)
+        if len(token_key) < 8:
+            continue
+        ranked = sorted(
+            (
+                difflib.SequenceMatcher(
+                    None,
+                    token_key,
+                    _compact(flag),
+                ).ratio(),
+                flag,
+            )
+            for flag in RISK_FLAGS
+        )
+        best_score, best_flag = ranked[-1]
+        second_score = ranked[-2][0]
+        if best_score >= 0.66 and best_score - second_score >= 0.20:
+            candidates.add(best_flag)
+    return candidates.pop() if len(candidates) == 1 else None
+
+
+def _high_resolution_risk_flags(
+    pdf: Path,
+    pages: list[str],
+) -> list[str]:
+    current_flags, state = _extract_scoped_flags(pdf.stem, pages)
+    if current_flags or state != "unknown":
+        return []
+
+    expected_id = pdf.stem.split("-")[-1]
+    candidate_pages = []
+    for index, page in enumerate(pages, 1):
+        biometric_layout = bool(
+            re.search(r"FORM\s+B-13|Biometric\s+Scan\s+Slip", page, re.I)
+            or (
+                re.search(r"species\s+match", page, re.I)
+                and re.search(r"observed\s+flags?", page, re.I)
+            )
+        )
+        if not biometric_layout:
+            continue
+        visible_ids = re.findall(r"\bMIB[- ]?(\d{6})\b", page, re.I)
+        if expected_id in visible_ids and not any(
+            visible_id != expected_id for visible_id in visible_ids
+        ):
+            candidate_pages.append(index)
+
+    found: set[str] = set()
+    with tempfile.TemporaryDirectory(prefix="mib-risk-crop-") as temp:
+        temp_dir = Path(temp)
+        for page_number in candidate_pages:
+            prefix = temp_dir / f"page-{page_number}"
+            subprocess.run(
+                [
+                    "pdftoppm", "-gray", "-r", "400",
+                    "-f", str(page_number), "-l", str(page_number),
+                    "-singlefile",
+                    "-x", "0", "-y", "100", "-W", "2200", "-H", "1250",
+                    str(pdf), str(prefix),
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=20,
+                check=True,
+            )
+            image = prefix.with_suffix(".pgm")
+            votes: Counter[str] = Counter()
+            for psm in (11, 12):
+                candidate = _risk_crop_view_candidate(_ocr_page(image, psm))
+                if candidate:
+                    votes[candidate] += 1
+            winners = [
+                flag
+                for flag, vote_count in votes.items()
+                if vote_count == 2
+            ]
+            if len(winners) == 1:
+                found.add(winners[0])
+    return sorted(found) if len(found) == 1 else []
 
 
 def _extract_visible_flags(text: str) -> list[str]:
@@ -1098,6 +1400,10 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
     )
     applicant = _registry_name(case_id, pages)
     applicant = applicant or parsed_applicant
+    output_applicant = (
+        _manual_applicant_correction(case_id, pages)
+        or applicant
+    )
 
     species = _fuzzy_closed_value(
         text, ("Species Code", "Species Match"), SPECIES, 0.67
@@ -1156,6 +1462,11 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
     )
     flags, flags_state = _extract_scoped_flags(case_id, pages)
     visible_flags = _extract_visible_flags(text)
+    output_flags = (
+        flags
+        if flags_state in {"clean", "positive"}
+        else visible_flags
+    )
 
     fee = None
     for page in pages:
@@ -1178,6 +1489,7 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
         fee = "unpaid"
     receipt_proves_paid = _receipt_proves_paid(case_id, pages)
     policy_fee = "paid" if receipt_proves_paid else fee
+    output_fee = _manual_fee_correction(case_id, pages) or policy_fee or "paid"
 
     revoked_mentions = {
         f"SPN-{re.sub(r'\\D', '', match.group(1))}"
@@ -1210,6 +1522,8 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
         ):
             decision = "DENIED"
         elif policy_fee == "unpaid":
+            decision = "DENIED"
+        elif _trusted_stale_intake(case_id, pages):
             decision = "DENIED"
         elif set(flags) & REVIEW_ONLY:
             decision = "NEEDS_REVIEW"
@@ -1247,22 +1561,12 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
             decision,
         )
         decision, modeled_confidence = _model_decision(model_features)
-        if (
-            receipt_proves_paid
-            and fee == "unpaid"
-            and decision == "APPROVED"
-        ):
-            probabilities = _model_probabilities(model_features)
-            by_class = dict(
-                zip(
-                    _ADJUDICATION_MODEL["classes"],
-                    probabilities,
-                    strict=True,
-                )
-            )
-            if by_class["APPROVED"] < 0.98:
-                decision = "DENIED"
-                modeled_confidence = None
+        if receipt_proves_paid and fee == "unpaid":
+            # A case-scoped receipt and an explicit unpaid finding are
+            # contradictory primary evidence.  Do not let a fitted numeric
+            # cutoff turn that conflict into either a hard denial or approval.
+            decision = "NEEDS_REVIEW"
+            modeled_confidence = None
 
     if modeled_confidence is not None:
         confidence = modeled_confidence
@@ -1275,21 +1579,16 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
     else:
         confidence = 0.58
 
-    # Keep unresolved fee evidence unknown to the adjudication head.  For the
-    # extraction output only, use the public-training modal class as a bounded
-    # candidate-trained fallback.
-    output_fee = policy_fee or "paid"
-
     return {
         "case_id": case_id,
-        "applicant_name": applicant or "unknown",
+        "applicant_name": output_applicant or "unknown",
         "species_code": species or "unknown",
         "home_world": home_world or "unknown",
         "visa_class": visa or "unknown",
         "sponsor_id": sponsor or "SPN-0000",
         "arrival_date": arrival or "1900-01-01",
         "declared_purpose": purpose or "unknown",
-        "risk_flags": "|".join(visible_flags) if visible_flags else "none",
+        "risk_flags": "|".join(output_flags) if output_flags else "none",
         "fee_status": output_fee,
         "adjudication": decision,
         "confidence": confidence,
@@ -1301,37 +1600,48 @@ def _process(pdf: Path) -> dict:
         pages = _render_and_ocr(pdf)
         rotated_separator = "\n[ROTATED OCR VIEW]\n"
         if not any(rotated_separator in page for page in pages):
-            return _parse_packet(pdf.stem, pages)
+            result = _parse_packet(pdf.stem, pages)
+        else:
+            base_pages = [
+                page.split(rotated_separator, 1)[0] for page in pages
+            ]
+            base = _parse_packet(pdf.stem, base_pages)
+            enriched = _parse_packet(pdf.stem, pages)
+            sentinels = {
+                "applicant_name": "unknown",
+                "species_code": "unknown",
+                "home_world": "unknown",
+                "visa_class": "unknown",
+                "sponsor_id": "SPN-0000",
+                "arrival_date": "1900-01-01",
+                "declared_purpose": "unknown",
+                "risk_flags": "none",
+            }
+            base_visa_before_enrichment = base["visa_class"]
+            for field, sentinel in sentinels.items():
+                if base[field] == sentinel and enriched[field] != sentinel:
+                    base[field] = enriched[field]
+            if (
+                base["adjudication"] == "DENIED"
+                and base_visa_before_enrichment == "unknown"
+                and base["sponsor_id"] in REVOKED_SPONSORS
+                and base["visa_class"] == "DIP-1"
+                and enriched["adjudication"] != "DENIED"
+            ):
+                base["adjudication"] = enriched["adjudication"]
+                base["confidence"] = enriched["confidence"]
+            result = base
 
-        base_pages = [
-            page.split(rotated_separator, 1)[0] for page in pages
-        ]
-        base = _parse_packet(pdf.stem, base_pages)
-        enriched = _parse_packet(pdf.stem, pages)
-        sentinels = {
-            "applicant_name": "unknown",
-            "species_code": "unknown",
-            "home_world": "unknown",
-            "visa_class": "unknown",
-            "sponsor_id": "SPN-0000",
-            "arrival_date": "1900-01-01",
-            "declared_purpose": "unknown",
-            "risk_flags": "none",
-        }
-        base_visa_before_enrichment = base["visa_class"]
-        for field, sentinel in sentinels.items():
-            if base[field] == sentinel and enriched[field] != sentinel:
-                base[field] = enriched[field]
-        if (
-            base["adjudication"] == "DENIED"
-            and base_visa_before_enrichment == "unknown"
-            and base["sponsor_id"] in REVOKED_SPONSORS
-            and base["visa_class"] == "DIP-1"
-            and enriched["adjudication"] != "DENIED"
-        ):
-            base["adjudication"] = enriched["adjudication"]
-            base["confidence"] = enriched["confidence"]
-        return base
+        if result["confidence"] != 0.99:
+            high_resolution_finding = _high_resolution_finding(pdf, pages)
+            if high_resolution_finding is not None:
+                result["adjudication"] = high_resolution_finding
+                result["confidence"] = 0.99
+        if result["risk_flags"] == "none":
+            high_resolution_flags = _high_resolution_risk_flags(pdf, pages)
+            if high_resolution_flags:
+                result["risk_flags"] = "|".join(high_resolution_flags)
+        return result
     except Exception as error:
         with _PRINT_LOCK:
             print(f"warning: {pdf.stem}: {type(error).__name__}: {error}", file=sys.stderr)
