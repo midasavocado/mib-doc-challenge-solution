@@ -1075,10 +1075,17 @@ def _supplementary_decision(case_id: str, pages: list[str]) -> str | None:
         if any(visible_id != expected_id for visible_id in visible_ids):
             continue
 
-        exact_heading = bool(
-            re.search(r"\bManual\s+Adjudicator\s+Note\b", page, re.I)
+        note_heading = any(
+            "MANUAL" in _compact(line)
+            and "NOTE" in _compact(line)
+            and difflib.SequenceMatcher(
+                None,
+                _compact(line),
+                "MANUALADJUDICATORNOTE",
+            ).ratio() >= 0.85
+            for line in page.splitlines()
         )
-        if exact_heading:
+        if note_heading:
             page_candidates: set[str] = set()
             views = re.split(
                 rf"{re.escape(_OCR_VIEW_SEPARATOR)}|"
@@ -1127,6 +1134,19 @@ def _supplementary_decision(case_id: str, pages: list[str]) -> str | None:
                         threshold = 0.83 if decision == "DENIED" else 0.87
                         if score >= threshold:
                             page_candidates.add(decision)
+
+                # A damaged Finding line can leave the signed note's semantic
+                # reason intact. Keep this hard approval phrase deliberately
+                # narrow so it cannot match generic clean-check language.
+                for reason in re.findall(
+                    r"\bReason\s*:\s*([^\n]+)", view, re.I
+                ):
+                    if re.search(
+                        r"\bclean\b.*\bexception[-\s]*qualif\w*\b.*\bpacket\b",
+                        reason,
+                        re.I,
+                    ):
+                        page_candidates.add("APPROVED")
             if len(page_candidates) == 1:
                 candidates.update(page_candidates)
             continue
@@ -1661,6 +1681,80 @@ def _process(pdf: Path) -> dict:
         }
 
 
+def _levenshtein(left: str, right: str) -> int:
+    previous = list(range(len(right) + 1))
+    for left_index, left_character in enumerate(left, 1):
+        current = [left_index]
+        for right_index, right_character in enumerate(right, 1):
+            current.append(
+                min(
+                    current[-1] + 1,
+                    previous[right_index] + 1,
+                    previous[right_index - 1]
+                    + int(left_character != right_character),
+                )
+            )
+        previous = current
+    return previous[-1]
+
+
+def _repair_rare_name_tokens(predictions: dict[str, dict]) -> None:
+    """Repair isolated OCR slips using only repeated names in this input batch."""
+    token_counts: Counter[str] = Counter()
+    spellings: dict[str, Counter[str]] = {}
+    for prediction in predictions.values():
+        tokens = prediction["applicant_name"].split()
+        if (
+            len(tokens) != 2
+            or prediction["applicant_name"] == "unknown"
+            or not all(re.fullmatch(r"[A-Za-z][A-Za-z'-]{2,}", token) for token in tokens)
+        ):
+            continue
+        for token in tokens:
+            key = token.casefold()
+            token_counts[key] += 1
+            spellings.setdefault(key, Counter())[token] += 1
+
+    vocabulary = sorted(
+        token for token, count in token_counts.items() if count >= 5
+    )
+    if not vocabulary:
+        return
+
+    for prediction in predictions.values():
+        tokens = prediction["applicant_name"].split()
+        if (
+            len(tokens) != 2
+            or prediction["applicant_name"] == "unknown"
+            or not all(re.fullmatch(r"[A-Za-z][A-Za-z'-]{2,}", token) for token in tokens)
+        ):
+            continue
+        repaired = []
+        for token in tokens:
+            key = token.casefold()
+            if token_counts[key] > 1:
+                repaired.append(token)
+                continue
+            ranked = sorted(
+                (_levenshtein(key, candidate), candidate)
+                for candidate in vocabulary
+            )
+            if (
+                ranked[0][0] > 2
+                or (len(ranked) > 1 and ranked[0][0] == ranked[1][0])
+            ):
+                repaired.append(token)
+                continue
+            target = ranked[0][1]
+            repaired.append(
+                sorted(
+                    spellings[target].items(),
+                    key=lambda item: (-item[1], item[0]),
+                )[0][0]
+            )
+        prediction["applicant_name"] = " ".join(repaired)
+
+
 def main(input_dir: str, output_path: str) -> None:
     pdfs = sorted(Path(input_dir).glob("*.pdf"))
     workers = max(1, min(int(os.environ.get("MIB_MAX_WORKERS", "4")), 4))
@@ -1680,6 +1774,7 @@ def main(input_dir: str, output_path: str) -> None:
                     flush=True,
                 )
 
+    _repair_rare_name_tokens(predictions)
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w", encoding="utf-8") as handle:
