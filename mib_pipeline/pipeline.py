@@ -432,6 +432,185 @@ def _extract_date(text: str, label: str) -> str | None:
     return None
 
 
+def _manual_visa_correction(
+    case_id: str,
+    pages: list[str],
+) -> str | None:
+    expected_id = case_id.split("-")[-1]
+    corrections: Counter[str] = Counter()
+    visa_pattern = "|".join(
+        re.escape(value) for value in sorted(VISAS, key=len, reverse=True)
+    )
+    for page in pages:
+        views = re.split(
+            rf"{re.escape(_OCR_VIEW_SEPARATOR)}|"
+            rf"{re.escape(_NATIVE_VIEW_SEPARATOR)}|"
+            r"\n\[ROTATED OCR VIEW\]\n",
+            page,
+        )
+        for view in views:
+            visible_ids = re.findall(r"\bMIB[- ]?(\d{6})\b", view, re.I)
+            if expected_id not in visible_ids or any(
+                visible_id != expected_id for visible_id in visible_ids
+            ):
+                continue
+            if not re.search(
+                r"FORM\s+I-8090|Primary\s+intake\s+record",
+                view,
+                re.I,
+            ):
+                continue
+            values = {
+                value
+                for match in re.finditer(
+                    rf"manual\s+correction\s*:\s*visa\s+class\s+"
+                    rf"(?:is|to|=)\s*({visa_pattern})\b",
+                    view,
+                    re.I,
+                )
+                if (value := _vocabulary_value(match.group(1), VISAS))
+            }
+            if len(values) == 1:
+                corrections.update(values)
+    winners = [
+        value for value, votes in corrections.items()
+        if votes >= 2
+    ]
+    return winners[0] if len(winners) == 1 else None
+
+
+def _sponsor_attested_visa(
+    case_id: str,
+    pages: list[str],
+) -> str | None:
+    expected_id = case_id.split("-")[-1]
+    votes: Counter[str] = Counter()
+    visa_pattern = "|".join(
+        re.escape(value) for value in sorted(VISAS, key=len, reverse=True)
+    )
+    patterns = (
+        rf"\bvisa\s+class\s*[:=-]\s*({visa_pattern})\b",
+        rf"\bresponsibility\s+for\s+class\s+({visa_pattern})\s+"
+        rf"compliance\b",
+    )
+    for page in pages:
+        if not re.search(r"\bSponsor\s+Attestation\b", page, re.I):
+            continue
+        page_ids = re.findall(r"\bMIB[- ]?(\d{6})\b", page, re.I)
+        if expected_id not in page_ids or any(
+            page_id != expected_id for page_id in page_ids
+        ):
+            continue
+        views = re.split(
+            rf"{re.escape(_OCR_VIEW_SEPARATOR)}|"
+            rf"{re.escape(_NATIVE_VIEW_SEPARATOR)}|"
+            r"\n\[ROTATED OCR VIEW\]\n",
+            page,
+        )
+        for view in views:
+            visible_ids = re.findall(r"\bMIB[- ]?(\d{6})\b", view, re.I)
+            if any(
+                visible_id != expected_id for visible_id in visible_ids
+            ):
+                continue
+            values = {
+                value
+                for pattern in patterns
+                for match in re.finditer(pattern, view, re.I)
+                if (value := _vocabulary_value(match.group(1), VISAS))
+            }
+            if len(values) == 1:
+                votes.update(values)
+    winners = [
+        value for value, count in votes.items()
+        if count >= 2
+    ]
+    return winners[0] if len(winners) == 1 else None
+
+
+def _registry_name(
+    case_id: str,
+    pages: list[str],
+) -> str | None:
+    expected_id = case_id.split("-")[-1]
+    votes: Counter[str] = Counter()
+    spellings: dict[str, str] = {}
+    for page in pages:
+        if not re.search(r"\b(?:Planetary\s+)?Registry\s+Extract\b", page, re.I):
+            continue
+        page_ids = re.findall(r"\bMIB[- ]?(\d{6})\b", page, re.I)
+        if expected_id not in page_ids or any(
+            page_id not in (expected_id, "000000") for page_id in page_ids
+        ):
+            continue
+        views = re.split(
+            rf"{re.escape(_OCR_VIEW_SEPARATOR)}|"
+            rf"{re.escape(_NATIVE_VIEW_SEPARATOR)}|"
+            r"\n\[ROTATED OCR VIEW\]\n",
+            page,
+        )
+        for view in views:
+            visible_ids = re.findall(r"\bMIB[- ]?(\d{6})\b", view, re.I)
+            if any(
+                visible_id not in (expected_id, "000000")
+                for visible_id in visible_ids
+            ):
+                continue
+            candidates = set()
+            for candidate in _labeled_values(view, ("Registry Name",)):
+                candidate = re.sub(r"\s{2,}.*$", "", candidate).strip()
+                if re.fullmatch(
+                    r"[A-Za-z][A-Za-z'-]+ [A-Za-z][A-Za-z'-]+",
+                    candidate,
+                ):
+                    candidates.add(candidate)
+            if len(candidates) == 1:
+                candidate = candidates.pop()
+                key = candidate.lower()
+                votes[key] += 1
+                spellings[key] = candidate
+    winners = [
+        key for key, count in votes.items()
+        if count >= 2
+    ]
+    return spellings[winners[0]] if len(winners) == 1 else None
+
+
+def _receipt_proves_paid(
+    case_id: str,
+    pages: list[str],
+) -> bool:
+    expected_id = case_id.split("-")[-1]
+    votes = 0
+    for page in pages:
+        if not re.search(r"\b(?:MIB\s+)?Fee\s+Receipt\b", page, re.I):
+            continue
+        page_ids = re.findall(r"\bMIB[- ]?(\d{6})\b", page, re.I)
+        if expected_id not in page_ids or any(
+            page_id != expected_id for page_id in page_ids
+        ):
+            continue
+        views = re.split(
+            rf"{re.escape(_OCR_VIEW_SEPARATOR)}|"
+            rf"{re.escape(_NATIVE_VIEW_SEPARATOR)}|"
+            r"\n\[ROTATED OCR VIEW\]\n",
+            page,
+        )
+        for view in views:
+            visible_ids = re.findall(r"\bMIB[- ]?(\d{6})\b", view, re.I)
+            if any(
+                visible_id != expected_id for visible_id in visible_ids
+            ):
+                continue
+            if re.search(
+                r"\bamount\s*(?:[:=-]\s*)?\$?\s*809(?:[.,]00)?\b",
+                view,
+                re.I,
+            ):
+                votes += 1
+    return votes >= 2
+
+
 def _extract_scoped_flags(case_id: str, pages: list[str]) -> tuple[list[str], str]:
     eligible_pages = []
     biometric_page_seen = False
@@ -875,11 +1054,14 @@ def _explicit_decision(case_id: str, pages: list[str]) -> str | None:
         if score >= 0.58:
             return value
 
+    supplementary = _supplementary_decision(case_id, pages)
+    if supplementary is not None:
+        return supplementary
     if re.search(r"reason\s*:?.*(?:mandatory\s+fee\s+unpaid|embargo(?:ed)?\s+home\s+world)", clean, re.I):
         return "DENIED"
     if re.search(r"reason\s*:?.*(?:damaged|contradictory|incomplete).*(?:evidence|packet)", clean, re.I):
         return "NEEDS_REVIEW"
-    return _supplementary_decision(case_id, pages)
+    return None
 
 
 def _parse_packet(case_id: str, pages: list[str]) -> dict:
@@ -910,13 +1092,33 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
             and not re.search(r"cut out|unknown|whiteout", candidate, re.I)
         ):
             cleaned_names.append(candidate)
-    applicant = Counter(cleaned_names).most_common(1)[0][0] if cleaned_names else None
+    parsed_applicant = (
+        Counter(cleaned_names).most_common(1)[0][0]
+        if cleaned_names else None
+    )
+    applicant = _registry_name(case_id, pages)
+    applicant = applicant or parsed_applicant
 
     species = _fuzzy_closed_value(
         text, ("Species Code", "Species Match"), SPECIES, 0.67
     )
     home_world = _fuzzy_closed_value(text, ("Home World",), HOME_WORLDS, 0.66)
-    visa = _fuzzy_closed_value(text, ("Visa Class",), VISAS, 0.64)
+    parsed_visa = _fuzzy_closed_value(
+        text,
+        ("Visa Class",),
+        VISAS,
+        0.64,
+    )
+    visa = (
+        _manual_visa_correction(case_id, pages)
+        or _sponsor_attested_visa(case_id, pages)
+        or parsed_visa
+    )
+    # The adjudication model was trained on the original parser representation.
+    # Keep newly recovered sponsor/manual evidence extraction-only until a
+    # grouped out-of-fold retrain proves that changing this feature is safe.
+    adjudication_visa = parsed_visa or visa
+    policy_visa = visa or adjudication_visa
 
     attestation_sponsors = [
         re.sub(r"\D", "", match.group(1))
@@ -974,6 +1176,8 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
             break
     if re.search(r"reason\s*:?.*mandatory\s+fee\s+unpaid", text, re.I):
         fee = "unpaid"
+    receipt_proves_paid = _receipt_proves_paid(case_id, pages)
+    policy_fee = "paid" if receipt_proves_paid else fee
 
     revoked_mentions = {
         f"SPN-{re.sub(r'\\D', '', match.group(1))}"
@@ -987,23 +1191,39 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
     decision = _explicit_decision(case_id, pages)
     direct_decision = decision is not None
     if decision is None:
+        missing_core_fields = sum(
+            value is None
+            for value in (applicant, home_world, arrival)
+        )
         if set(flags) & DISQUALIFYING:
             decision = "DENIED"
-        elif visa == "TRANSIT-7":
+        elif "rescinded_denial" in flags:
+            decision = "NEEDS_REVIEW"
+        elif policy_visa == "TRANSIT-7" and missing_core_fields >= 3:
+            decision = "NEEDS_REVIEW"
+        elif policy_visa == "TRANSIT-7":
             decision = "DENIED"
-        elif sponsor in (REVOKED_SPONSORS | revoked_mentions) and visa != "DIP-1":
+        elif (
+            sponsor in (REVOKED_SPONSORS | revoked_mentions)
+            and policy_visa is not None
+            and policy_visa != "DIP-1"
+        ):
             decision = "DENIED"
-        elif fee == "unpaid":
+        elif policy_fee == "unpaid":
             decision = "DENIED"
         elif set(flags) & REVIEW_ONLY:
             decision = "NEEDS_REVIEW"
-        elif fee == "waived" and visa != "DIP-1" and not re.search(
+        elif (
+            policy_fee == "waived"
+            and adjudication_visa != "DIP-1"
+            and not re.search(
             r"(?:hardship|authorized)\s+waiver|waiver\s+(?:approved|granted)",
             text,
             re.I,
+            )
         ):
             decision = "NEEDS_REVIEW"
-        elif fee in (None, "unknown"):
+        elif policy_fee in (None, "unknown"):
             decision = "NEEDS_REVIEW"
         elif flags_state == "unknown":
             decision = "NEEDS_REVIEW"
@@ -1018,7 +1238,7 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
             applicant,
             species,
             home_world,
-            visa,
+            adjudication_visa,
             sponsor,
             arrival,
             purpose,
@@ -1027,6 +1247,22 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
             decision,
         )
         decision, modeled_confidence = _model_decision(model_features)
+        if (
+            receipt_proves_paid
+            and fee == "unpaid"
+            and decision == "APPROVED"
+        ):
+            probabilities = _model_probabilities(model_features)
+            by_class = dict(
+                zip(
+                    _ADJUDICATION_MODEL["classes"],
+                    probabilities,
+                    strict=True,
+                )
+            )
+            if by_class["APPROVED"] < 0.98:
+                decision = "DENIED"
+                modeled_confidence = None
 
     if modeled_confidence is not None:
         confidence = modeled_confidence
@@ -1042,7 +1278,7 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
     # Keep unresolved fee evidence unknown to the adjudication head.  For the
     # extraction output only, use the public-training modal class as a bounded
     # candidate-trained fallback.
-    output_fee = fee or "paid"
+    output_fee = policy_fee or "paid"
 
     return {
         "case_id": case_id,
@@ -1082,9 +1318,19 @@ def _process(pdf: Path) -> dict:
             "declared_purpose": "unknown",
             "risk_flags": "none",
         }
+        base_visa_before_enrichment = base["visa_class"]
         for field, sentinel in sentinels.items():
             if base[field] == sentinel and enriched[field] != sentinel:
                 base[field] = enriched[field]
+        if (
+            base["adjudication"] == "DENIED"
+            and base_visa_before_enrichment == "unknown"
+            and base["sponsor_id"] in REVOKED_SPONSORS
+            and base["visa_class"] == "DIP-1"
+            and enriched["adjudication"] != "DENIED"
+        ):
+            base["adjudication"] = enriched["adjudication"]
+            base["confidence"] = enriched["confidence"]
         return base
     except Exception as error:
         with _PRINT_LOCK:
