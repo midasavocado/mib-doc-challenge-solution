@@ -65,6 +65,11 @@ _ADJUDICATION_MODEL = json.loads(
         encoding="utf-8"
     )
 )
+_ADJUDICATION_CALIBRATOR = json.loads(
+    Path(__file__).with_name("adjudication_calibrator.json").read_text(
+        encoding="utf-8"
+    )
+)
 
 
 def _normalized(text: str) -> str:
@@ -640,6 +645,46 @@ def _model_probabilities(features: dict[str, object]) -> list[float]:
     return [value / total for value in exponentials]
 
 
+def _model_confidence(
+    probabilities: list[float],
+    modeled_decision: str,
+    base_decision: str,
+) -> float:
+    classes = _ADJUDICATION_MODEL["classes"]
+    by_class = dict(zip(classes, probabilities, strict=True))
+    ordered = sorted(probabilities)
+    maximum = ordered[-1]
+    values = [
+        by_class["APPROVED"],
+        by_class["DENIED"],
+        by_class["NEEDS_REVIEW"],
+        by_class[modeled_decision],
+        maximum,
+        maximum - ordered[-2],
+        -sum(value * math.log(max(value, 1e-12)) for value in probabilities),
+        *[float(modeled_decision == value) for value in classes],
+        *[float(base_decision == value) for value in classes],
+    ]
+    standardized = [
+        (value - mean) / scale
+        for value, mean, scale in zip(
+            values,
+            _ADJUDICATION_CALIBRATOR["mean"],
+            _ADJUDICATION_CALIBRATOR["scale"],
+            strict=True,
+        )
+    ]
+    logit = _ADJUDICATION_CALIBRATOR["intercept"] + sum(
+        coefficient * value
+        for coefficient, value in zip(
+            _ADJUDICATION_CALIBRATOR["coefficient"],
+            standardized,
+            strict=True,
+        )
+    )
+    return 1.0 / (1.0 + math.exp(-logit))
+
+
 def _model_decision(features: dict[str, object]) -> tuple[str, float]:
     classes = _ADJUDICATION_MODEL["classes"]
     probabilities = _model_probabilities(features)
@@ -665,7 +710,11 @@ def _model_decision(features: dict[str, object]) -> tuple[str, float]:
     ]
     if decision == "APPROVED" and by_class["DENIED"] > ceiling:
         decision = "NEEDS_REVIEW"
-    confidence = _ADJUDICATION_MODEL["decision"]["confidence"][decision]
+    confidence = _model_confidence(
+        probabilities,
+        decision,
+        str(features["current_decision"]),
+    )
     return decision, confidence
 
 

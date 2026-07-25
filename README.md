@@ -15,6 +15,8 @@ Trusted visible findings and strong policy denials remain authoritative. Only
 the lower-confidence approve/review fallback is refined by a small offline
 candidate-trained histogram model. Its features exclude case IDs, applicant
 names, raw sponsor IDs, filenames, hashes, and document fingerprints.
+Fallback confidence is estimated by a separately cross-fitted logistic
+calibrator using only model probabilities and decision-path metadata.
 
 ## Run
 
