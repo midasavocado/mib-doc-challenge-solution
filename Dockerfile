@@ -8,7 +8,8 @@ RUN apt-get update \
     && find /var/lib/apt/lists -mindepth 1 -delete
 
 WORKDIR /app
-COPY run.sh solution.py adjudication_model.json adjudication_calibrator.json /app/
+COPY run.sh solution.py /app/
+COPY mib_pipeline /app/mib_pipeline
 RUN chmod +x /app/run.sh
 
 ENTRYPOINT ["/app/run.sh"]

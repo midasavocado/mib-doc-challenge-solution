@@ -39,6 +39,22 @@ The image uses CPU-only Poppler and Tesseract. The entrypoint accepts exactly:
 <input_pdf_dir> <output_predictions_path>
 ```
 
+## Structure
+
+```text
+solution.py                         challenge entrypoint
+mib_pipeline/
+  pipeline.py                      OCR, extraction, and adjudication pipeline
+  adjudication_model.json          offline fallback classifier
+  adjudication_calibrator.json     cross-fitted confidence calibrator
+run.sh                             container entrypoint
+Dockerfile                         offline runtime image
+```
+
+The package boundary keeps the challenge entrypoint small and gives future
+OCR, extraction, and adjudication modules a clean home without changing the
+runtime contract.
+
 ## Provenance
 
 This repository started from the organizer's MIT-licensed offline baseline and
