@@ -251,6 +251,26 @@ The rules themselves remain semantically plausible. The failure shows that
 current missing/sentinel provenance is not equivalent to missing adjudication
 evidence. Revisit only after extraction and provenance are frozen.
 
+### Replay after the latest extraction checkpoint
+
+**Result: extraction improved; learned classification became less stable.**
+
+`full-1000-final-20260726` raises public extraction to 45.4144/50 and total
+score to 139.1366. Its 78.76 classification remains the public full-fit model,
+not generalization evidence.
+
+After removing the prior adapter's transductive access to held-out feature
+marginals, the earlier extraction representation scores 64.984/80 across five
+shuffle seeds. Replaying the same strict train-800/test-200 protocol on the
+latest extraction falls to 64.606 and increases mean CFA from 4.2 to 7.8.
+Only 12/25 folds improve over the contemporaneous source graph, and one fold
+adds five CFAs.
+
+Training on both degraded and repaired views also regresses. The learned head
+was partly exploiting OCR missingness/damage correlations that disappear as
+extraction improves. Freeze extraction and provenance before final classifier
+training.
+
 ### Visual damage classifier
 
 **Result: rejected.**
