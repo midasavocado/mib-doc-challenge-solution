@@ -426,15 +426,28 @@ def _render_and_ocr(pdf: Path) -> list[str]:
             re.I,
         )
         for index, page in enumerate(pages):
-            visible_ids = {
+            rendered_ocr = page.split(_NATIVE_VIEW_SEPARATOR, 1)[0]
+            page_ids = {
                 f"MIB-{match}"
                 for match in re.findall(r"\bMIB[- ]?(\d{6})\b", page, re.I)
             }
-            if (
-                expected_id not in visible_ids
-                or any(page_id != expected_id for page_id in visible_ids)
-                or heading.search(page)
-            ):
+            visible_ids = {
+                f"MIB-{match}"
+                for match in re.findall(
+                    r"\bMIB[- ]?(\d{6})\b", rendered_ocr, re.I
+                )
+            }
+            legacy_scope = (
+                expected_id in page_ids
+                and not any(page_id != expected_id for page_id in page_ids)
+                and not heading.search(page)
+            )
+            rendered_scope = (
+                expected_id in visible_ids
+                and not any(page_id != expected_id for page_id in visible_ids)
+                and not heading.search(rendered_ocr)
+            )
+            if not (legacy_scope or rendered_scope):
                 continue
             rotated_views = []
             for label, clockwise in (("cw", True), ("ccw", False)):
@@ -467,9 +480,15 @@ def _render_and_ocr(pdf: Path) -> list[str]:
                     )
                 )
                 if (
-                    expected_id in rotated_ids
-                    and not any(
+                    not any(
                         page_id != expected_id for page_id in rotated_ids
+                    )
+                    and (
+                        expected_id in rotated_ids
+                        or (
+                            rendered_scope
+                            and visible_ids == {expected_id}
+                        )
                     )
                     and (
                         heading.search(view)
@@ -1829,6 +1848,18 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
         VISAS,
         0.64,
     )
+    if (
+        parsed_visa is None
+        and re.search(
+            r"\btransit\s+class\b[\s\S]{0,80}\b"
+            r"(?:cannot|can(?:no|')?t|may\s+not|not\s+authori[sz]ed)\b",
+            text,
+            re.I,
+        )
+    ):
+        # An authoritative adjudicator reason can explicitly identify the
+        # otherwise unreadable visa class without guessing from the decision.
+        parsed_visa = "TRANSIT-7"
     visa = (
         _manual_visa_correction(case_id, pages)
         or _sponsor_attested_visa(case_id, pages)
@@ -2052,14 +2083,13 @@ def _process(pdf: Path) -> dict:
                 result["risk_flags"] = "|".join(high_resolution_flags)
         if (
             result["applicant_name"] == "unknown"
-            or result["species_code"] == "TRIANGULAN"
+            or result["species_code"] in {"unknown", "TRIANGULAN"}
             or result["sponsor_id"] == "SPN-0000"
             or result["arrival_date"] == "1900-01-01"
         ):
             high_resolution_fields = _high_resolution_field_repairs(pdf)
             for field, sentinel in (
                 ("applicant_name", "unknown"),
-                ("species_code", "TRIANGULAN"),
                 ("sponsor_id", "SPN-0000"),
                 ("arrival_date", "1900-01-01"),
             ):
@@ -2068,6 +2098,11 @@ def _process(pdf: Path) -> dict:
                     and field in high_resolution_fields
                 ):
                     result[field] = high_resolution_fields[field]
+            if (
+                result["species_code"] in {"unknown", "TRIANGULAN"}
+                and "species_code" in high_resolution_fields
+            ):
+                result["species_code"] = high_resolution_fields["species_code"]
         return result
     except Exception as error:
         with _PRINT_LOCK:
