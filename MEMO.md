@@ -197,6 +197,21 @@ Across five complete shuffle seeds, the neural adapter ranged from 64.38 to
 The compact tree adapter remained better and much safer at a 65.404 mean and
 4.8 CFA. Architecture alone therefore does not repair the support mismatch.
 
+### Missing causal-evidence audit
+
+**Result: three generator dimensions retained; naive feature additions rejected.**
+
+Across 25 identity-free 800/200 folds, active-case scope integrity averaged
++0.612 / 80 and reduced CFA by 5–7 per seed. The terminal visible-policy reason
+averaged +0.444 and reduced CFA by 7; field-local flag observation strength
+averaged +0.118. None was positive in every fold, so none is promoted directly.
+
+The audit strongly rejected source presence alone, isolated positive-source
+proof bits, global OCR redundancy, and a collapsed conflict subtype. The next
+generator instead represents ordered conflict endpoints and authority,
+active-versus-foreign scope, and field-local visible/unreadable/absent/fallback
+states. This expands causal support rather than repeating the old state space.
+
 ### Visual damage classifier
 
 **Result: rejected.**
