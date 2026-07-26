@@ -20,7 +20,7 @@ import tempfile
 import threading
 import time
 import xml.etree.ElementTree as ET
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import date
 from pathlib import Path
 
@@ -189,6 +189,40 @@ def _ocr_page(image: Path, psm: int = 4) -> str:
     return _normalized(result.stdout)
 
 
+def _ocr_tsv_words(image: Path) -> list[dict[str, int | str]]:
+    result = subprocess.run(
+        [
+            "tesseract", str(image), "stdout", "--psm", "11",
+            "-l", "eng", "tsv",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+    words = []
+    for line in result.stdout.splitlines()[1:]:
+        parts = line.split("\t", 11)
+        if len(parts) != 12 or not parts[11].strip():
+            continue
+        try:
+            words.append(
+                {
+                    "block": int(parts[2]),
+                    "paragraph": int(parts[3]),
+                    "line": int(parts[4]),
+                    "left": int(parts[6]),
+                    "top": int(parts[7]),
+                    "height": int(parts[9]),
+                    "text": parts[11].strip(),
+                }
+            )
+        except ValueError:
+            continue
+    return words
+
+
 def _read_pgm(path: Path) -> tuple[int, int, bytes]:
     data = path.read_bytes()
     match = re.match(
@@ -198,6 +232,48 @@ def _read_pgm(path: Path) -> tuple[int, int, bytes]:
     if not match or int(match.group(3)) != 255:
         raise ValueError(f"unsupported PGM header: {path.name}")
     return int(match.group(1)), int(match.group(2)), data[match.end():]
+
+
+def _crop_pgm(
+    source: Path,
+    destination: Path,
+    left: int,
+    top: int,
+    right: int,
+    bottom: int,
+) -> None:
+    width, height, pixels = _read_pgm(source)
+    left = max(0, min(left, width - 1))
+    top = max(0, min(top, height - 1))
+    right = max(left + 1, min(right, width))
+    bottom = max(top + 1, min(bottom, height))
+    cropped = b"".join(
+        pixels[row * width + left:row * width + right]
+        for row in range(top, bottom)
+    )
+    destination.write_bytes(
+        f"P5\n{right - left} {bottom - top}\n255\n".encode() + cropped
+    )
+
+
+def _scale_pgm_nearest(
+    source: Path,
+    destination: Path,
+    factor: int,
+) -> None:
+    """Enlarge a small OCR crop without inventing interpolated gray values."""
+    width, height, pixels = _read_pgm(source)
+    rows = []
+    for row_index in range(height):
+        row = pixels[row_index * width:(row_index + 1) * width]
+        expanded = bytearray(width * factor)
+        for offset in range(factor):
+            expanded[offset::factor] = row
+        rows.extend([bytes(expanded)] * factor)
+    destination.write_bytes(
+        f"P5\n{width * factor} {height * factor}\n255\n".encode()
+        + b"".join(rows)
+    )
 
 
 def _rotate_pgm(source: Path, destination: Path, clockwise: bool) -> None:
@@ -492,6 +568,177 @@ def _high_resolution_finding(
     return found.pop() if len(found) == 1 else None
 
 
+_REGISTERED_FIELD_SPECS = {
+    "species_code": ("Species Code", "Species Match"),
+    "sponsor_id": ("Sponsor ID",),
+    "arrival_date": ("Arrival Date",),
+}
+
+
+def _visible_case_numbers(text: str) -> set[str]:
+    confusion = str.maketrans(
+        {
+            "O": "0", "C": "0", "Q": "0", "D": "0",
+            "I": "1", "L": "1", "Z": "2", "S": "5",
+            "G": "6", "B": "8",
+        }
+    )
+    numbers = set()
+    for token in re.findall(
+        r"\bM(?:I|1|L)?B[- ]?([A-Z0-9]{6})\b",
+        text,
+        re.I,
+    ):
+        normalized = token.upper().translate(confusion)
+        if normalized.isdigit():
+            numbers.add(normalized)
+    return numbers
+
+
+def _registered_line_has_label(
+    text: str,
+    labels: tuple[str, ...],
+) -> bool:
+    key = _compact(text)
+    for label in labels:
+        label_key = _compact(label)
+        if label_key in key:
+            return True
+        prefix = key[:max(len(label_key) + 3, 8)]
+        if difflib.SequenceMatcher(None, prefix, label_key).ratio() >= 0.67:
+            return True
+    return False
+
+
+def _registered_field_value(field: str, text: str) -> str | None:
+    if field == "species_code":
+        exact = _vocabulary_value(text, SPECIES)
+        if exact is not None:
+            return exact
+        key = _compact(text)
+        ranked = sorted(
+            (
+                difflib.SequenceMatcher(
+                    None,
+                    key,
+                    _compact(value),
+                ).ratio(),
+                value,
+            )
+            for value in SPECIES
+        )
+        best_score, best_value = ranked[-1]
+        second_score = ranked[-2][0]
+        if best_score >= 0.56 and best_score - second_score >= 0.16:
+            return best_value
+        return None
+    if field == "sponsor_id":
+        match = re.search(
+            r"\bSP[NH]?[-_ ]?((?:\d[\s-]*){4})\b",
+            text,
+            re.I,
+        )
+        if not match:
+            return None
+        digits = re.sub(r"\D", "", match.group(1))
+        return f"SPN-{digits}" if len(digits) == 4 else None
+    match = re.search(
+        r"\b(20\d{2})\s*[-/.]\s*(\d{2})\s*[-/.]\s*(\d{2})\b",
+        text,
+    )
+    if not match:
+        return None
+    candidate = "-".join(match.groups())
+    try:
+        date.fromisoformat(candidate)
+    except ValueError:
+        return None
+    return candidate
+
+
+def _registered_field_repairs(
+    image: Path,
+    temp_dir: Path,
+    expected_id: str,
+) -> dict[str, str]:
+    words = _ocr_tsv_words(image)
+    page_text = " ".join(str(word["text"]) for word in words)
+    page_text += "\n" + _ocr_page(image, 11)
+    case_numbers = _visible_case_numbers(page_text)
+    if expected_id not in case_numbers or any(
+        value != expected_id for value in case_numbers
+    ):
+        return {}
+
+    width, _, _ = _read_pgm(image)
+    grouped = defaultdict(list)
+    for word in words:
+        grouped[
+            (
+                int(word["block"]),
+                int(word["paragraph"]),
+                int(word["line"]),
+            )
+        ].append(word)
+    votes = {
+        field: Counter()
+        for field in _REGISTERED_FIELD_SPECS
+    }
+    scaled_arrival_votes: Counter[str] = Counter()
+    for line_index, line_words in enumerate(grouped.values()):
+        line_words.sort(key=lambda word: int(word["left"]))
+        line_text = " ".join(str(word["text"]) for word in line_words)
+        for field, labels in _REGISTERED_FIELD_SPECS.items():
+            if not _registered_line_has_label(line_text, labels):
+                continue
+            top = min(int(word["top"]) for word in line_words)
+            row_height = max(int(word["height"]) for word in line_words)
+            crop = temp_dir / (
+                f"registered-{image.stem}-{line_index}-{field}.pgm"
+            )
+            _crop_pgm(
+                image,
+                crop,
+                int(width * 0.04),
+                top - 2 * row_height,
+                int(width * 0.62),
+                top + 3 * row_height,
+            )
+            for psm in (6, 7, 8, 11, 13):
+                value = _registered_field_value(
+                    field,
+                    _ocr_page(crop, psm),
+                )
+                if value is not None:
+                    votes[field][value] += 1
+            if field == "arrival_date":
+                for factor in (2, 3, 4):
+                    enlarged = temp_dir / (
+                        f"registered-{image.stem}-{line_index}-"
+                        f"{field}-{factor}x.pgm"
+                    )
+                    _scale_pgm_nearest(crop, enlarged, factor)
+                    value = _registered_field_value(
+                        field,
+                        _ocr_page(enlarged, 11),
+                    )
+                    if value is not None:
+                        scaled_arrival_votes[value] += 1
+
+    repairs = {}
+    for field, candidates in votes.items():
+        if len(candidates) != 1:
+            continue
+        value, count = candidates.most_common(1)[0]
+        if count >= 2:
+            repairs[field] = value
+    if len(scaled_arrival_votes) == 1:
+        value, count = scaled_arrival_votes.most_common(1)[0]
+        if count >= 3:
+            repairs["arrival_date"] = value
+    return repairs
+
+
 def _high_resolution_field_repairs(pdf: Path) -> dict[str, str]:
     """Retry unresolved visible fields with a high-resolution OCR ensemble."""
     expected_id = pdf.stem.split("-")[-1]
@@ -499,6 +746,7 @@ def _high_resolution_field_repairs(pdf: Path) -> dict[str, str]:
         "applicant_name": Counter(),
         "arrival_date": Counter(),
     }
+    registered_repairs: dict[str, set[str]] = defaultdict(set)
     heading = re.compile(
         r"FORM\s+(?:I-8090|B-13)|Biometric\s+Scan\s+Slip|"
         r"(?:Planetary\s+)?Registry\s+Extract|Sponsor\s+Attestation|"
@@ -521,6 +769,12 @@ def _high_resolution_field_repairs(pdf: Path) -> dict[str, str]:
             )
             for image in sorted(temp_dir.glob("page-*.pgm")):
                 views = [_ocr_page(image, psm) for psm in (3, 4, 6, 11)]
+                for field, value in _registered_field_repairs(
+                    image,
+                    temp_dir,
+                    expected_id,
+                ).items():
+                    registered_repairs[field].add(value)
                 visible_ids = {
                     match
                     for view in views
@@ -567,6 +821,12 @@ def _high_resolution_field_repairs(pdf: Path) -> dict[str, str]:
             continue
         value, count = candidates.most_common(1)[0]
         if count >= 2:
+            repairs[field] = value
+    for field, candidates in registered_repairs.items():
+        if len(candidates) != 1:
+            continue
+        value = next(iter(candidates))
+        if field not in repairs or repairs[field] == value:
             repairs[field] = value
     return repairs
 
@@ -1792,11 +2052,15 @@ def _process(pdf: Path) -> dict:
                 result["risk_flags"] = "|".join(high_resolution_flags)
         if (
             result["applicant_name"] == "unknown"
+            or result["species_code"] == "TRIANGULAN"
+            or result["sponsor_id"] == "SPN-0000"
             or result["arrival_date"] == "1900-01-01"
         ):
             high_resolution_fields = _high_resolution_field_repairs(pdf)
             for field, sentinel in (
                 ("applicant_name", "unknown"),
+                ("species_code", "TRIANGULAN"),
+                ("sponsor_id", "SPN-0000"),
                 ("arrival_date", "1900-01-01"),
             ):
                 if (
@@ -1967,6 +2231,37 @@ def _impute_closed_vocabulary_modes(predictions: dict[str, dict]) -> None:
                 prediction[field] = mode
 
 
+def _repair_rare_arrival_years(predictions: dict[str, dict]) -> None:
+    """Repair one-glyph year slips using only dominant years in this batch."""
+    years = Counter(
+        prediction["arrival_date"][:4]
+        for prediction in predictions.values()
+        if re.fullmatch(r"20\d{2}-\d{2}-\d{2}", prediction["arrival_date"])
+    )
+    total = sum(years.values())
+    if total < 50:
+        return
+    mode, mode_count = years.most_common(1)[0]
+    if mode_count / total < 0.70:
+        return
+    trusted = {
+        year
+        for year, count in years.items()
+        if count / total >= 0.02
+    }
+    for prediction in predictions.values():
+        value = prediction["arrival_date"]
+        if not re.fullmatch(r"20\d{2}-\d{2}-\d{2}", value):
+            continue
+        year = value[:4]
+        if (
+            year not in trusted
+            and int(year) > int(mode) + 1
+            and sum(left != right for left, right in zip(year, mode)) == 1
+        ):
+            prediction["arrival_date"] = mode + value[4:]
+
+
 def main(input_dir: str, output_path: str) -> None:
     pdfs = sorted(Path(input_dir).glob("*.pdf"))
     workers = max(1, min(int(os.environ.get("MIB_MAX_WORKERS", "4")), 4))
@@ -1989,6 +2284,7 @@ def main(input_dir: str, output_path: str) -> None:
     _repair_rare_name_tokens(predictions)
     _repair_collapsed_name_ligatures(predictions)
     _impute_closed_vocabulary_modes(predictions)
+    _repair_rare_arrival_years(predictions)
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w", encoding="utf-8") as handle:
