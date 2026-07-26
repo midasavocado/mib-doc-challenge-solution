@@ -492,6 +492,85 @@ def _high_resolution_finding(
     return found.pop() if len(found) == 1 else None
 
 
+def _high_resolution_field_repairs(pdf: Path) -> dict[str, str]:
+    """Retry unresolved visible fields with a high-resolution OCR ensemble."""
+    expected_id = pdf.stem.split("-")[-1]
+    votes: dict[str, Counter[str]] = {
+        "applicant_name": Counter(),
+        "arrival_date": Counter(),
+    }
+    heading = re.compile(
+        r"FORM\s+(?:I-8090|B-13)|Biometric\s+Scan\s+Slip|"
+        r"(?:Planetary\s+)?Registry\s+Extract|Sponsor\s+Attestation|"
+        r"(?:MIB\s+)?Fee\s+Receipt|Manual\s+Adjudicator\s+Note",
+        re.I,
+    )
+    try:
+        with tempfile.TemporaryDirectory(prefix="mib-hires-fields-") as temp:
+            temp_dir = Path(temp)
+            prefix = temp_dir / "page"
+            subprocess.run(
+                [
+                    "pdftoppm", "-gray", "-r", "360",
+                    str(pdf), str(prefix),
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=45,
+                check=True,
+            )
+            for image in sorted(temp_dir.glob("page-*.pgm")):
+                views = [_ocr_page(image, psm) for psm in (3, 4, 6, 11)]
+                visible_ids = {
+                    match
+                    for view in views
+                    for match in re.findall(
+                        r"\bMIB[- ]?(\d{6})\b",
+                        view,
+                        re.I,
+                    )
+                }
+                if expected_id not in visible_ids or any(
+                    value != expected_id for value in visible_ids
+                ):
+                    continue
+                if not any(heading.search(view) for view in views):
+                    continue
+                for view in views:
+                    name_candidates = set()
+                    for candidate in _labeled_values(
+                        view,
+                        ("Applicant", "Applicant Name", "Registry Name"),
+                    ):
+                        candidate = re.sub(
+                            r"\s{2,}.*$",
+                            "",
+                            candidate,
+                        ).strip()
+                        if re.fullmatch(
+                            r"[A-Za-z][A-Za-z'-]{2,} "
+                            r"[A-Za-z][A-Za-z'-]{2,}",
+                            candidate,
+                        ):
+                            name_candidates.add(candidate)
+                    if len(name_candidates) == 1:
+                        votes["applicant_name"].update(name_candidates)
+                    arrival = _extract_date(view, "Arrival Date")
+                    if arrival is not None:
+                        votes["arrival_date"][arrival] += 1
+    except (OSError, subprocess.SubprocessError):
+        return {}
+
+    repairs = {}
+    for field, candidates in votes.items():
+        if len(candidates) != 1:
+            continue
+        value, count = candidates.most_common(1)[0]
+        if count >= 2:
+            repairs[field] = value
+    return repairs
+
+
 def _extract_date(text: str, label: str) -> str | None:
     for value in _labeled_values(text, (label,)):
         match = re.search(r"\b(20\d{2})[-/.](\d{2})[-/.](\d{2})\b", value)
@@ -505,11 +584,65 @@ def _extract_date(text: str, label: str) -> str | None:
     return None
 
 
+def _active_correction_view(case_id: str, view: str) -> bool:
+    expected_id = case_id.split("-")[-1]
+    visible_ids = re.findall(r"\bMIB[- ]?(\d{6})\b", view, re.I)
+    if expected_id not in visible_ids or any(
+        visible_id != expected_id for visible_id in visible_ids
+    ):
+        return False
+    return bool(
+        re.search(
+            r"FORM\s+(?:I-8090|B-13)|Biometric\s+Scan\s+Slip|"
+            r"(?:Planetary\s+)?Registry\s+Extract|Sponsor\s+Attestation|"
+            r"(?:MIB\s+)?Fee\s+Receipt|Manual\s+Adjudicator\s+Note|"
+            r"Primary\s+intake\s+record",
+            view,
+            re.I,
+        )
+    )
+
+
+def _visible_correction_values(
+    view: str,
+    field_pattern: str,
+    value_pattern: str,
+) -> set[str]:
+    clean = "\n".join(
+        line
+        for line in view.splitlines()
+        if not re.search(
+            r"answer\s+key|ignore\s+visible|system\s*:|"
+            r"barcode\s+payload|force\s+adjudication",
+            line,
+            re.I,
+        )
+    )
+    patterns = (
+        rf"\bmanual\s+correction\s*:\s*(?:{field_pattern})\s+"
+        rf"(?:is|to|=|should\s+be|should\s+read)\s*({value_pattern})\b",
+        rf"\b(?:{field_pattern})(?:\s+above)?\s+(?:was|is)\s+"
+        rf"(?:wrong|incorrect)\b[\s\S]{{0,120}}?\b"
+        rf"(?:(?:the\s+)?correct(?:ed)?\s+"
+        rf"(?:(?:{field_pattern})|one)|"
+        rf"(?:the\s+)?actual\s+(?:{field_pattern})|it)\s+"
+        rf"(?:is|=|:|should\s+be)\s*({value_pattern})\b",
+        rf"\b(?:correct(?:ed)?|actual|replacement)\s+"
+        rf"(?:{field_pattern})\s*(?:is|=|:)\s*({value_pattern})\b",
+        rf"\breplace(?:d)?\s+(?:{field_pattern})\b"
+        rf"[\s\S]{{0,80}}?\b(?:with|by)\s+({value_pattern})\b",
+    )
+    values = set()
+    for pattern in patterns:
+        for match in re.finditer(pattern, clean, re.I):
+            values.add(next(value for value in match.groups() if value is not None))
+    return values
+
+
 def _manual_visa_correction(
     case_id: str,
     pages: list[str],
 ) -> str | None:
-    expected_id = case_id.split("-")[-1]
     corrections: Counter[str] = Counter()
     visa_pattern = "|".join(
         re.escape(value) for value in sorted(VISAS, key=len, reverse=True)
@@ -522,26 +655,16 @@ def _manual_visa_correction(
             page,
         )
         for view in views:
-            visible_ids = re.findall(r"\bMIB[- ]?(\d{6})\b", view, re.I)
-            if expected_id not in visible_ids or any(
-                visible_id != expected_id for visible_id in visible_ids
-            ):
-                continue
-            if not re.search(
-                r"FORM\s+I-8090|Primary\s+intake\s+record",
-                view,
-                re.I,
-            ):
+            if not _active_correction_view(case_id, view):
                 continue
             values = {
                 value
-                for match in re.finditer(
-                    rf"manual\s+correction\s*:\s*visa\s+class\s+"
-                    rf"(?:is|to|=)\s*({visa_pattern})\b",
+                for candidate in _visible_correction_values(
                     view,
-                    re.I,
+                    r"visa\s+class",
+                    visa_pattern,
                 )
-                if (value := _vocabulary_value(match.group(1), VISAS))
+                if (value := _vocabulary_value(candidate, VISAS))
             }
             if len(values) == 1:
                 corrections.update(values)
@@ -556,9 +679,11 @@ def _manual_applicant_correction(
     case_id: str,
     pages: list[str],
 ) -> str | None:
-    expected_id = case_id.split("-")[-1]
     votes: Counter[str] = Counter()
     spellings: dict[str, str] = {}
+    name_pattern = (
+        r"[A-Za-z][A-Za-z'-]+\s+[A-Za-z][A-Za-z'-]+"
+    )
     for page in pages:
         views = re.split(
             rf"{re.escape(_OCR_VIEW_SEPARATOR)}|"
@@ -567,24 +692,14 @@ def _manual_applicant_correction(
             page,
         )
         for view in views:
-            visible_ids = re.findall(r"\bMIB[- ]?(\d{6})\b", view, re.I)
-            if expected_id not in visible_ids or any(
-                visible_id != expected_id for visible_id in visible_ids
-            ):
-                continue
-            if not re.search(
-                r"FORM\s+I-8090|Primary\s+intake\s+record",
-                view,
-                re.I,
-            ):
+            if not _active_correction_view(case_id, view):
                 continue
             candidates = {
-                " ".join(match.groups())
-                for match in re.finditer(
-                    r"manual\s+correction\s*:\s*applicant\s+is\s+"
-                    r"([A-Za-z][A-Za-z'-]+)\s+([A-Za-z][A-Za-z'-]+)\b",
+                candidate
+                for candidate in _visible_correction_values(
                     view,
-                    re.I,
+                    r"applicant(?:\s+name)?",
+                    name_pattern,
                 )
             }
             if len(candidates) == 1:
@@ -600,7 +715,6 @@ def _manual_fee_correction(
     case_id: str,
     pages: list[str],
 ) -> str | None:
-    expected_id = case_id.split("-")[-1]
     votes: Counter[str] = Counter()
     for page in pages:
         views = re.split(
@@ -610,26 +724,46 @@ def _manual_fee_correction(
             page,
         )
         for view in views:
-            visible_ids = re.findall(r"\bMIB[- ]?(\d{6})\b", view, re.I)
-            if expected_id not in visible_ids or any(
-                visible_id != expected_id for visible_id in visible_ids
-            ):
-                continue
-            if not re.search(
-                r"FORM\s+I-8090|Primary\s+intake\s+record",
-                view,
-                re.I,
-            ):
+            if not _active_correction_view(case_id, view):
                 continue
             values = {
-                match.group(1).lower()
-                for match in re.finditer(
-                    r"manual\s+correction\s*:\s*fee\s+status\s+is\s+"
-                    r"(paid|waived|unpaid|unknown)\b",
+                value.lower()
+                for value in _visible_correction_values(
                     view,
-                    re.I,
+                    r"fee\s+status",
+                    r"paid|waived|unpaid|unknown",
                 )
             }
+            if len(values) == 1:
+                votes.update(values)
+    winners = [value for value, count in votes.items() if count >= 2]
+    return winners[0] if len(winners) == 1 else None
+
+
+def _manual_sponsor_correction(
+    case_id: str,
+    pages: list[str],
+) -> str | None:
+    votes: Counter[str] = Counter()
+    for page in pages:
+        views = re.split(
+            rf"{re.escape(_OCR_VIEW_SEPARATOR)}|"
+            rf"{re.escape(_NATIVE_VIEW_SEPARATOR)}|"
+            r"\n\[ROTATED OCR VIEW\]\n",
+            page,
+        )
+        for view in views:
+            if not _active_correction_view(case_id, view):
+                continue
+            values = set()
+            for candidate in _visible_correction_values(
+                view,
+                r"sponsor(?:\s+id)?",
+                r"SPN[-_ ]?(?:\d[\s-]*){4}",
+            ):
+                digits = re.sub(r"\D", "", candidate)
+                if len(digits) == 4:
+                    values.add(f"SPN-{digits}")
             if len(values) == 1:
                 votes.update(values)
     winners = [value for value, count in votes.items() if count >= 2]
@@ -1461,14 +1595,9 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
         )
     ]
     sponsor_numbers = [number for number in sponsor_numbers if len(number) == 4]
-    correction = re.search(
-        r"manual\s+correction\s*:\s*sponsor(?:\s+id)?\s+is\s+"
-        r"SPN[-_ ]?((?:\d[\s-]*){4})",
-        text,
-        re.I,
-    )
-    if correction:
-        sponsor_number = re.sub(r"\D", "", correction.group(1))
+    corrected_sponsor = _manual_sponsor_correction(case_id, pages)
+    if corrected_sponsor is not None:
+        sponsor_number = corrected_sponsor.removeprefix("SPN-")
     elif attestation_sponsors:
         sponsor_number = Counter(attestation_sponsors).most_common(1)[0][0]
     elif sponsor_numbers:
@@ -1661,6 +1790,20 @@ def _process(pdf: Path) -> dict:
             high_resolution_flags = _high_resolution_risk_flags(pdf, pages)
             if high_resolution_flags:
                 result["risk_flags"] = "|".join(high_resolution_flags)
+        if (
+            result["applicant_name"] == "unknown"
+            or result["arrival_date"] == "1900-01-01"
+        ):
+            high_resolution_fields = _high_resolution_field_repairs(pdf)
+            for field, sentinel in (
+                ("applicant_name", "unknown"),
+                ("arrival_date", "1900-01-01"),
+            ):
+                if (
+                    result[field] == sentinel
+                    and field in high_resolution_fields
+                ):
+                    result[field] = high_resolution_fields[field]
         return result
     except Exception as error:
         with _PRINT_LOCK:

@@ -12,6 +12,12 @@ bounded 90-degree rotation retry. Rotated OCR may only fill fields that the
 upright evidence left unresolved; it cannot replace an existing field read or
 change the adjudication path.
 
+Unresolved applicant names and arrival dates receive a targeted 360-DPI retry
+across several page-segmentation modes. A value is accepted only when it is the
+sole active-case candidate and at least two OCR views agree. Visible correction
+statements are scoped to the active case and exact field; conflicting
+corrections remain unresolved instead of silently choosing one.
+
 Repeated applicant-name tokens learned from the current input batch repair
 isolated edit-distance errors and the common OCR collapse of `rn` into `m`.
 These repairs use no labels, case IDs, or frozen applicant-name dictionary.
