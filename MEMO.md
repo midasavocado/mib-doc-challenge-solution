@@ -182,6 +182,21 @@ yet only 64.67 / 80 on real transfer. A larger tree, forest, or neural network
 fed the same features and oracle labels cannot recover real decision evidence
 that the generator does not encode.
 
+### Compact neural baseline
+
+**Result: rejected; broaden the generator, not the network.**
+
+A one-hidden-layer task-specific neural network was evaluated without identity
+features. The synthetic-only network scored 79.943 / 80 on a separate
+synthetic validation partition but only 64.61 / 80 on real transfer. In the
+fully isolated protocol, each fold's generator and adapter saw only its own
+800 training rows; the held-out 200 features and labels were never exposed.
+
+Across five complete shuffle seeds, the neural adapter ranged from 64.38 to
+65.65 / 80 (mean 64.946) with 13–19 catastrophic false approvals (mean 15.8).
+The compact tree adapter remained better and much safer at a 65.404 mean and
+4.8 CFA. Architecture alone therefore does not repair the support mismatch.
+
 ### Visual damage classifier
 
 **Result: rejected.**
