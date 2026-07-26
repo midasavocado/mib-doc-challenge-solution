@@ -229,6 +229,13 @@ The compact 2,643-parameter MLP reached 59.765 at 10k only by increasing CFA.
 The experiment confirms that causal diversity helps more than raw resampling,
 but the current representation still lacks complementary adjudication evidence.
 
+The final selective-overlay control made that conclusion decisive. Applied
+only as an inner-gated correction layer over the stronger 63.96 source graph,
+the 10k causal model fell to 62.835 / 80 and the 100k model to 63.135. Only
+1/10 held-out folds improved at either scale. The overlays reduced CFA but
+discarded more correct decisions than they rescued, so the entire generator
+lane remains research-only.
+
 ### Visual damage classifier
 
 **Result: rejected.**
