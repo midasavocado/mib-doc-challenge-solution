@@ -212,6 +212,23 @@ generator instead represents ordered conflict endpoints and authority,
 active-versus-foreign scope, and field-local visible/unreadable/absent/fallback
 states. This expands causal support rather than repeating the old state space.
 
+### Causal counterfactual generator
+
+**Result: directionally useful, rejected for low absolute score and instability.**
+
+The first three causal families produced 100,000 unique rows per outer fold
+without reading real labels or held-out features. Models received 44
+identity-free evidence columns. Across two complete five-fold repetitions, the
+100k histogram model improved its deliberately strict transparent comparator
+from 57.89 to 59.30 / 80 and reduced CFA from 16 to 4 over 2,000 predictions.
+
+This is not a promotion result: 59.30 trails the existing 63.96 source graph,
+64.41 evidence-state table, and 65.404 safe adapter; only 8/10 folds improved
+and 8/10 avoided a CFA increase. Increasing 10k to 100k bought only +0.05.
+The compact 2,643-parameter MLP reached 59.765 at 10k only by increasing CFA.
+The experiment confirms that causal diversity helps more than raw resampling,
+but the current representation still lacks complementary adjudication evidence.
+
 ### Visual damage classifier
 
 **Result: rejected.**
