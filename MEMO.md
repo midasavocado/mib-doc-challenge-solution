@@ -162,6 +162,26 @@ shuffle seeds. Classification ranged from 65.26 to 65.50 / 80 (mean 65.404);
 CFAs ranged from 4 to 5 (mean 4.8). This is stable improvement over the
 63.96 / 80, 18-CFA source graph rather than one favorable partition.
 
+### Within-fold label-preserving augmentation
+
+**Result: measurable gain, rejected for CFA risk.**
+
+Each outer train-800 fold generated its own synthetic rows; its held-out 200
+rows were never exposed to generation or model selection. Across two complete
+five-fold repetitions, 10k augmented rows scored 65.795 / 80 and 79.7%
+accuracy. It beat the source graph in 9 of 10 folds.
+
+The apparent gain was not safe enough to promote: it produced 35 catastrophic
+false approvals over 2,000 held-out predictions. Larger corpora got worse:
+25k scored 65.735, 50k scored 65.605, and 100k scored 65.415 / 80 while CFAs
+rose to 52.
+
+This learning curve distinguishes a capacity limit from an information limit.
+The histogram model reached 80.00 / 80 on independent synthetic validation,
+yet only 64.67 / 80 on real transfer. A larger tree, forest, or neural network
+fed the same features and oracle labels cannot recover real decision evidence
+that the generator does not encode.
+
 ### Visual damage classifier
 
 **Result: rejected.**
@@ -240,9 +260,11 @@ A classification candidate is promoted only when:
 
 ## Next work
 
-1. Audit the synthetic generator and policy-locked feature mapping.
-2. Generate label-preserving, within-fold synthetic variants from each real
-   800-case training partition and evaluate only on its untouched 200 cases.
-3. Export the smallest model within 0.1 points of the best stable result.
-4. Integrate it only in the isolated classification candidate.
-5. Run a production-shaped panel, then the full official acceptance test.
+1. Audit held-out errors for a small number of new, visible, generalizable
+   evidence channels that are absent from the synthetic feature space.
+2. Test any learned candidate only on strict train-800/test-200 folds.
+3. Compare a compact neural model only if it receives richer evidence; do not
+   expect architecture alone to repair synthetic-to-real label mismatch.
+4. Export the smallest candidate within 0.1 points of the best safe result.
+5. Integrate it only in the isolated classification candidate.
+6. Run a production-shaped panel, then the full official acceptance test.
