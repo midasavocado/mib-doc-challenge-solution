@@ -152,6 +152,16 @@ boosting model:
 A shallow tree remained auditable: the smallest useful model had depth 4,
 13 nodes, and 7 leaves. Larger forests did not justify their added complexity.
 
+The synthetic-only result exactly matches the transparent policy oracle on the
+real rows. This is useful evidence that the model learned the written policy,
+but it also proves that generating more rows from the same oracle cannot teach
+the undocumented exceptions absent from that oracle.
+
+The safest synthetic-pretrained 800/200 adapter was repeated across five
+shuffle seeds. Classification ranged from 65.26 to 65.50 / 80 (mean 65.404);
+CFAs ranged from 4 to 5 (mean 4.8). This is stable improvement over the
+63.96 / 80, 18-CFA source graph rather than one favorable partition.
+
 ### Visual damage classifier
 
 **Result: rejected.**
@@ -231,8 +241,8 @@ A classification candidate is promoted only when:
 ## Next work
 
 1. Audit the synthetic generator and policy-locked feature mapping.
-2. Repeat the safest synthetic-pretrained 800/200 experiment across multiple
-   shuffle seeds.
+2. Generate label-preserving, within-fold synthetic variants from each real
+   800-case training partition and evaluate only on its untouched 200 cases.
 3. Export the smallest model within 0.1 points of the best stable result.
 4. Integrate it only in the isolated classification candidate.
 5. Run a production-shaped panel, then the full official acceptance test.
