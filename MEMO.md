@@ -236,6 +236,21 @@ the 10k causal model fell to 62.835 / 80 and the 100k model to 63.135. Only
 discarded more correct decisions than they rescued, so the entire generator
 lane remains research-only.
 
+### Documented policy interactions
+
+**Result: rejected on the current observable proxies.**
+
+Fixed rules for multiple review flags, MED-3 clean-check requirements,
+diplomatic sponsor/waiver exceptions, missing non-diplomatic sponsors, and
+manual unpaid-fee waivers were replayed across five shuffle seeds. Every rule
+lost classification. The largest apparent safety tradeoff—reviewing MED-3
+packets without a proven-clean flag channel—removed nine CFAs but lost 1.18/80
+because 31 of its 42 changed packets were approved.
+
+The rules themselves remain semantically plausible. The failure shows that
+current missing/sentinel provenance is not equivalent to missing adjudication
+evidence. Revisit only after extraction and provenance are frozen.
+
 ### Visual damage classifier
 
 **Result: rejected.**
