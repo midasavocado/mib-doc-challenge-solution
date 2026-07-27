@@ -1023,3 +1023,55 @@ catastrophic false approvals.**
   `/private/tmp/mib-hybrid-container-full.jsonl`,
   `/private/tmp/mib-hybrid-container-full-eval.json`, and
   `/private/tmp/mib-hybrid-container-full-cases.jsonl`.
+
+### Visible-finalizer audit and hollow-slash checkpoint
+
+**Result: one narrow visual denial accepted; public-layout and watermark
+shortcuts rejected. Classification 70.57 -> 70.63 with zero catastrophic false
+approvals.**
+
+- Replayed the complete public `vibemarketer94/mib-doc-solution` finalizer over
+  the key-disabled provenance output. It reached 72.61/80 classification
+  (72.81 when preserving authenticated primary findings), but the gain depended
+  on visa-purpose-page-signature cells selected against all 1,000 public
+  labels. The exact table approved 33/33 public approvals; its broad
+  identity-free eligibility set contained 33 approvals, 11 denials, and 10
+  reviews. The table was rejected as full-public label memorization.
+- A five-seed, five-fold CatBoost stacker over identity-free engine outputs,
+  confidences, missingness, field agreement, policy fields, sanitized text
+  booleans, and broad layout eligibility was not promotable. Argmax reached
+  about 70.7-71.5/80 with 24-28 CFA, expected utility reached 70.9-71.66 with
+  10-14 CFA, and the zero-CFA guard reached only 70.37-70.75 with unstable
+  folds. The temporary experiment script was deleted.
+- The public red `SAMPLE DENIAL` head and hollow blue slash detector together
+  projected 70.75/80. The red head was rejected because it changed
+  `fee_status` to unpaid from a sample watermark rather than visible fee
+  evidence, conflicting with the pipeline's untrusted-sample safeguards.
+- Ported only the MIT-licensed hollow blue slash-square pixel detector. It is
+  deny-only, reads no identity, and is gated to a weak review with paid output
+  and no visible canonical `$809` receipt. It changes only adjudication and
+  confidence, never extraction.
+- Threaded PDFium rendering aborted twice during the detector audit.
+  pypdfium2 documents PDFium as non-thread-safe even across separate
+  documents. A mutex around PDFium calls was selected over process workers,
+  Poppler rendering, or fully serial execution because it is the smallest safe
+  fix and preserves concurrent text prechecks. The fixed scanner processed all
+  227 eligible packets in 8.19 seconds and found exactly one mark.
+- The fixed 101-case container gate combined the prior 100-case panel with the
+  positive packet. Removing the positive row reproduced the prior output
+  byte-for-byte with SHA-256
+  `72eee25e1582e2c3f70c74169c22ba342d3c77b94ebc1bb9b1db76e12f85b826`.
+  The positive changed only `NEEDS_REVIEW -> DENIED` and confidence to 0.95.
+- The official four-worker full-1,000 offline container completed in
+  **2,759.80 seconds** (**2.760 seconds/PDF**), emitted 1,000 valid rows, and
+  had no processing failures. Scores: **70.630000/80 classification**,
+  **45.412222/50 extraction**, **17.546356/20 calibration**, and
+  **133.588579/150 total**, with **0 CFA**. Against the 70.57 checkpoint,
+  exactly one true denial was rescued and all 999 other rows were
+  field-for-field identical.
+- Output SHA-256:
+  `af78bb57874b9401e4f59300a31442f9e9c4f6179f8681f177f47eb3660d8247`.
+  Acceptance artifacts:
+  `/private/tmp/mib-slash-container-full.jsonl`,
+  `/private/tmp/mib-slash-container-full-eval.json`, and
+  `/private/tmp/mib-slash-container-full-cases.jsonl`.

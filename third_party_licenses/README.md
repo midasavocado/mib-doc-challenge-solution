@@ -11,6 +11,13 @@ MIT-licensed `strobl/mib-doc-solution`. Its license is retained as
 answer-key and label-selected purpose-signature channels and is used only as
 an independent visible-evidence adjudicator.
 
+The hollow blue slash-square detector in `mib_pipeline/visible_denials.py` is
+adapted from 8090 Inc.'s public MIT-licensed `vibemarketer94/mib-doc-solution`
+at commit `499ba40798ab7d252b35e68627ee87c88ab7e4d0`. Its license is retained as
+`vibemarketer94-mib-doc-solution-MIT.txt`. Only the deny-only pixel detector is
+used; public-label-selected layout cells and the red sample-watermark heuristic
+are intentionally excluded.
+
 The remaining pinned Python wheels retain their own license and NOTICE files
 inside the installed package tree. In particular, redistribution must retain:
 

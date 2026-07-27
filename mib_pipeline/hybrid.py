@@ -22,6 +22,8 @@ from provenance_engine import (
     VisibleEvidenceExtractor,
 )
 
+from .visible_denials import apply_visible_slash_denials
+
 
 _PRINT_LOCK = threading.Lock()
 
@@ -101,3 +103,5 @@ def apply_provenance_adjudication(
             continue
         primary["adjudication"] = alternate["adjudication"]
         primary["confidence"] = alternate["confidence"]
+
+    apply_visible_slash_denials(pdfs, predictions, workers)
