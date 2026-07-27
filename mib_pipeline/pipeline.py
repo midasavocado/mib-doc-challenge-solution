@@ -2845,6 +2845,32 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
             and not waiver_authorized
         ):
             decision = "NEEDS_REVIEW"
+        elif (
+            policy_fee in (None, "unknown")
+            and fee in {"paid", "waived"}
+            and flags_state == "clean"
+            and not source_conflict
+            and all((applicant, species, home_world, visa, arrival, purpose))
+            and (
+                fee == "paid"
+                or trusted_policy_visa == "DIP-1"
+                or waiver_authorized
+            )
+        ):
+            # A complete packet plus an explicit clean B-13 and a visible fee
+            # status is sufficient affirmative evidence even when damage hides
+            # the receipt amount.  Keep this one-way: the weaker status-only
+            # read may approve a fully corroborated packet, but it may never
+            # manufacture a denial.
+            decision = "APPROVED"
+            _trace_decision(
+                case_id,
+                "status_only_fee_approval",
+                transition="NEEDS_REVIEW->APPROVED",
+                fee_status=fee,
+                source="visible_fee_status_and_clean_b13",
+                scope="active_packet",
+            )
         elif policy_fee in (None, "unknown"):
             decision = "NEEDS_REVIEW"
         elif flags_state == "unknown":

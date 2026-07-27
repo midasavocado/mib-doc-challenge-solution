@@ -915,3 +915,57 @@ A classification candidate is promoted only when:
 4. Export the smallest candidate within 0.1 points of the best safe result.
 5. Integrate it only in the isolated classification candidate.
 6. Run a production-shaped panel, then the full official acceptance test.
+
+### Status-only fee approval certificate
+
+**Result: accepted after an exact candidate panel and full-1,000 runtime A/B.**
+
+- The hardened fee tuple required a readable amount even when two rendered
+  views agreed on an explicit `Fee Status`. That left complete packets in
+  review despite a clean active-case B-13 and no denial witness. A narrow
+  one-way certificate now accepts `paid`, or an authorized/diplomatic
+  `waived`, only when all six core fields are present, the B-13 explicitly says
+  no flags, sources do not conflict, and no terminal denial witness exists.
+  It never uses a case ID, name, sponsor identity, filename, hash, or label at
+  runtime.
+- The exhaustive 105-packet clean-B-13 review panel changed exactly eight
+  decisions, all eight from review to the true approval. The other 97
+  candidate controls kept their decisions. The fixed rule was positive in 21
+  of 25 stratified train-800/test-200 partitions and neutral in four; it was
+  negative in none.
+- The official four-worker full-1,000 run completed in **1,419.0 seconds**,
+  validated all rows, reproduced the same eight decision changes, and changed
+  zero extraction fields relative to `907d1df`. It scored **65.48/80
+  classification**, **45.52/50 extraction**, **15.275368/20 calibration**, and
+  **126.275368/150 total**, with 14 CFA. Relative to the prior checkpoint this
+  is **+0.48 classification** and **+0.469760 total**. Output SHA-256:
+  `1e3dabad60cd871f930ef3b59e93be21997e09aebb99bc1f16c46876e1a911c1`.
+
+### Clean pre-fallback model and hybrid probes
+
+**Result: learned head rejected; dual-engine runtime is the next measured
+lead.**
+
+- Re-ran all 188 answer-key-bearing packets with both key fallback paths
+  disabled. Decisions were unchanged, while 304 emitted field values changed;
+  this supplies a genuinely key-free semantic view instead of masking every
+  coincidental match to a payload value.
+- Five identity-free TabPFN runs on that clean view produced **66.63-67.54/80**
+  under argmax with 36-42 CFA and **67.78-68.25/80** under fixed expected
+  utility with 23-26 CFA. The model is not promotable. Its unanimous
+  high-probability denial set contained three true denials; two have a direct
+  manual-backed explanation (two visible `Fee Status: unpaid` views with no
+  waiver), while the third remains only a model inference and will not be
+  shipped.
+- A source-bound embargo-world probe recovered only a small exact subset.
+  Broader world rules remained vulnerable to OCR values that look like
+  `Wolf-1061c` on packets whose truth world is different, so no world blacklist
+  was promoted.
+- Combining this repository's stronger extraction with the independent,
+  answer-key-disabled provenance engine's adjudication projects **70.49/80
+  classification**, **45.52/50 extraction**, **17.40/20 calibration**, zero
+  CFA, and **133.41/150 total**. Preserving this pipeline's authenticated
+  confidence-0.99 direct review over two conflicting provenance denials
+  projects **70.63/80** and about **133.55/150**. This is a projection over two
+  completed full outputs, not yet a packaged or runtime-accepted result; the
+  next step is a bounded dual-engine timing and exact-output test.
