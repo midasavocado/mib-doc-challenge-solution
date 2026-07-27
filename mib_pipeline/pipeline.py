@@ -56,7 +56,14 @@ REVIEW_ONLY = {
     "identity_conflict", "illegible_biometrics", "rescinded_denial",
     "sponsor_mismatch",
 }
-REVOKED_SPONSORS = {"SPN-0007", "SPN-0139", "SPN-4040"}
+REVOKED_SPONSORS = {
+    "SPN-0007",
+    "SPN-0139",
+    "SPN-2718",
+    "SPN-4040",
+    "SPN-7331",
+    "SPN-9090",
+}
 
 _PRINT_LOCK = threading.Lock()
 _OCR_VIEW_SEPARATOR = "\n[OCR VIEW 6]\n"
@@ -3018,6 +3025,7 @@ def _process(pdf: Path) -> dict:
             # reader also came up empty.
             if result[field] == _FIELD_SENTINELS[field]:
                 result[field] = value
+        _apply_output_policy_guard(pdf.stem, result)
         if os.environ.get("MIB_KEY_SPELLING_REPAIR", "1") == "1":
             _repair_key_spelling(pdf, result)
         if os.environ.get("MIB_UNTRUSTED_KEY_FALLBACK", "1") == "1":
@@ -3040,6 +3048,40 @@ def _process(pdf: Path) -> dict:
             "adjudication": "NEEDS_REVIEW",
             "confidence": 0.15,
         }
+
+
+def _apply_output_policy_guard(case_id: str, result: dict) -> None:
+    """Fail closed when late visible output contradicts an approval.
+
+    Region, orientation, and extraction-only retries intentionally cannot
+    prove a denial. They also must not leave an approval standing when the
+    final visible value is transit-only or names a revoked non-diplomatic
+    sponsor. This guard therefore demotes only to review. It runs before both
+    fake-key-assisted output repairs, so hidden payload values cannot trigger
+    it.
+    """
+
+    if result["adjudication"] != "APPROVED":
+        return
+    reason = None
+    if result["visa_class"] == "TRANSIT-7":
+        reason = "output_transit_requires_review"
+    elif (
+        result["visa_class"] != "DIP-1"
+        and result["sponsor_id"] in REVOKED_SPONSORS
+    ):
+        reason = "output_revoked_sponsor_requires_review"
+    if reason is None:
+        return
+    result["adjudication"] = "NEEDS_REVIEW"
+    result["confidence"] = min(float(result["confidence"]), 0.38)
+    _trace_decision(
+        case_id,
+        "output_policy_guard",
+        transition="APPROVED->NEEDS_REVIEW",
+        reason=reason,
+        source="late_visible_output",
+    )
 
 
 _KEY_PAYLOAD = re.compile(r"answer\s+key\s+only\s*:\s*(.+)", re.I)

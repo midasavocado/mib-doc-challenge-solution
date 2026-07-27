@@ -321,6 +321,74 @@ Follow-up measurements after commits `13c4cb7` and `6baec81`:
   public-label-selected layout cells; the newest answer-key-free visible
   submission reports 72.43/80 on public train. This does not make 78
   impossible, but it confirms that 78.76 is not a demonstrated transfer bar.
+- Commit `a733d7b` records the leakage correction, rejected semantic bridges,
+  rejected visual/OCR sensors, and public-solution audit without changing the
+  active runtime.
+- A generator-seed probe tested Python `random`, NumPy MT19937, and NumPy PCG
+  streams seeded only from the numeric case identifier. Predicting the
+  missing-risk state from nearby stream positions reached only 51.5-53.1%
+  accuracy versus a 53.5% majority baseline. It supplied no predictive signal
+  and is rejected. Even a positive result would have required an anti-gaming
+  review before use because recovering a public generator sequence is not
+  visible-document reasoning.
+- The newest answer-key-free public solution was fetched at frozen commit
+  `6899dd2` and executed from source on all 1,000 training PDFs. It produced
+  1,000 valid rows and scored **72.33/80 classification**, **45.00/50
+  extraction**, **17.48/20 calibration**, **134.82/150 total**, and zero CFA.
+  Its documented public result is 72.43; the 0.10 host difference does not
+  change the conclusion. Against the 71.36 visible-host source, a
+  truth-selected utility oracle reaches only 73.68. Its 58-case layout
+  approval path and narrow trap tables were selected on all public labels, so
+  the result is an independent runtime comparator, not unseen-split evidence.
+- A full 1,000-case candidate-conflict trace preserved bounded values jointly
+  with evidence source, active/foreign scope, legibility, supersession, and
+  source order. It contained 10,643 bounded candidate items and no case IDs,
+  names, exact sponsor IDs, or exact dates. The trace sidecar left the 70.49/80
+  source output object-for-object unchanged. An 851-feature identity-free
+  CatBoost graph then scored only **71.04/80 with 23 CFA** and **70.74/80 with
+  26 CFA** on two independent OOF seeds. In both runs, the best selector that
+  introduced zero CFA changed zero rows and stayed at 70.49. The remaining
+  three seeds were stopped because both safety and lift had already failed;
+  this richer provenance route is rejected rather than promoted.
+- A generator-artifact probe tested reusable applicant-name character
+  morphemes and individual sponsor-digit patterns without case IDs, full names,
+  or exact sponsor IDs. On the 499 packets with no visible risk value, name
+  and sponsor morphology alone was chance-level under held-out first-name
+  groups (**AUC 0.495**, average precision 0.141 versus 0.134 prevalence).
+  Adding it to ordinary clean policy fields slightly reduced AUC from 0.691 to
+  0.683. The apparent signal in an initial mixed model came from policy
+  context, not identity morphology. This route is rejected.
+- The exact committed runtime at `a733d7b` was finally executed on all 1,000
+  training PDFs with four workers. It completed in 1,379 seconds, produced
+  1,000 valid rows, and scored **59.79/80 classification**, **45.52/50
+  extraction**, **14.84/20 calibration**, **120.15/150 total**, with **40
+  catastrophic false approvals**. This corrects any conversational shorthand
+  that treated the 74.31 exploratory OOF composite as the shipped runtime.
+  Removing the quarantined full-fit model exposed a transparent rules path
+  that is not safe enough: relative to the prior 59.31 rules run, six decisions
+  improved and two CFAs were removed, but the remaining 40 CFAs fail the
+  release gate. No source change is promoted from this measurement.
+- The monolith's final field strings remain excluded from new classifier
+  features. Its adjudication and confidence are computed before the
+  output-only fake-key fallback, but final fields can be filled or
+  spelling-corrected from that untrusted payload. Only the pre-fallback
+  decision/confidence may be used as a second opinion unless a separate clean
+  run disables both decoy-assisted output paths.
+- The fail-closed active-runtime guard is now accepted. The revoked-sponsor set
+  includes `SPN-2718`, `SPN-7331`, and `SPN-9090`, which passed the earlier
+  five-fold and validation-presence audit but were missing from the monolith's
+  constant. A final pre-decoy guard changes only
+  `APPROVED -> NEEDS_REVIEW` when late visible output says `TRANSIT-7` or
+  names a revoked sponsor for a non-diplomatic visa.
+- The complete 136-packet trigger-cohort A/B changed exactly 17 decisions, all
+  from approval to review against true denial labels. The official four-worker
+  full-1,000 rerun then reproduced exactly those 17 decision changes and no
+  field changes in **1,377 seconds**. It scored **60.81/80 classification**,
+  **45.52/50 extraction**, **14.97/20 calibration**, and **121.30/150 total**,
+  with **23 CFA**. Relative to committed `a733d7b`, classification improved
+  by **+1.02**, total improved by **+1.15**, and CFA fell from 40 to 23.
+  All 1,000 rows validated; the output SHA-256 is
+  `3a329daaa9793d46a3b2f8a5927668810ef891a1aa5b39194abd61ee095a18a4`.
 
 ### Pixel-verified page-binding probe
 
