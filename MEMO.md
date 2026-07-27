@@ -358,6 +358,15 @@ Follow-up measurements after commits `13c4cb7` and `6baec81`:
   Adding it to ordinary clean policy fields slightly reduced AUC from 0.691 to
   0.683. The apparent signal in an initial mixed model came from policy
   context, not identity morphology. This route is rejected.
+- A fold-local batch-constrained decoder estimated the adjudication mix among
+  source-review packets from each train-800 fold, then used a global
+  expected-utility assignment on the held-out 200. This tested whether stable
+  generator prevalence could recover outcomes that were too weak to choose
+  independently. The first complete OOF seed changed 137 rows, regressed the
+  70.49/80 zero-CFA source to **70.07/80**, and introduced **21 CFA**. The
+  second seed was stopped because the pre-registered global assignment had
+  already failed both lift and safety. Knowing how many hidden outcomes exist
+  does not identify which visually indistinguishable packets own them.
 - The exact committed runtime at `a733d7b` was finally executed on all 1,000
   training PDFs with four workers. It completed in 1,379 seconds, produced
   1,000 valid rows, and scored **59.79/80 classification**, **45.52/50
@@ -389,6 +398,8 @@ Follow-up measurements after commits `13c4cb7` and `6baec81`:
   by **+1.02**, total improved by **+1.15**, and CFA fell from 40 to 23.
   All 1,000 rows validated; the output SHA-256 is
   `3a329daaa9793d46a3b2f8a5927668810ef891a1aa5b39194abd61ee095a18a4`.
+  Commit `3997bef` contains the accepted source change and this full-run
+  history.
 
 ### Pixel-verified page-binding probe
 
