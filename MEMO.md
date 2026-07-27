@@ -1193,3 +1193,69 @@ supported by recoverable evidence.**
 The accepted runtime therefore remains commit `28ae4db`, 70.81/80
 classification, 0 CFA. No failed source change, learned artifact, temporary
 test file, or generated model was retained.
+
+### 2026-07-27 — accepted visible-uncertainty review safeguards
+
+**Result: accepted. Classification 70.81 -> 71.02 with zero catastrophic
+false approvals.**
+
+- The accepted 70.81 output had exactly three latent `NEEDS_REVIEW` cases
+  classified as `DENIED`: `MIB-000096`, `MIB-000457`, and `MIB-000550`.
+  Native-page inspection established a different visible uncertainty defect
+  in each packet:
+  - `MIB-000096` had a stale-date denial whose only non-diplomatic visa read
+    came from a page explicitly marked `REDACTED?`; no second page
+    corroborated that visa class.
+  - `MIB-000457` exposed the damaged title of a higher-precedence manual
+    adjudicator note, but its finding was unreadable. A weak transit inference
+    could not overrule the existence of that unresolved manual decision.
+  - `MIB-000550` visibly carried the review-only
+    `illegible_biometrics` flag. Linux OCR hallucinated a packet receipt date
+    of `2028-01-28` in a packet frozen at the 2026-07-07 challenge snapshot,
+    then manufactured a stale-application denial from that impossible date.
+- The first general safeguard candidate passed the three-case host smoke and
+  projected **71.02**, but its first full Linux container gate reached only
+  **70.88**. It corrected `MIB-000096` while Linux OCR missed the full damaged
+  manual-note title and retained the impossible future receipt date. That
+  result was rejected and not committed.
+- The final implementation contains no case IDs, applicant names, label
+  values, or row lookups. It:
+  - recognizes either the full damaged `Manual Adjudicator Note` title or its
+    more stable `Adjudicator Note` suffix, only for low-confidence incomplete
+    denials with no hard risk flag and no readable finding;
+  - requires a review-only risk flag, a stale non-DIP output, an explicit
+    `REDACTED?` marker on the sole visa source, and no independent visa
+    corroboration before softening that denial; and
+  - rejects any OCR receipt date later than the fixed packet snapshot, falling
+    back to the published snapshot date exactly as it does for a missing
+    receipt.
+- The rebuilt three-case offline Linux container returned
+  `NEEDS_REVIEW` for all three targets. The final official four-worker,
+  network-disabled, read-only full-1,000 container then completed 1,000/1,000
+  primary and 1,000/1,000 provenance rows with no failures. The measured
+  processing stages took approximately **2,818 seconds** before the final
+  narrow safeguard.
+- Official scores are **71.020000/80 classification**,
+  **45.412222/50 extraction**, **17.662702/20 calibration**, and
+  **134.094925/150 total**, with **0 catastrophic false approvals**. Relative
+  to the 70.81 checkpoint, exactly the three rows above changed, and only
+  `adjudication` plus `confidence` changed. The other 997 complete records and
+  every extraction field were unchanged.
+- Output SHA-256:
+  `e0bc3a8512a027ffdb1d408b83f77b742642ec4f02affafd967c33d3df8e83aa`.
+  Acceptance artifacts:
+  `/private/tmp/mib-review-fix2-full-output/predictions.jsonl`,
+  `/private/tmp/mib-review-fix2-full-eval.json`,
+  `/private/tmp/mib-review-fix2-full-cases.jsonl`, and
+  `/private/tmp/mib-review-fix2-full.log`.
+- Public-truth examples make the residual observability gap concrete:
+  `MIB-000024` and `MIB-000036` are latent approvals but visibly justify
+  review because the decisive approval proof is absent or unreadable.
+  `MIB-000033` and `MIB-000068` are latent denials carrying
+  `biohazard_red` and `memory_tampering`, respectively, but neither hard flag
+  appears on any visible page; the visible packet therefore also justifies
+  review.
+- Verification passed `py_compile`, the five public contract tests, the
+  rebuilt three-case offline container smoke, the official full-1,000
+  container, the official evaluator, `git diff --check`, and an exact
+  object-level baseline comparison.

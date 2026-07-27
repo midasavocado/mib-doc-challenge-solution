@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import concurrent.futures
+import difflib
+import re
 import sys
 import threading
 import time
+from datetime import date
 from pathlib import Path
 
 from provenance_engine import (
@@ -26,6 +29,160 @@ from .visible_denials import apply_visible_slash_denials
 
 
 _PRINT_LOCK = threading.Lock()
+_PACKET_SNAPSHOT_DATE = date(2026, 7, 7)
+_HARD_DENIAL_FLAGS = {
+    "active_warrant",
+    "biohazard_red",
+    "memory_tampering",
+    "planetary_embargo",
+}
+_REVIEW_ONLY_FLAGS = {
+    "identity_conflict",
+    "illegible_biometrics",
+    "rescinded_denial",
+    "sponsor_mismatch",
+}
+
+
+def _normalized_letters(value: str) -> str:
+    return re.sub(r"[^a-z]+", "", value.casefold())
+
+
+def _has_damaged_manual_review_note(pages: list[str], prediction: dict) -> bool:
+    """Recognize an unreadable higher-precedence manual note.
+
+    A weak policy inference must not overrule a visible manual adjudicator note
+    whose title survives but whose finding does not. This is deliberately
+    limited to low-confidence, incomplete rows with no hard denial flag.
+    """
+
+    if (
+        float(prediction["confidence"]) >= 0.8
+        or str(prediction["risk_flags"]) != "none"
+        or (
+            prediction["applicant_name"] != "unknown"
+            and prediction["arrival_date"] != "1900-01-01"
+        )
+    ):
+        return False
+    packet_text = "\n".join(pages)
+    if re.search(
+        r"\bfinding\s*[:=-]?\s*(?:approved|denied|needs[_\s-]*review)\b",
+        packet_text,
+        re.I,
+    ):
+        return False
+    targets = tuple(
+        _normalized_letters(label)
+        for label in ("Manual Adjudicator Note", "Adjudicator Note")
+    )
+    return any(
+        max(
+            difflib.SequenceMatcher(
+                None,
+                _normalized_letters(line),
+                target,
+            ).ratio()
+            for target in targets
+        )
+        >= 0.65
+        for line in packet_text.splitlines()
+        if len(_normalized_letters(line)) >= 12
+    )
+
+
+def _has_uncorroborated_redacted_stale_visa(
+    pages: list[str],
+    prediction: dict,
+) -> bool:
+    """Reject a stale-date denial whose non-DIP visa premise is redacted.
+
+    The public policy makes staleness depend on whether the visa is diplomatic.
+    If the sole visible non-DIP visa read shares a page with an explicit
+    ``REDACTED?`` marker and no independent page corroborates that visa, the
+    packet proves uncertainty rather than denial.
+    """
+
+    flags = {
+        flag
+        for flag in str(prediction["risk_flags"]).split("|")
+        if flag and flag != "none"
+    }
+    if (
+        not flags
+        or not flags <= _REVIEW_ONLY_FLAGS
+        or flags & _HARD_DENIAL_FLAGS
+        or prediction["visa_class"] == "DIP-1"
+        or float(prediction["confidence"]) == 0.99
+    ):
+        return False
+    try:
+        arrival = date.fromisoformat(str(prediction["arrival_date"]))
+    except ValueError:
+        return False
+    if (_PACKET_SNAPSHOT_DATE - arrival).days <= 180:
+        return False
+
+    visa = re.escape(str(prediction["visa_class"])).replace(r"\-", r"[\s-]?")
+    visa_line = re.compile(
+        rf"(?:visa\s+class\s*[:.]?\s*{visa}|class\s+{visa}\s+compliance)",
+        re.I,
+    )
+    redacted_source = any(
+        re.search(r"\bREDACTED\s*\?", page, re.I) and visa_line.search(page)
+        for page in pages
+    )
+    corroborating_pages = sum(bool(visa_line.search(page)) for page in pages)
+    return redacted_source and corroborating_pages < 2
+
+
+def _apply_visible_review_safeguards(
+    pdfs: list[Path],
+    predictions: dict[str, dict],
+) -> None:
+    """Demote soft denials contradicted by visible uncertainty evidence."""
+
+    from .pipeline import _render_and_ocr
+
+    for pdf in pdfs:
+        prediction = predictions[pdf.stem]
+        if prediction["adjudication"] != "DENIED":
+            continue
+        flags = set(str(prediction["risk_flags"]).split("|"))
+        low_confidence_incomplete = (
+            float(prediction["confidence"]) < 0.8
+            and prediction["risk_flags"] == "none"
+            and (
+                prediction["applicant_name"] == "unknown"
+                or prediction["arrival_date"] == "1900-01-01"
+            )
+        )
+        review_flag_stale = False
+        if (
+            flags & _REVIEW_ONLY_FLAGS
+            and not flags & _HARD_DENIAL_FLAGS
+            and prediction["visa_class"] != "DIP-1"
+            and float(prediction["confidence"]) != 0.99
+        ):
+            try:
+                arrival = date.fromisoformat(str(prediction["arrival_date"]))
+            except ValueError:
+                arrival = _PACKET_SNAPSHOT_DATE
+            review_flag_stale = (
+                _PACKET_SNAPSHOT_DATE - arrival
+            ).days > 180
+        if not (low_confidence_incomplete or review_flag_stale):
+            continue
+        pages = _render_and_ocr(pdf)
+        if _has_damaged_manual_review_note(
+            pages,
+            prediction,
+        ) or _has_uncorroborated_redacted_stale_visa(
+            pages,
+            prediction,
+        ):
+            prediction["adjudication"] = "NEEDS_REVIEW"
+            prediction["confidence"] = 0.78
 
 
 def _processor() -> OutputConfidenceRecalibrationProcessor:
@@ -117,3 +274,4 @@ def apply_provenance_adjudication(
         primary["confidence"] = alternate["confidence"]
 
     apply_visible_slash_denials(pdfs, predictions, workers)
+    _apply_visible_review_safeguards(pdfs, predictions)

@@ -334,6 +334,27 @@ class AdjudicationEngine:
             return field.value
         return None
 
+    def _effective_receipt_date(
+        self,
+        resolved_case: ResolvedCase,
+    ) -> date:
+        """Return a visible receipt date only when it can belong to the packet.
+
+        Packets are frozen at the published snapshot date. A later OCR date is
+        necessarily damaged text, so it cannot manufacture a stale-application
+        denial; fall back to the snapshot exactly as for a missing receipt.
+        """
+
+        field = _field(resolved_case, "packet_receipt_date")
+        receipt = _parse_date(_value(resolved_case, "packet_receipt_date"))
+        if (
+            receipt is not None
+            and receipt <= self._rules.snapshot_receipt_date
+            and _is_visible(field)
+        ):
+            return receipt
+        return self._rules.snapshot_receipt_date
+
     @classmethod
     def _orphan_finding_decision(cls, resolved_case: ResolvedCase) -> str | None:
         """Recover one exact-case Finding whose damaged title hid its note type.
@@ -508,13 +529,7 @@ class AdjudicationEngine:
             or resolved_case.contested_fields
         ):
             return False
-        receipt_field = _field(resolved_case, "packet_receipt_date")
-        receipt = _parse_date(_value(resolved_case, "packet_receipt_date"))
-        effective_receipt = (
-            receipt
-            if receipt is not None and _is_visible(receipt_field)
-            else self._rules.snapshot_receipt_date
-        )
+        effective_receipt = self._effective_receipt_date(resolved_case)
         return (effective_receipt - arrival).days > self._rules.stale_after_days
 
     def _visible_structured_diplomatic_waiver(
@@ -687,18 +702,12 @@ class AdjudicationEngine:
             approval_facts.append("diplomatic_sponsor_exemption")
 
         arrival = _parse_date(_value(resolved_case, "arrival_date"))
-        receipt_field = _field(resolved_case, "packet_receipt_date")
-        receipt = _parse_date(_value(resolved_case, "packet_receipt_date"))
         if arrival is None:
             review_reasons.append("arrival_date_unknown")
         elif not _is_visible(_field(resolved_case, "arrival_date")):
             review_reasons.append("arrival_date_not_visible")
         else:
-            effective_receipt = (
-                receipt
-                if receipt is not None and _is_visible(receipt_field)
-                else self._rules.snapshot_receipt_date
-            )
+            effective_receipt = self._effective_receipt_date(resolved_case)
             age_days = (effective_receipt - arrival).days
             if age_days > self._rules.stale_after_days:
                 if visa_visible and visa_class == "DIP-1":
