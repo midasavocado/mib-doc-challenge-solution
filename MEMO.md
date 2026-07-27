@@ -1128,3 +1128,68 @@ false approvals.**
   and duplicate raw acceptance output were moved to
   `~/.Trash/mib-rejected-probes-20260727-acceptance/`. Verified acceptance
   artifacts remain at the stable paths above.
+
+### Post-70.81 causal audit and honest ceiling
+
+**Result: no further runtime change. The 78+ public-score target is not
+supported by recoverable evidence.**
+
+- The remaining accepted-output confusion is `189` approved correct, `385`
+  denied correct, `277` review correct, `89` approvals sent to review, `46`
+  denials sent to review, `11` approvals sent to denial, and `3` reviews sent
+  to denial. The current exact accuracy is 851/1,000. Moving from 70.81 to
+  78.00 would require about 120 of the 135 false reviews to be assigned their
+  latent approved/denied label, even though most lack the deciding pixels.
+- A native-pixel audit of the 46 denied-to-review rows found **zero** new
+  active-case, pixel-verified terminal policy facts. An analogous audit of the
+  89 approved-to-review rows found one packet with all nine output facts
+  visibly recoverable; missing risk evidence is the dominant residual.
+- A generic complete-packet certificate required all seven core fields in
+  pixel-verified native text, the active case ID without a foreign ID,
+  explicit `Observed flags: none`, and an explicit paid/waived receipt. It
+  selected exactly two packets: one true approval and one true review.
+  Promoting both would lose one classification raw point, so the broad rule
+  was rejected.
+- Both selected packets have a visible `DIP-WAIVER`. The true-review sponsor
+  page carries a visible `SAMPLE DENIAL`; the true approval carries a purple
+  signed/sealed attestation. A frozen purple-seal census over all 45 weak,
+  clean-risk waived reviews found ten matches with mixed truth:
+  five approved, three denied, and two review. Requiring complete
+  pixel-verified fields, an explicit clean B-13, receipt, and seal isolated
+  only the one known approval. That one-example, label-selected certificate
+  has no independent support and was not promoted.
+- A new string-free PDF-grammar representation used 2,204 features from
+  drawing operators, coarse geometry/color primitives, page sequence, and
+  image/font/form resource counts. It excluded text values, filenames,
+  metadata, trailer IDs, timestamps, names, sponsor identities, hashes, and
+  row order. Five exact 800/200 LightGBM folds reached 71.71-72.28 under
+  unconstrained prediction but created 25-30 catastrophic false approvals.
+  The best zero-CFA splice was a selection-sensitive 70.84 versus the 70.81
+  baseline. In the paired ablation, grammar alone scored 39.84, ordinary
+  semantic fields scored 72.20, and adding grammar did not improve the
+  unconstrained score. The structural channel is rejected.
+- The quarantined 78.76 model did **not** contain direct case IDs, applicant
+  names, raw sponsor IDs, filenames, or document hashes; its own artifact
+  records those exclusions. It nevertheless contains 200 boosted-tree rounds
+  fitted on all 1,000 public labels, including exact semantic interactions and
+  arrival-age thresholds. Its same-set 78.76 result therefore is public
+  feature-combination fit rather than evidence of row-ID lookup, and its
+  held-out replacements did not reproduce the number.
+- A fresh census of every public submission through PR 30 found no disclosed
+  honest 78+ unseen-split classifier. The strongest public-train claim is
+  74.54, whose author explicitly enables fake-answer-key field transcription
+  and a purpose-by-page-signature table optimized on all 1,000 public labels.
+  The newest answer-key-free visible submission reports 72.43.
+- Most importantly, the organizer explicitly answered the missing-risk issue:
+  when the disqualifying flag is not recoverable from the PDF, the packet is
+  under-determined and `NEEDS_REVIEW` is the correct operational output
+  ([issue 4](https://github.com/8090-inc/mib-doc-challenge/issues/4),
+  [issue 5](https://github.com/8090-inc/mib-doc-challenge/issues/5)).
+  The public training CSV can still carry the latent denied label, and the
+  public evaluator gives a correct operational review only 2/8 raw points.
+  Predicting those latent draws is exactly the memorization/gaming behavior
+  the private-set audit is designed to reject.
+
+The accepted runtime therefore remains commit `28ae4db`, 70.81/80
+classification, 0 CFA. No failed source change, learned artifact, temporary
+test file, or generated model was retained.
