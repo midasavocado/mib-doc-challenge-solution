@@ -455,19 +455,55 @@ Follow-up measurements after commits `13c4cb7` and `6baec81`:
   case-seed reconstruction route therefore has neither evidence nor an honest
   generalization basis.
 
-### One-way denial projection
+### One-way terminal denial guard
 
-**Result: strongest next lead; projection only, not yet promoted.**
+**Result: accepted after an exact panel and full-1,000 runtime A/B.**
 
-The documented transit, revoked-sponsor, stale-arrival, and embargo-world
-conditions were projected as denial witnesses for unresolved non-diplomatic
-outputs, while preserving authenticated direct findings at confidence 0.99.
-Adding recurring embargo world `TRAPPIST-1e` produced **66.12/80
-classification**, **15.36/20 calibration**, **127.00/150 total**, and the same
-14 CFA. A separate visible unpaid-fee projection changed one additional true
-denial and reached **66.18/80** and **127.07/150**. These are label-scored
-static projections, not runtime acceptance results; the next step is an exact
-trigger panel followed by a full run before either rule can be committed.
+- Authenticated direct findings remain locked. Otherwise, the field manual's
+  terminal transit-only, revoked non-diplomatic sponsor, and stale
+  non-diplomatic arrival conditions may now move an unresolved result one way
+  to denial. Embargo-world output remains review-only because the prior
+  fold-local entity learner did not justify a stronger world blacklist.
+  `TRAPPIST-1e` and the one-row final-output unpaid shortcut were therefore
+  rejected rather than promoted.
+- The fixed generic rule was positive in all 25 stratified 800/200
+  partitions: fold deltas ranged from **+0.48 to +1.11/80**. The exact
+  214-packet runtime panel changed 70 reviews to denial: 65 true denials, two
+  true approvals, and three true reviews. It changed zero extraction fields
+  and left all 144 control decisions unchanged.
+- The official four-worker full-1,000 run completed in **1,432.7 seconds**,
+  validated all 1,000 rows, exactly reproduced the panel's 70 decision
+  changes, and changed zero extraction fields relative to the preceding
+  checkpoint. It scored **65.00/80 classification**, **45.52/50 extraction**,
+  **15.29/20 calibration**, and **125.81/150 total**, with **14 CFA**.
+  Relative to `0fde804`, this is **+3.65 classification** and **+3.90 total**
+  with CFA unchanged. Output SHA-256:
+  `3fc404430b4dd24525b70dcdea11fab2f08cbf49cab935adfe0e99b66d35e03a`.
+
+### Rich semantic-head probes after the denial guard
+
+**Result: no learned head promoted.**
+
+- An identity-free CatBoost head used bounded semantic output values,
+  sponsor standing, arrival bucket, graph decision, risk evidence state, and
+  document-family signature. Its preliminary held-out best reached
+  **67.65/80** but increased CFA from 14 to 21. Conservatively masking every
+  field that could have matched the hidden answer-key payload reduced the best
+  denial-only overlay to **65.19/80**; the score-maximizing approval overlay
+  reached 67.42 with 24 CFA. This is not a safe replacement.
+- A new pretrained MiniLM sentence-semantic probe consumed only visible native
+  spans after removing case IDs, names, sponsor numbers, dates, generic
+  numbers, and all recognized untrusted payload lines. Its held-out classifiers
+  scored only **47-48/80**. The best overlay added 0.54 points while adding 14
+  CFA. The packet prose is predominantly repeated template language, so this
+  channel is rejected.
+- A one-seed TabPFN probe initially found a **65.97/80** denial-only overlay.
+  After conservatively masking all fields that could have come from the hidden
+  answer-key payload, the same route fell to **65.12/80**. Its clean
+  score-maximizing approval overlay reached 67.49 but doubled CFA from 14 to
+  28. A high threshold selected seven correct approvals for **65.42/80** with
+  no CFA increase on that one seed; it remains only a lead until independent
+  seeds and a genuinely clean pre-fallback runtime view reproduce it.
 
 ### Pixel-verified page-binding probe
 

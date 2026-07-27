@@ -3053,33 +3053,27 @@ def _process(pdf: Path) -> dict:
 
 
 def _apply_output_policy_guard(case_id: str, result: dict) -> None:
-    """Fail closed when late visible output contradicts an approval.
+    """Fail closed when late visible output proves a terminal policy result.
 
-    Region, orientation, and extraction-only retries intentionally cannot
-    prove a denial. They also must not leave an approval standing when the
-    final visible value is transit-only, names a revoked non-diplomatic
-    sponsor, names a recurring embargoed non-diplomatic home world, or proves
-    a non-diplomatic arrival was already stale for the versioned public-data
-    snapshot. This guard therefore demotes only to review. It runs before both
-    fake-key-assisted output repairs, so hidden payload values cannot trigger
-    it.
+    A direct finding remains authoritative. Otherwise, final visible values
+    may supply a one-way denial witness for terminal rules explicitly stated
+    in the field manual: transit-only visas, revoked non-diplomatic sponsors,
+    and stale non-diplomatic arrivals. A recurring embargo-world value is less
+    conclusive without its registry source and therefore only demotes an
+    approval to review. This runs before both fake-key-assisted output repairs,
+    so hidden payload values cannot trigger it.
     """
 
-    if result["adjudication"] != "APPROVED":
+    if result["confidence"] == 0.99 or result["adjudication"] == "DENIED":
         return
-    reason = None
+    denial_reason = None
     if result["visa_class"] == "TRANSIT-7":
-        reason = "output_transit_requires_review"
+        denial_reason = "output_transit_denial_witness"
     elif (
         result["visa_class"] != "DIP-1"
         and result["sponsor_id"] in REVOKED_SPONSORS
     ):
-        reason = "output_revoked_sponsor_requires_review"
-    elif (
-        result["visa_class"] != "DIP-1"
-        and result["home_world"] in EMBARGOED_HOME_WORLDS
-    ):
-        reason = "output_embargoed_home_world_requires_review"
+        denial_reason = "output_revoked_sponsor_denial_witness"
     elif (
         result["visa_class"] != "DIP-1"
         and result["arrival_date"] != _FIELD_SENTINELS["arrival_date"]
@@ -3092,8 +3086,25 @@ def _apply_output_policy_guard(case_id: str, result: dict) -> None:
         except ValueError:
             arrival_age = 0
         if arrival_age > 180:
-            reason = "output_stale_arrival_requires_review"
-    if reason is None:
+            denial_reason = "output_stale_arrival_denial_witness"
+    if denial_reason is not None:
+        transition = f"{result['adjudication']}->DENIED"
+        result["adjudication"] = "DENIED"
+        result["confidence"] = 0.94
+        _trace_decision(
+            case_id,
+            "output_policy_guard",
+            transition=transition,
+            reason=denial_reason,
+            source="late_visible_output",
+        )
+        return
+
+    if (
+        result["adjudication"] != "APPROVED"
+        or result["visa_class"] == "DIP-1"
+        or result["home_world"] not in EMBARGOED_HOME_WORLDS
+    ):
         return
     result["adjudication"] = "NEEDS_REVIEW"
     result["confidence"] = min(float(result["confidence"]), 0.38)
@@ -3101,7 +3112,7 @@ def _apply_output_policy_guard(case_id: str, result: dict) -> None:
         case_id,
         "output_policy_guard",
         transition="APPROVED->NEEDS_REVIEW",
-        reason=reason,
+        reason="output_embargoed_home_world_requires_review",
         source="late_visible_output",
     )
 
