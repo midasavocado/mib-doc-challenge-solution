@@ -132,6 +132,91 @@ The next passes target field-local risk evidence, nested ensemble selection,
 and compact deployable inference. Same-set cell tables and identity
 fingerprints remain disallowed.
 
+### Public-solution and layout-consensus audit
+
+**Result: useful source comparison; public cell traps rejected.**
+
+The currently published high-classification submissions were inspected and
+reproduced where possible. The strongest disclosed public-train number was
+74.54/80, but that solution explicitly enables both answer-key field
+transcription and a purpose-by-page-signature table optimized on all 1,000
+public labels. A fresh full 1,000-case run of its current source with answer-key
+transcription disabled and the purpose/signature unlock enabled produced:
+
+| Section | Score |
+|---|---:|
+| Extraction | 45.04 / 50 |
+| Classification | **73.21 / 80** |
+| Calibration | 17.30 / 20 |
+| Total | 135.55 / 150 |
+| Catastrophic false approvals | 0 |
+
+The run attempted and answered all 1,000 packets. It is an exact runtime
+measurement, but the purpose/signature unlock remains a public-full-data table,
+so 73.21 is not an untouched-fold claim.
+
+A second public pipeline raises a 71.36 source result to 73.34 with 33
+additional correct approvals and zero CFAs. Its safety comes from 21 hardcoded
+`(visa, purpose, page signature)` trap cells. Removing those public-label
+traps makes 54 approvals and scores 71.98 with 11 CFAs. Learning the safe cells
+only inside each train-800 fold reached 72.01-72.37 across five seeds, with
+5-8 CFAs.
+
+All 33 pages from the 11 denied generic-layout CFAs were rendered and inspected.
+They are ordinary three-page packets with the biometric B-13 risk page absent.
+Their labels contain `biohazard_red`, `memory_tampering`, or `active_warrant`,
+but those pixels do not exist in the packet. The trap table therefore predicts
+an unobserved generator draw; it does not recover visible evidence.
+
+### Independent-extractor disagreement probe
+
+**Result: rejected.**
+
+An external render-first engine and the monolithic visible parser were treated
+as two independent field sensors. The second view had real but small oracle
+headroom over the external engine: 2-10 additional recoverable values per
+field. A CatBoost model received both sanitized semantic views plus agreement
+bits, but no names, raw sponsor IDs, case IDs, filenames, hashes, or row order.
+
+Five-fold results remained 71.94-72.01/80, no better than the single-engine
+model. The parsers share too many failures for agreement to be a useful
+classification certificate. One diagnostic accidentally included the old
+monolithic decision column and displayed a spurious 78.94; that column was
+immediately identified as the quarantined full-fit model output, the run was
+stopped, and the result was discarded. It is recorded here so it cannot be
+mistaken for evidence later.
+
+### Pretrained tabular-policy prior
+
+**Result: genuine clean-field breakthrough; noisy-field bridge not solved.**
+
+TabPFN 2.5, a tabular foundation model pretrained on synthetic data, was tested
+under the same five exact train-800/test-200 folds. Inputs were limited to
+low-cardinality semantic policy fields, arrival age, and sponsor state; they
+excluded identities and document fingerprints.
+
+When every held-out packet supplied its labeled semantic fields, TabPFN reached
+**78.11/80**, **97.3% accuracy**, and **zero CFAs**. This is materially above
+the previous 76.71-76.79 semantic-model ceiling and proves that the remaining
+clean-field interactions were not fully captured by the earlier trees and
+hand-mined rules.
+
+The runtime bridge is not yet good enough:
+
+- extracted dual-view fields: best exploratory score 72.46/80;
+- fold-local truth/extracted row augmentation: at most the 71.36 source
+  baseline;
+- randomized clean/noisy field replacement during training: 72.47/80;
+- high-confidence teacher corrections gated by 4-8 cross-parser agreements:
+  no positive correction set;
+- ordinary dual-view CatBoost: 71.94-72.01/80.
+
+The model checkpoint is only a research dependency and is not in the Docker
+runtime. The result changes the target: preserve the clean semantic policy
+prior, then learn a probabilistic field-error layer or add genuinely
+complementary source evidence. Feeding noisy fields directly destroys the
+gain.
+
 ### Pixel-verified page-binding probe
 
 A classification-only A/B tested whether a uniquely pixel-verified native
