@@ -1075,3 +1075,56 @@ approvals.**
   `/private/tmp/mib-slash-container-full.jsonl`,
   `/private/tmp/mib-slash-container-full-eval.json`, and
   `/private/tmp/mib-slash-container-full-cases.jsonl`.
+
+### Proof-preserving hybrid precedence checkpoint
+
+**Result: accepted. Classification 70.63 -> 70.81 with zero catastrophic
+false approvals.**
+
+- The hybrid previously replaced every non-direct primary decision with the
+  independent engine's result. That allowed `NEEDS_REVIEW`, which proves only
+  uncertainty, to erase a primary `DENIED` backed by visible terminal policy
+  evidence. The fusion lattice now preserves a primary denial when the
+  alternate engine abstains, except when the primary packet explicitly carries
+  `rescinded_denial`. An alternate `APPROVED` can still supersede a weaker
+  denial, and all authenticated primary findings remain locked as before.
+- A five-case offline container gate covered three positive denials, one
+  explicit rescission control, and one approval-over-denial control. It
+  produced the expected decisions exactly:
+  `DENIED, DENIED, DENIED, NEEDS_REVIEW, APPROVED`.
+- The official four-worker, network-disabled, read-only full-1,000 container
+  run completed in approximately **2,894 seconds** (**2.894 seconds/PDF**),
+  emitted 1,000 valid records, and had no processing failures. Scores:
+  **70.810000/80 classification**, **45.412222/50 extraction**,
+  **17.569025/20 calibration**, and **133.791247/150 total**, with **0 CFA**.
+- Relative to the 70.63 checkpoint, exactly three rows changed:
+  `MIB-000166`, `MIB-000362`, and `MIB-000609`. Each is a true denial; each
+  moved only from `NEEDS_REVIEW` to `DENIED`, with confidence moving to 0.94.
+  All extraction fields and the other 997 rows were byte-for-byte unchanged.
+- Output SHA-256:
+  `dab4d30909efd3f2263473e31d9fe90f1ab3286da25d8ccff87206ded71c3388`.
+  Acceptance artifacts:
+  `/private/tmp/mib-preserve-container-full.jsonl`,
+  `/private/tmp/mib-preserve-container-full-eval.json`,
+  `/private/tmp/mib-preserve-container-full-cases.jsonl`, and
+  `/private/tmp/mib-preserve-container-full.log`.
+
+### Rejected post-70.63 visible-recovery probes
+
+- A pinned `microsoft/trocr-small-printed` transformer read 703 rendered line
+  crops from 38 unresolved true-denial diagnostics. It found only one exact
+  field that the existing RapidOCR/Tesseract views both missed:
+  `fee_status=paid` on `MIB-000697`. That fact cannot prove denial, so the
+  model supplied zero complementary denial witnesses. No code or model was
+  retained; the isolated download cache was moved to Trash.
+- A label-blind 100-packet panel (80 unresolved rows and 20 controls, selected
+  by frozen case-ID hashes before label inspection) compared the same
+  provenance engine at 150, 200, and 300 DPI. Official panel raw utility was
+  **588**, **593**, and **590**, respectively, with zero CFA at every
+  resolution. Runtime was 150.7, 182.7, and 230.6 seconds. The 300-DPI pass
+  changed four decisions, fixing two and harming two; 150 DPI was lower still.
+  The existing 200-DPI setting remains the measured local optimum.
+- Rejected projections, zoom images, cloned audit repositories, panel inputs,
+  and duplicate raw acceptance output were moved to
+  `~/.Trash/mib-rejected-probes-20260727-acceptance/`. Verified acceptance
+  artifacts remain at the stable paths above.

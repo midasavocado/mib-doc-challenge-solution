@@ -101,6 +101,18 @@ def apply_provenance_adjudication(
         primary = predictions[case_id]
         if float(primary["confidence"]) == 0.99:
             continue
+        if (
+            primary["adjudication"] == "DENIED"
+            and alternate["adjudication"] == "NEEDS_REVIEW"
+            and "rescinded_denial"
+            not in str(primary["risk_flags"]).split("|")
+        ):
+            # A visible denial witness can prove only DENIED, while the
+            # independent engine's uncertainty proves nothing in the opposite
+            # direction.  Preserve that witness unless the packet explicitly
+            # says the prior denial was rescinded.  An affirmative APPROVED
+            # result may still supersede a weaker primary denial.
+            continue
         primary["adjudication"] = alternate["adjudication"]
         primary["confidence"] = alternate["confidence"]
 
