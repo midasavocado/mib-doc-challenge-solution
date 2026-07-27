@@ -401,6 +401,74 @@ Follow-up measurements after commits `13c4cb7` and `6baec81`:
   Commit `3997bef` contains the accepted source change and this full-run
   history.
 
+### Stale-arrival and embargo-world output guard
+
+**Result: accepted after an exact full-1,000 runtime A/B.**
+
+- The pre-decoy fail-closed guard was extended with two visible,
+  identity-independent policy conditions: a non-diplomatic arrival more than
+  180 days before the versioned 2026-07-07 packet snapshot, and a
+  non-diplomatic applicant from recurring embargo worlds `Eris Relay` or
+  `Wolf-1061c`. Like the earlier transit/revoked-sponsor guard, this checkpoint
+  permits only `APPROVED -> NEEDS_REVIEW`.
+- An absolute-symlink trigger panel covered all 214 packets that could exercise
+  the old or new guard. It changed exactly nine decisions: seven stale
+  arrivals and two embargo-world rows. Every change was approval to review
+  against a true denial; the other 205 panel decisions were unchanged.
+- The official four-worker full-1,000 run completed in **1,395.5 seconds**,
+  validated all 1,000 records, reproduced the same nine decision changes, and
+  changed zero extraction fields. It scored **61.35/80 classification**,
+  **45.52/50 extraction**, **15.04/20 calibration**, and **121.91/150 total**,
+  with **14 CFA**. Relative to commit `3997bef`, classification improved by
+  **+0.54**, total by **+0.61**, and CFA fell by nine. Output SHA-256:
+  `d68bebf0bdc5beb83231f7fc65640ee7ad086efd3b00f7011e013d6275631cc7`.
+
+### Parallel classifier and missing-evidence audit
+
+**Result: useful ceiling measurements; no learned candidate promoted.**
+
+- The isolated evidence-state candidate completed a clean full-1,000 runtime
+  and scored **62.80/80 classification**, **44.15/50 extraction**,
+  **15.40/20 calibration**, and **122.35/150 total**, with one CFA. Applying
+  the accepted stale-arrival guard as an output-only projection changed one
+  true denial and reached **62.86/80**, **15.41/20 calibration**,
+  **122.42/150 total**, and zero CFA. Its three learned inputs are only the
+  source-graph decision, bounded evidence state, and document-family
+  signature; it uses no names, case IDs, sponsors, filenames, or hashes. It
+  remains isolated because it regresses extraction and is not yet a clean
+  additive improvement over the active runtime.
+- A fully nested selector over the active runtime, evidence-state candidate,
+  and clean PR3 provenance output selected no changes in every outer fold and
+  stayed at **70.49/80**. A truth-selected oracle reaches only **67.81** for
+  active plus evidence-state, **71.04** for PR3 plus evidence-state,
+  **73.40** for all three, and **73.94** even after adding the independent
+  72.33 visible engine. Those retained sources cannot reach 78 even with a
+  perfect selector.
+- The remaining 14 active-runtime CFAs were manually separated from the
+  policy-visible cohort. The evidence-state and public visible engines review
+  nearly all of them. Rendering `MIB-000224` confirmed the representative
+  failure: its packet contains intake, registry, and fee pages but no B-13
+  risk page, while truth contains `biohazard_red`. The missing semantic pixel
+  cannot be recovered by a larger classifier.
+- The local repository history, public organization repositories, and exact
+  generator-phrase search exposed no public packet-generator source. A
+  case-seed reconstruction route therefore has neither evidence nor an honest
+  generalization basis.
+
+### One-way denial projection
+
+**Result: strongest next lead; projection only, not yet promoted.**
+
+The documented transit, revoked-sponsor, stale-arrival, and embargo-world
+conditions were projected as denial witnesses for unresolved non-diplomatic
+outputs, while preserving authenticated direct findings at confidence 0.99.
+Adding recurring embargo world `TRAPPIST-1e` produced **66.12/80
+classification**, **15.36/20 calibration**, **127.00/150 total**, and the same
+14 CFA. A separate visible unpaid-fee projection changed one additional true
+denial and reached **66.18/80** and **127.07/150**. These are label-scored
+static projections, not runtime acceptance results; the next step is an exact
+trigger panel followed by a full run before either rule can be committed.
+
 ### Pixel-verified page-binding probe
 
 A classification-only A/B tested whether a uniquely pixel-verified native

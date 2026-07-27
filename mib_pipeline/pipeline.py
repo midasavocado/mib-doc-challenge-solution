@@ -64,6 +64,8 @@ REVOKED_SPONSORS = {
     "SPN-7331",
     "SPN-9090",
 }
+EMBARGOED_HOME_WORLDS = {"Eris Relay", "Wolf-1061c"}
+PACKET_SNAPSHOT_DATE = date(2026, 7, 7)
 
 _PRINT_LOCK = threading.Lock()
 _OCR_VIEW_SEPARATOR = "\n[OCR VIEW 6]\n"
@@ -3055,8 +3057,10 @@ def _apply_output_policy_guard(case_id: str, result: dict) -> None:
 
     Region, orientation, and extraction-only retries intentionally cannot
     prove a denial. They also must not leave an approval standing when the
-    final visible value is transit-only or names a revoked non-diplomatic
-    sponsor. This guard therefore demotes only to review. It runs before both
+    final visible value is transit-only, names a revoked non-diplomatic
+    sponsor, names a recurring embargoed non-diplomatic home world, or proves
+    a non-diplomatic arrival was already stale for the versioned public-data
+    snapshot. This guard therefore demotes only to review. It runs before both
     fake-key-assisted output repairs, so hidden payload values cannot trigger
     it.
     """
@@ -3071,6 +3075,24 @@ def _apply_output_policy_guard(case_id: str, result: dict) -> None:
         and result["sponsor_id"] in REVOKED_SPONSORS
     ):
         reason = "output_revoked_sponsor_requires_review"
+    elif (
+        result["visa_class"] != "DIP-1"
+        and result["home_world"] in EMBARGOED_HOME_WORLDS
+    ):
+        reason = "output_embargoed_home_world_requires_review"
+    elif (
+        result["visa_class"] != "DIP-1"
+        and result["arrival_date"] != _FIELD_SENTINELS["arrival_date"]
+    ):
+        try:
+            arrival_age = (
+                PACKET_SNAPSHOT_DATE
+                - date.fromisoformat(result["arrival_date"])
+            ).days
+        except ValueError:
+            arrival_age = 0
+        if arrival_age > 180:
+            reason = "output_stale_arrival_requires_review"
     if reason is None:
         return
     result["adjudication"] = "NEEDS_REVIEW"
