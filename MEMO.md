@@ -14,19 +14,34 @@ results.
 
 The latest valid full run is:
 
-`work/fresh-independent/full-1000-deskew-20260726`
+`work/fresh-independent/full-1000-fastocr-20260726`
 
 | Section | Score |
 |---|---:|
-| Extraction | 44.37 / 50 |
+| Extraction | 45.5033 / 50 |
 | Classification | 78.76 / 80 |
 | Calibration | 14.96 / 20 |
-| Total | 138.09 / 150 |
+| Total | 139.2255 / 150 |
 | Catastrophic false approvals | 0 |
 
 This public classification result uses a model fitted on all 1,000 public
 labels. It is useful as a public checkpoint, but it is **not** accepted as an
 estimate of private-set generalization.
+
+The full-fit adjudication override is now quarantined in the active pipeline.
+It must not be re-enabled until a replacement reaches at least 78/80 on
+untouched train-800/test-200 evaluations. The JSON artifact remains in history
+for reproducibility; it is not accepted evidence.
+
+### Frozen-checkpoint calibration audit
+
+A monotonic confidence mapping was evaluated over 25 exact train-800/test-200
+folds while keeping the checkpoint's decisions frozen. It improved calibration
+from 14.9622 to **19.4883/20 mean out of fold**; the worst fold scored 19.241.
+A full public replay scored 19.5563 and total 143.8196, but that replay inherits
+the frozen classifier's full-fit limitation. The calibrator is preserved under
+`work/fresh-independent/classification-calibration` and is not active while
+the full-fit classifier is quarantined.
 
 ### Honest classification checkpoint
 
@@ -43,6 +58,122 @@ only unresolved cases reach a learned fallback.
 The synthetic-pretrained adaptation improved every canonical 200-case fold by
 `+1.35`, `+0.55`, `+2.25`, `+1.85`, and `+1.70` classification points while
 reducing aggregate CFAs from 18 to 5.
+
+### Identity-free 74.31 exploratory composite
+
+**Result: research checkpoint only; not a runnable or promotion-quality
+artifact.**
+
+A later exploratory composite reached **74.31 / 80 classification** on the
+1,000 public cases while excluding case IDs, applicant names, filenames,
+hashes, row order, and raw sponsor identities from its learned inputs. The
+score combined:
+
+1. an out-of-fold CatBoost stack over an external visible-document engine,
+   extracted policy fields, page/layout summaries, and PDF construction
+   features;
+2. a deterministic inverse-decoy policy on the 188 packets containing one
+   structurally valid fake answer-key payload;
+3. out-of-fold visual risk-tile probabilities used only as a bounded blend.
+
+The inverse-decoy rule was 178/188 correct. Its one exceptional branch is
+generic rather than case-specific: a decoy `DENIED` maps to `APPROVED`; a
+decoy `APPROVED` maps to `DENIED` only when the payload also describes a hard
+risk, transit visa, barred sponsor, non-diplomatic Wolf-1061c packet, unpaid
+fee, or stale non-diplomatic arrival, and otherwise maps to
+`NEEDS_REVIEW`. Nested fold tests reproduced 177/188 on most seeds and 174/188
+on the weakest tested seed.
+
+This is not accepted as a clean 74.31 result for three reasons:
+
+- the composite existed as out-of-fold analysis probabilities rather than a
+  final runtime model trained for unseen PDFs;
+- the external base contains purpose-by-layout cells selected on all public
+  training labels;
+- the decoy payload is explicitly untrusted under the challenge contract,
+  even though inverting a generic adversarial pattern is not case
+  memorization.
+
+The temporary model bundle was intentionally not promoted. The active source
+therefore does not claim 74.31, and a future implementation must retrain a
+deployable model, preserve the identity exclusions, and pass nested selection
+plus the official four-worker run.
+
+### Resumed 74-to-79 search
+
+**Result: active research; no candidate promoted yet.**
+
+The 74.31 route was reconstructed from surviving source and evaluator
+artifacts. The following checks were completed before the first resumed
+checkpoint commit:
+
+- Enabling the public-train purpose-by-layout approval cells on a 71.36
+  source run raised the same-set classification to **74.25**, but learning the
+  cells inside each train-800 fold and applying them only to its untouched
+  test-200 fold reached just **71.78** at the safest tested setting. The large
+  apparent gain is therefore public-cell overfit, not transferable evidence.
+- A CatBoost stack using only extracted categorical policy fields, sanitized
+  document-family signatures, page count, file size, fake-key structure, and
+  the source decision reached a provisional **73.22** out of fold. That number
+  still chooses its blend weight on the combined out-of-fold predictions, so
+  it is a search result rather than a nested estimate.
+- Training the same model on both extracted and truth-field views did not
+  help; its best provisional blend was 73.17.
+- A semantic model given perfect labeled policy fields reached **76.71** out
+  of fold. Adding 349 PDF drawing/object summaries reduced it to at most
+  75.72. This tightens the diagnosis: missing or misread semantic evidence is
+  the main gap, while generic PDF topology adds noise.
+- Exact decoded embedded-image hashes produced 1,977 assets. The 21 recurring
+  assets were broad face/background resources with mixed decisions; no asset
+  met even the minimum two-example, 70%-pure fold rule on a held-out packet.
+  Exact asset lookup therefore supplied zero usable corrections.
+
+The next passes target field-local risk evidence, nested ensemble selection,
+and compact deployable inference. Same-set cell tables and identity
+fingerprints remain disallowed.
+
+### Pixel-verified page-binding probe
+
+A classification-only A/B tested whether a uniquely pixel-verified native
+footer should override a foreign case identifier hallucinated by OCR. The
+panel included all 73 packets with a recorded foreign OCR identifier: 19
+known source-graph errors and 54 currently-correct controls.
+
+The candidate moved the panel from 457 to 462 classification raw
+(`+0.05/80` on the full 1,000-case scale) with zero CFA, but it regressed one
+correct denial to review and one correct review to approval. This failed the
+preregistered `+0.50/80` and zero-control-loss gates. The code was removed;
+source-specific scope checks remain active. Full audit:
+`../work/fresh-independent/classification-page-binding/REPORT.md`.
+
+### Two-view unpaid-fee witness
+
+A narrower denial-only use of the same provenance machinery passed. When the
+receipt heading is damaged but an active-case physical page still provides two
+views of the literal label `Fee Status: unpaid`, a non-DIP packet with no
+authenticated finding or visible waiver may transition to denial.
+
+On the exact 21-case visible-unpaid/no-direct/non-DIP panel, the active baseline
+already denied 15 cases. The witness changed five remaining reviews to denial;
+all five were correct. This adds 30 classification raw points, or `+0.30/80`
+on the full public set. Six contradictory non-denied controls, including a
+visible-unpaid truth-review trap, were unchanged. The fixed rule is nonnegative
+in every fold across all five prescribed shuffle seeds. Full audit:
+`../work/fresh-independent/classification-unpaid-witness/REPORT.md`.
+
+Status: retained pending the official four-worker full-1,000 acceptance run.
+
+### Late hard-risk witness audit
+
+Nineteen older visible-only outputs carried a hard risk token while strict
+provenance called the risk source absent or unknown; all 19 truths are denied.
+Two proof paths were tested: a two-view active-page token reader and a
+region-retry result that could act only when its own scoped parse also denied.
+Both produced zero decision changes on the exact cohort. The remaining token
+appears only in an extraction-only late fill, so feeding it back into policy
+would violate the provenance boundary. Both candidate hooks were removed.
+Full audit:
+`../work/fresh-independent/classification-hard-risk-witness/REPORT.md`.
 
 ## Classification architecture
 
@@ -333,6 +464,60 @@ A prior fuzzy-date run changed eight decisions and reduced classification from
 decision-quality evidence restored all eight decisions in a targeted panel.
 Two independent full runs then produced identical decisions across all 1,000
 cases.
+
+## Proof-carrying classification pass
+
+The public-full-fit adjudication model remains disabled. A nested adapter that
+combined the source graph with 10,000 policy-locked synthetic examples was
+evaluated over five seeds and five exact train-800/test-200 folds:
+
+- source graph: 63.928 / 80;
+- unrestricted adapter: 65.738 / 80, but CFA increased in 12/25 folds;
+- best selector with no CFA increase: 64.274 / 80, with a -2.60 worst fold.
+
+All learned adapters were rejected. Synthetic policy rows improve average
+accuracy but do not create missing visible evidence.
+
+Three bounded rendered-evidence channels are now active:
+
+1. active-case registry `EMBARGO REVIEW`, previously validated at +0.66/80
+   with all five folds positive and three fewer CFAs;
+2. pixel-verified identity/visa source conflicts, previously validated at
+   +0.43/80 beyond registry with no new CFA;
+3. a damaged B-13 hard-flag fragment requiring the B-13 heading, active case
+   ID, `Observed` label prefix, one unique hard-flag suffix, and agreement from
+   two OCR layouts. It recovers `MIB-000855` as `biohazard_red` and changes the
+   correct decision from review to denial, worth +0.06/80.
+
+The answer-key payload appears in 1,255 of the 5,000 validation PDFs. On the
+188 public packets with one structurally clean payload, individual extraction
+fields are about 90-98% correct while the claimed adjudication is 0/188
+correct. It remains output-only, tainted, and unavailable to classification or
+confidence.
+
+### Source-proven fee and staleness evidence
+
+The fixed stale-arrival shortcut was removed. Staleness now requires both a
+visible active-case intake arrival date and a separately labeled packet-receipt
+date; absent either role, it abstains.
+
+Fee policy now consumes an active-case, two-view source tuple rather than the
+first packet-wide fee word. Amount and waiver code reconcile a damaged status:
+`$809 -> paid`, `$0 + DIP-WAIVER -> waived`, and `$0 + N/A` preserves only a
+proven `unpaid`/`unknown` state. Visible corrections retain highest
+precedence. The grammar matched 449/449 readable public fee receipts, and a
+five-case live contradiction panel emitted 5/5 exact fee values. Its frozen
+source-graph projection is +0.07/80 with no CFA change.
+
+The one-way denial bus is inspectable with `MIB_DECISION_TRACE=1`; ordinary
+runs remain quiet. A 20-case production-shaped safety panel finished with
+zero CFA and retained finding precedence. Full evidence and rejected marker
+rules are recorded in
+`work/fresh-independent/classification-proof-bus/REPORT.md`.
+
+The 76.77 perfect-field diagnostic already includes registry/source-conflict
+evidence, so those gains are not additive. About 1.23 classification points
+still require a genuinely new visible semantic channel.
 
 ## Promotion gates
 

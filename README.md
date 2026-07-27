@@ -27,12 +27,14 @@ fallbacks use either the public-training fee prior or modes learned from the
 current input batch for closed-vocabulary fields. These estimates are applied
 after adjudication and can never become approval evidence.
 
-Trusted visible findings and strong policy denials remain authoritative. Only
-the lower-confidence approve/review fallback is refined by a small offline
-candidate-trained histogram model. Its features exclude case IDs, applicant
-names, raw sponsor IDs, filenames, hashes, and document fingerprints.
-Fallback confidence is estimated by a separately cross-fitted logistic
-calibrator using only model probabilities and decision-path metadata.
+Trusted visible findings and source-proven policy denials remain authoritative.
+Unresolved or contradictory trusted evidence stays `NEEDS_REVIEW`. The active
+runtime does not load the public-full-fit adjudication model or its calibrator;
+those artifacts are retained only to reproduce an older public checkpoint.
+
+Experimental classification results, including the non-identity 74.31
+out-of-fold composite and the checks that prevented its promotion, are recorded
+in `MEMO.md`. They are not represented as live runtime scores.
 
 ## Run
 
@@ -56,8 +58,8 @@ The image uses CPU-only Poppler and Tesseract. The entrypoint accepts exactly:
 solution.py                         challenge entrypoint
 mib_pipeline/
   pipeline.py                      OCR, extraction, and adjudication pipeline
-  adjudication_model.json          offline fallback classifier
-  adjudication_calibrator.json     cross-fitted confidence calibrator
+  adjudication_model.json          quarantined historical checkpoint artifact
+  adjudication_calibrator.json     quarantined historical checkpoint artifact
 run.sh                             container entrypoint
 Dockerfile                         offline runtime image
 ```

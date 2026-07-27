@@ -7,6 +7,8 @@ RUN apt-get update \
     && apt-get clean \
     && find /var/lib/apt/lists -mindepth 1 -delete
 
+RUN pip install --no-cache-dir "numpy==2.3.1"
+
 WORKDIR /app
 COPY run.sh solution.py /app/
 COPY mib_pipeline /app/mib_pipeline
