@@ -1,6 +1,6 @@
 # MIB Document Challenge — Living Engineering Memo
 
-Last updated: 2026-07-26
+Last updated: 2026-07-27
 
 This memo records the approaches we tried, the evidence behind each decision,
 and the current promotion gates. It is intentionally a living document: update
@@ -216,6 +216,111 @@ runtime. The result changes the target: preserve the clean semantic policy
 prior, then learn a probabilistic field-error layer or add genuinely
 complementary source evidence. Feeding noisy fields directly destroys the
 gain.
+
+Follow-up measurements after commits `13c4cb7` and `6baec81`:
+
+- The clean truth-field TabPFN semantic result repeated at **77.72-78.11**
+  across five seeds (mean **78.018**), with zero CFA in every run. It remains
+  a diagnostic ceiling because truth fields are not runtime inputs.
+- A two-view TabPFN initially appeared to reach **73.53/80 OOF**; fixed
+  expected utility plus the existing denial witness appeared to reach
+  **73.79/80** with zero CFA. A later byte-for-byte source audit retracted
+  both as clean results. The old second-view file contained five exact truth
+  `risk_flags` copied from hidden `SYSTEM: ... answer key` text. Those five
+  high-leverage prototypes changed TabPFN's entire decision surface.
+  Re-running against the fully traced answer-key-disabled view scored
+  **70.49/80** with 33 CFA at eight ensemble members and **70.49/80** with 34
+  CFA at 32 members; fixed expected utility still left 15 CFA. The earlier
+  ordinal **73.29** and **74.79** variants used the same contaminated view
+  and are rejected too. This correction supersedes the earlier exploratory
+  high-water claims.
+- The corrected one-hot semantic teacher scored **78.11/80**, 97.3%, and zero
+  CFA on untouched truth policy fields, but **61.90/80** with 48 CFA on
+  extracted fields. Even requiring all eight available fields to agree
+  produced only **64.73/80** with 35 CFA. Agreement is not a truth
+  certificate because the extractors share default and source-selection
+  errors; this teacher-gating route is rejected.
+- A fold-local latent-field error model used identity-free dual-parser
+  evidence to predict distributions over the clean policy fields before
+  invoking the 78.11 semantic teacher. Fractional posterior means were
+  off-manifold for the teacher and collapsed to **37.28/80**, 43.1% accuracy,
+  and zero CFA. Hard projection to the most likely valid field tuple reached
+  only **63.05/80**, 78.8% accuracy, and 43 CFA. The reconstructed fields
+  remain too wrong to sample safely, so this route is rejected.
+- Whole-document pretrained ResNet-18 embeddings added exactly **0.00** under
+  nested selection for five seeds and three PCA sizes. Source-local clustered
+  page embeddings regressed **71.36 to 71.03** and added two CFA in the first
+  complete LightGBM configuration, so the remaining redundant configurations
+  were stopped.
+- A fresh full run of a second external visible engine completed 1,000/1,000
+  valid rows and scored **72.33/80**, zero CFA. Even a truth-selected oracle
+  between it and the clean 73.29 model reaches only **76.16**; the oracle over
+  every retained source reaches **76.34**.
+- PyTorch plus LightGBM in one macOS process reproduced a native OpenMP
+  `SIGSEGV` twice. Separating embedding extraction and tree fitting into
+  different processes fixed it without the unsafe duplicate-runtime
+  environment override.
+- OpenCV QR and barcode decoders found no decodable payload among the 22
+  rendered `BARCODE PAYLOAD` pages. No barcode-derived metadata was used.
+- A clean full-1,000 provenance trace completed against the independent
+  extractor with answer-key and purpose-signature shortcuts disabled. The
+  trace records field state, winning and losing evidence type, conflict
+  reason, legibility, cue type, and source confidence without changing
+  decisions. The unchanged official output scored **70.49/80**, zero CFA,
+  with all 1,000 records. A fold-local TabPFN selected 256 of roughly 970
+  training-only provenance features per fold and reached **70.88/80** with
+  30 CFA; fixed expected utility still left 18 CFA. Its apparent **74.01**
+  blend used the now-retracted contaminated base probabilities and is
+  invalid. Provenance is informative but is not a safe decision head.
+- Qwen2.5-VL 3B was evaluated on rendered pixels only, with truth withheld and
+  answer keys, prompt injections, barcodes, and watermarks explicitly
+  excluded. A balanced 16-case panel contained one OCR-confirmed visible
+  example and one absent-risk packet for each risk type. It recovered only
+  **4/8** visible flags and produced a clean absence on only **3/8** absent
+  packets, mostly hallucinating `rescinded_denial`. It is rejected as a
+  classifier or denial witness; no VLM output was used.
+- GLM-OCR 0.9B was then tested strictly as a rendered-pixel microscope, not a
+  runtime model. On eight packets whose current candidate had no risk value, it
+  produced one exact useful read (`MIB-000796`, `identity_conflict`), one
+  plausible typo, and six misses or unsafe reads. It emitted no policy flag on
+  11 matched no-risk controls. A deterministic Tesseract implementation
+  reproduced the exact read using three agreeing row OCR modes plus two
+  independent case-ID reads. However, a detached-`HEAD` A/B proved the shipped
+  pipeline already returns `identity_conflict` and `NEEDS_REVIEW` for that
+  packet through another reader. The candidate changed zero final outputs and
+  was reverted; it is evidence about OCR failure modes, not a score gain.
+- A joint error-channel decoder learned `P(observed parser fields | clean
+  fields)` inside each train fold and voted over clean semantic prototypes.
+  Both parser views were nearly identical, so the channel had no independent
+  information. Every inner fold preferred disabling it; forcing the safest
+  denial/review-only overlay scored **60.02-60.99/80** versus the 70.49 source.
+- A counterfactual semantic certificate trained the clean-field TabPFN only on
+  each train-800 fold, then required an override to survive every plausible
+  one-field correction. It changed zero rows. Relaxing this would recreate the
+  known noisy-field failure: direct semantic inference on extracted fields
+  scored **58.42/80** with 76 CFA in this stricter representation.
+- An explicit visible-source certificate was **174/179 (97.2%)** exact at a
+  practical OCR-confidence threshold, but covered only four current decision
+  errors. It is a high-quality confidence signal, not a multi-point
+  classification channel.
+- The largest exact-field residual is 79 true approvals left in review, mostly
+  because the risk region is absent or unreadable. A five-seed CatBoost model
+  predicted the latent `none`/review/hard risk state from identity-free
+  policy, source, and provenance features at only **63.1-64.3%** OOF accuracy.
+  Useful thresholds were negative or seed-unstable and introduced false
+  approvals. The missing risk draw is not recoverable from those features.
+- The current RapidOCR 3.9.2 stack (PP-OCRv6 detector plus English PP-OCRv5
+  recognizer) scanned rendered B-13 regions for all 499 trace rows whose risk
+  state was unknown. Rendered heading nomination found 57 candidate pages. The
+  only strongly active-case-bound reads were `MIB-000345` and `MIB-000796`;
+  the monolithic pipeline already returns both final risk values correctly.
+  Net final-output and classification change: **zero**.
+- Public submission evidence was checked to test the premise behind the target.
+  No entrant currently discloses a 78+ unseen-split classification result. The
+  strongest disclosed 74.54 and 73.79 public-train paths acknowledge
+  public-label-selected layout cells; the newest answer-key-free visible
+  submission reports 72.43/80 on public train. This does not make 78
+  impossible, but it confirms that 78.76 is not a demonstrated transfer bar.
 
 ### Pixel-verified page-binding probe
 
