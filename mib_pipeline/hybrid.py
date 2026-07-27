@@ -258,6 +258,28 @@ def apply_provenance_adjudication(
         primary = predictions[case_id]
         if float(primary["confidence"]) == 0.99:
             continue
+        primary_incomplete = any(
+            (
+                primary["applicant_name"] == "unknown",
+                primary["species_code"] == "unknown",
+                primary["home_world"] == "unknown",
+                primary["visa_class"] == "unknown",
+                primary["sponsor_id"] == "SPN-0000",
+                primary["arrival_date"] == "1900-01-01",
+                primary["declared_purpose"] == "unknown",
+                primary["fee_status"] == "unknown",
+            )
+        )
+        if (
+            primary["adjudication"] == "NEEDS_REVIEW"
+            and alternate["adjudication"] == "DENIED"
+            and primary["risk_flags"] == "none"
+            and primary_incomplete
+        ):
+            # The alternate engine's fallback cells can populate missing
+            # fields with modal values and then turn those invented premises
+            # into a denial. Missing evidence proves review, not denial.
+            continue
         if (
             primary["adjudication"] == "DENIED"
             and alternate["adjudication"] == "NEEDS_REVIEW"

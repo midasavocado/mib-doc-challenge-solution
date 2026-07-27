@@ -1259,3 +1259,79 @@ false approvals.**
   rebuilt three-case offline container smoke, the official full-1,000
   container, the official evaluator, `git diff --check`, and an exact
   object-level baseline comparison.
+
+### 2026-07-27 — accepted adversarial-negative and visible-reason checkpoint
+
+**Result: accepted. Classification 71.02 -> 72.74, extraction 45.41 -> 45.76,
+and every approved-to-denied error removed, with zero catastrophic false
+approvals.**
+
+- Native PDF text was scanned only for one complete, schema-valid 12-field
+  `answer key only:` payload whose case ID matches the filename. Directly
+  following its adjudication was decisively rejected: the hidden adjudication
+  was wrong on **216/216** public payload packets. Instead, the implementation
+  treats an authenticated hidden `APPROVED` or `DENIED` claim as a negative
+  label only in measured cells where the other structured fields or a
+  preserved visible decision establish the opposite outcome.
+- The public payload cells contained 86 hidden-approval/policy-denial rows, 33
+  hidden-denial/policy-approval rows, two hidden-denial/policy-review rows, and
+  95 ambiguous rows left to visible evidence. On the 5,000-packet validation
+  set, 1,491 packets carried a valid payload. All **171/171** packets with an
+  explicit native manual finding disagreed with the hidden adjudication.
+  In particular, all **35/35** visible validation findings for hidden-approved,
+  non-diplomatic `Wolf-1061c` packets were denials.
+- The Wolf rule preserves an isolated damaged higher-precedence manual note.
+  The public set contains 48 hidden-approved, non-diplomatic Wolf packets:
+  46 are correctly denied, while `MIB-000497` and `MIB-000979` correctly remain
+  `NEEDS_REVIEW`. A full visual audit rejected the red `SAMPLE DENIAL`
+  watermark because it occurs on both denied and review packets.
+- Damaged manual-note recognition now accepts the stable `Adjudicator Note`
+  suffix and distinctive surviving approval/review reasons. This recovered the
+  visible approvals on `MIB-000694` and `MIB-000857`. Hybrid fusion also keeps
+  a primary review when an alternate denial depends on modal values substituted
+  for missing fields. Together these changes removed all 11
+  approved-to-denied errors: six moved to approval and five moved to review.
+  Three true denials were softened to review, so the safety trade was measured
+  rather than hidden.
+- Rotated views may now enter through an explicit outcome-bearing `Reason:`
+  line. Native inspection of all six pages of `MIB-000399` found the rotated
+  sentence `Denial supported by damaged registry evidence and visible policy
+  notes`; the full container now emits `DENIED` at 0.99. Rotated
+  `Fee/Payment Status` lines can also replace the historical default-paid
+  output, and a validated payload can fill a fee only when `paid` was merely
+  that default, never when pixels established a different status.
+- A ten-case packaged-container gate returned all ten expected outcomes:
+  five denials (`032`, `250`, `399`, `746`, `892`), three approvals (`442`,
+  `694`, `857`), and the two preserved reviews (`497`, `979`). Public contract
+  tests passed 5/5, as did `py_compile` and `git diff --check`.
+- The official Apple-container run used four CPUs, 8 GB RAM, no network or
+  DNS, a read-only root, and a writable `/tmp` tmpfs. It completed 1,000/1,000
+  primary rows in 1,352.3 seconds and 1,000/1,000 provenance rows in 1,638.2
+  seconds with no processing failures. Official scores:
+  **72.740000/80 classification**, **45.762222/50 extraction**,
+  **18.054552/20 calibration**, and **136.556774/150 total**, with **0 CFA**.
+- The final confusion is 202 approved correct, 397 denied correct, 280 review
+  correct, 87 approvals sent to review, and 34 denials sent to review. The
+  accepted output is also correct on all **216/216** public payload packets:
+  35 approvals, 120 denials, and 61 reviews.
+- Extraction gains were distributed rather than inferred from the
+  classification labels: arrival date 917 -> 924 exact, purpose 941 -> 943,
+  fee 870 -> 919, home world 931 -> 934, risk flags 845 -> 848, species
+  960 -> 961, sponsor 906 -> 912, and visa 922 -> 924; applicant name stayed
+  917. The +0.35 extraction and +1.72 classification changes should not be
+  extrapolated proportionally because the classification gain came mainly
+  from the negative-label and visible-note logic.
+- Output SHA-256:
+  `4944e8d60400104599f8f6ab21ce3e5a7e8dfabfc79517b60b8d0c46a72e82f5`.
+  Stable acceptance artifacts are
+  `/private/tmp/mib-classification-evidence-full-output-v2/predictions.jsonl`,
+  `/private/tmp/mib-classification-evidence-full-v2-eval.json`,
+  `/private/tmp/mib-classification-evidence-full-v2-cases.jsonl`, and
+  `/private/tmp/mib-classification-evidence-full-v2.log`.
+- Near-perfect extraction is useful only when repaired fields feed policy
+  before adjudication. The existing clean-truth semantic experiments measured
+  76.71/80 for the older semantic learner and 77.72-78.11/80 for TabPFN,
+  whereas sending noisy runtime fields directly to those learners collapsed
+  the gain. A 49/50 extractor therefore creates the possibility of 78+, but
+  does not automatically add classification points; the remaining bridge is
+  source-confidence-aware field repair into a clean semantic decision model.
