@@ -969,3 +969,57 @@ lead.**
   projects **70.63/80** and about **133.55/150**. This is a projection over two
   completed full outputs, not yet a packaged or runtime-accepted result; the
   next step is a bounded dual-engine timing and exact-output test.
+
+### Runtime-accepted visible-provenance hybrid
+
+**Result: accepted and packaged; classification 65.48 -> 70.57 with zero
+catastrophic false approvals.**
+
+- Kept this pipeline's extraction output and added an independent rendered
+  visible-evidence engine for adjudication and confidence. The only precedence
+  exception is an authenticated direct primary finding at confidence 0.99.
+  There are no concrete case-ID values, filenames, label tables, or truth-file
+  reads in the decision feature path.
+- Vendored the public MIT-licensed provenance engine with pinned hashed Python
+  dependencies and retained license/model notices. The upstream hidden
+  answer-key transcriber and public-label-selected purpose-signature approval
+  table were first forced off for the acceptance run, then removed from the
+  vendored source entirely. Rebuilding and rerunning the fixed 100-case
+  container panel after removal produced byte-identical output:
+  `72eee25e1582e2c3f70c74169c22ba342d3c77b94ebc1bb9b1db76e12f85b826`.
+- The host-integrated 100-case runtime matched the earlier wrapper output
+  byte-for-byte in 314.09 seconds. The pinned Linux image completed the same
+  panel in 279.40 seconds. Linux OCR changed ten extraction cells across nine
+  difficult packets and one confidence relative to the host, but changed zero
+  panel adjudications and introduced zero false approvals.
+- The official full-1,000 container run completed in **2,720.95 seconds**
+  (**2.721 seconds/PDF**) with 1,000 valid rows, no missing/extra/duplicate
+  cases, no invalid values, and no processing warnings. It scored:
+  **70.570000/80 classification**, **45.412222/50 extraction**,
+  **17.543946/20 calibration**, and **133.526168/150 total**, with **0 CFA**.
+  Output SHA-256:
+  `5cd5a066b4afd889936503b9f366a0b7371dda584ac1fd1b90f2db3887b8125e`.
+- Relative to the accepted 65.48 checkpoint, this is **+5.09
+  classification**, **-0.107778 extraction**, **+2.268578 calibration**, and
+  **+7.250800 total**. The hybrid changed 176 decisions: 112 became correct,
+  42 became incorrect, and 22 changed between two wrong classes. It rescued
+  all 14 prior catastrophic false approvals and introduced none. Confidence
+  changed on 684 rows; 65 extraction cells changed.
+- This is non-replay behavior, not the old 78.76 full-fit tree: the runtime
+  contains no per-case answer map and cannot branch on a concrete case ID. It
+  is still an evaluation on the public 1,000, so it is evidence of an
+  identity-free, visible-rule mechanism rather than proof of its exact
+  private-set score. Generic thresholds and confidence artifacts were tuned
+  on public data.
+- Container tooling detour, retained because failures matter: Docker Desktop
+  was absent; Colima's existing and fresh QEMU guests could not reach DNS even
+  with explicit resolvers; Podman's AppleHV and libkrun guests booted but
+  `gvproxy` received no response packets. Temporary scratch profiles were
+  removed after each attempt. Apple's first-party `container` 1.1.0 runtime
+  installed through Homebrew, built the Dockerfile, and completed both
+  acceptance runs. The default pre-existing Colima and Podman machines were
+  not deleted.
+- Acceptance artifacts:
+  `/private/tmp/mib-hybrid-container-full.jsonl`,
+  `/private/tmp/mib-hybrid-container-full-eval.json`, and
+  `/private/tmp/mib-hybrid-container-full-cases.jsonl`.

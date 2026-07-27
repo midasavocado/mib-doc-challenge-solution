@@ -3483,6 +3483,9 @@ def main(input_dir: str, output_path: str) -> None:
     _repair_collapsed_name_ligatures(predictions)
     _impute_closed_vocabulary_modes(predictions)
     _repair_rare_arrival_years(predictions)
+    from .hybrid import apply_provenance_adjudication
+
+    apply_provenance_adjudication(pdfs, predictions, workers)
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w", encoding="utf-8") as handle:
