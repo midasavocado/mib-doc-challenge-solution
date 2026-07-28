@@ -1719,3 +1719,49 @@ therefore remains 72.92/80 with zero catastrophic false approvals.**
   **18.071825/20 calibration**, **136.754047/150 total**, and **0 CFA**.
   The separate in-progress extraction edit in `mib_pipeline/pipeline.py` was
   preserved and excluded from this checkpoint.
+
+### 2026-07-27 — perfect-extraction classification bridge
+
+**Result: the apparent 78.11 perfect-field ceiling was missing evidence
+provenance. Perfect values plus one field-local arrival observability state
+reproduce 80.00/80 classification on the public 1,000 without a fitted tree.**
+
+- The earlier perfect-field replay promoted every non-policy review to
+  `APPROVED`. It scored 78.11/80 with 27 remaining errors, all
+  `NEEDS_REVIEW -> APPROVED`.
+- Fourteen of those 27 already have a case-scoped visible
+  `NEEDS_REVIEW` finding. Preserving normal finding precedence fixes all 14:
+  `78.11 + 14 * 0.07 = 79.09`.
+- Of the remaining 13, seven visibly print `UNREADABLE` in the primary
+  intake's arrival cell. The last six have that same arrival cell visibly
+  blank or destroyed. Their registry or latent extraction value can still
+  contain the date, but the field manual requires review when the arrival date
+  is missing from trusted visible evidence.
+- The complete deterministic replay is therefore:
+  1. preserve the case-scoped visible finding;
+  2. apply the documented hard-denial and review-only rules to perfect field
+     values;
+  3. preserve `NEEDS_REVIEW` when the primary-intake arrival evidence state is
+     `explicit_unreadable`, `blank`, or `destroyed`;
+  4. otherwise approve the clean tuple.
+  This fixes the remaining 13:
+  `79.09 + 13 * 0.07 = 80.00`.
+- This is not an ID rule. Across the entire labeled 1,000, the literal visible
+  `UNREADABLE` state occurs 14 times and all 14 are `NEEDS_REVIEW`; it occurs
+  in none of the 87 latent approvals that perfect extraction should promote.
+- The separate 5,000-packet set provides independent controls. `UNREADABLE`
+  occurs in 93 packets. Thirteen also carry an independently parsed visible
+  finding, and all 13 findings are `NEEDS_REVIEW`. Among all 840 visible
+  findings, 28 review findings explicitly say the arrival date is missing
+  from trusted visible evidence. The detector still matched all 840 findings:
+  242 approved, 340 denied, and 258 review.
+- The runtime implementation should be a field-local state machine, not a
+  learned public-label model: `observed_value`, `explicit_unreadable`,
+  `blank`, `destroyed`, `foreign_case`, or `conflict`. A value recovered from
+  the registry or an extraction-only fallback must not overwrite the intake
+  evidence state.
+- No runtime source changed at this checkpoint. The current accepted score
+  remains 72.92/80 classification. The path reaches 80 only when the
+  extraction lane supplies perfect values while classification retains this
+  provenance bit. The concurrent extraction edit in
+  `mib_pipeline/pipeline.py` was preserved and excluded.
