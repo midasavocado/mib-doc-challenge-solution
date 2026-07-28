@@ -1402,6 +1402,50 @@ def _fuzzy_labeled_applicant(text: str) -> str | None:
     return candidates.pop()
 
 
+def _native_labelled_sponsor(case_id: str, pages: list[str]) -> str | None:
+    """Sponsor id from a labelled line in pixel-verified native text.
+
+    `sponsor_numbers` counts every `SPN-####` in the concatenated views and
+    takes the mode.  Each page contributes several OCR views but only one
+    native view, so two mis-OCRed reads of one damaged page outvote a single
+    clean text-layer read: on MIB-000057 the layer says SPN-8779 once and the
+    renders say 5779 twice.  Pixel verification has already discarded the
+    hidden answer key, and `_sponsor_from_labeled_line` requires a Sponsor-ID
+    label and rejects revoked-sponsor policy prose.
+
+    The text layer prints the intake form as a table, so the id sits on the
+    line after its label and the same-line reader never fires on it; read it
+    with `_labeled_value`, which handles both layouts.
+
+    Extraction-only by construction: the caller must not let this reach the
+    revoked-sponsor rule or the completeness check.
+    """
+    expected_id = case_id.split("-")[-1]
+    native: list[str] = []
+    for page in pages:
+        if _NATIVE_VIEW_SEPARATOR not in page:
+            continue
+        view = page.split(_NATIVE_VIEW_SEPARATOR, 1)[1]
+        # The native section is followed by the rotated and deskewed OCR views;
+        # keeping them would defeat the point of reading the text layer.
+        for separator in ("\n[ROTATED OCR VIEW]\n", _DESKEWED_VIEW_SEPARATOR):
+            view = view.split(separator, 1)[0]
+        visible_ids = set(re.findall(r"\bMIB[- ]?(\d{6})\b", view, re.I))
+        if visible_ids and visible_ids != {expected_id}:
+            continue
+        native.append(view)
+    if not native:
+        return None
+    value = _labeled_value("\n".join(native), ("Sponsor ID",))
+    if not value:
+        return None
+    match = re.search(r"\bSPN[-_ ]?((?:\d[\s-]*){4})\b", value, re.I)
+    if not match:
+        return None
+    digits = re.sub(r"\D", "", match.group(1))
+    return f"SPN-{digits}" if len(digits) == 4 else None
+
+
 def _sponsor_from_garbled_prefix(text: str) -> str | None:
     """Recover a sponsor number whose `SPN-` prefix was mis-OCRed.
 
@@ -2909,8 +2953,14 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
     # that completed an otherwise-unresolved packet and turned a NEEDS_REVIEW
     # into a catastrophic false approval, even though both recovered values
     # were correct.  Emit them, never adjudicate on them.
+    native_sponsor = (
+        _native_labelled_sponsor(case_id, pages)
+        if corrected_sponsor is None and not attestation_sponsors
+        else None
+    )
     sponsor_output = (
-        sponsor
+        native_sponsor
+        or sponsor
         or _sponsor_from_garbled_prefix(text)
         or _sponsor_from_labeled_line(text)
     )

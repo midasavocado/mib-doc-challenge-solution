@@ -1194,6 +1194,52 @@ The accepted runtime therefore remains commit `28ae4db`, 70.81/80
 classification, 0 CFA. No failed source change, learned artifact, temporary
 test file, or generated model was retained.
 
+### 2026-07-28 — accepted native-text sponsor id, and a false-positive audit
+
+**Result: accepted. Extraction 45.898 -> 45.914 / 50 public (49.345 -> 49.363
+under unrecoverable-field scoring), 3 gains, 0 regressions, no adjudication or
+confidence drift.**
+
+- `sponsor_numbers` counts every `SPN-####` across the concatenated views and
+  takes the mode. Each page contributes several OCR views but only one native
+  view, so two mis-OCRed reads of one damaged page outvote a single clean
+  text-layer read. MIB-000057: the layer says SPN-8779 once, the renders say
+  5779 twice, and the mode wins. Same shape on MIB-000393 and MIB-000558.
+- `_native_labelled_sponsor` reads the Sponsor-ID line from the
+  pixel-verified native text of case-bound pages only. It feeds `sponsor_output`
+  and never `sponsor`, so it cannot reach the revoked-sponsor rule or the
+  completeness check — the failure mode the existing comment at that site
+  records as having produced a catastrophic false approval.
+
+**Two false positives caught during this work. Both looked like real wins.**
+
+1. **`split(_NATIVE_VIEW_SEPARATOR, 1)[1]` is not the native view.** The native
+   section is followed by the rotated and deskewed OCR views, so that slice
+   returns native text *plus* those views. A first version scored +3 while
+   actually reading rotated OCR and calling it the text layer; it carried two
+   losses where `SPN-0007` and `SPN-0139` leaked in from revoked-sponsor policy
+   prose. Always cut the trailing separators.
+2. **`_sponsor_from_labeled_line` cannot read the text layer at all.** It needs
+   `Label: value` on one line; the layer prints the intake form as a table with
+   the value on the following line. Measured over all 1,000 packets it fires
+   **0 times** on true native text. The accepted version uses `_labeled_value`,
+   which handles both layouts, and then has zero loss modes.
+
+**Closed-vocabulary check on applicant names (negative result, not shipped):**
+names are two tokens from a closed pool of exactly 144, every token appearing
+>= 5 times, no singletons. That pool is fully recoverable from the batch's own
+predictions at runtime (144/144 tokens at a >= 4 threshold, 2 junk entries), so
+snapping garbled tokens to it is available without touching public labels. It
+gains **1 case**. The remaining name errors are decoys and unreadable rows, not
+glyph corruption, so the vocabulary does not help them.
+
+**Where extraction actually stands.** Of the 114 scored errors left, only 30
+have the truth present anywhere in the pipeline's own page text (16 in native
+text, 14 in an OCR view) — **0.169 points**. The other 84 are absent from every
+channel. The earlier "0.39 recoverable" figure was measured against the
+forensic channel dump, which is a stronger reader than the production stack;
+0.169 is the honest ceiling for source-selection and OCR work.
+
 ### 2026-07-27 — accepted faded-ink last-resort field recovery
 
 **Result: accepted. Extraction 45.888 -> 45.898 / 50 public (49.334 -> 49.345
