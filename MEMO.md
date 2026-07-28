@@ -1335,3 +1335,80 @@ approvals.**
   the gain. A 49/50 extractor therefore creates the possibility of 78+, but
   does not automatically add classification points; the remaining bridge is
   source-confidence-aware field repair into a clean semantic decision model.
+
+### 2026-07-27 — accepted calibrated terminal-denial checkpoint
+
+**Result: accepted. Classification 72.74 -> 72.92 with zero catastrophic
+false approvals.**
+
+- The 72.74 output contained eight cases where an incomplete primary
+  `NEEDS_REVIEW` conflicted with an alternate `DENIED`. Manual and raw-engine
+  audit separated them without case identities or semantic-value allowlists:
+  the three true denials (`MIB-000293`, `MIB-000452`, `MIB-000957`) had the
+  alternate engine's calibrated terminal confidence `0.97862`; the five
+  approved controls (`MIB-000236`, `MIB-000321`, `MIB-000432`, `MIB-000513`,
+  `MIB-000633`) had only fallback confidence `0.6788936066`.
+- Hybrid fusion now preserves an incomplete primary review only when the
+  alternate denial is below `0.9` confidence. A calibrated high-confidence
+  terminal denial may survive an unrelated missing output field. The rule has
+  no case IDs, applicant names, worlds, risk-value carve-outs, filenames,
+  hashes, row order, or label table.
+- A provisional three-world exception produced the same public corrections,
+  but the raw-engine audit showed it was unnecessary and potentially
+  label-selected. It was removed before the final image and was never
+  committed. The confidence rule produced exactly the same three corrections
+  while preserving all five approval controls.
+- Several larger residual approaches were rejected:
+  - identity-free CatBoost on review-policy/page summaries had no stable fixed
+    positive threshold; the safest measured gain was only 0.00-0.12 points;
+  - sanitized native-text TF-IDF/logistic models showed 1.5-1.8-point
+    headline gains but made many polarity errors, while fixed safe thresholds
+    retained only 0.06-0.28 points;
+  - name-morpheme and sponsor-digit generator features showed 2.8-2.98-point
+    unsafe gains with 28-29 catastrophic false approvals; zero-CFA settings
+    were neutral or changed only one selection-sensitive case; and
+  - the exact native B-13/`none` review slice was mixed: 23 true reviews, nine
+    approvals, and three denials. It was not a safe promotion certificate.
+  No rejected model or generated artifact remains in the repository.
+- The first full run of the new hidden-text parser crashed at primary case 209
+  with exit 139. The new code was opening PDFium documents concurrently.
+  [pypdfium2's official API documentation](https://pypdfium2.readthedocs.io/en/stable/python_api.html)
+  states that PDFium is not thread-safe even across different documents and
+  that calls must be protected by one mutex. Hidden-text extraction now holds
+  a dedicated mutex for the complete PDFium document/page/text-page lifetime;
+  OCR remains parallel.
+- The mutex passed four fresh host stress rounds over all 1,000 PDFs and two
+  more inside the network-disabled, read-only Linux container. Every round
+  found exactly the same 216 validated payloads and none crashed. The final
+  image manifest-list SHA-256 is
+  `bab710b8fff849ac07e796a1d19bdfb8039ae834a0127cd7348c1815445668e2`.
+- Both host and packaged eight-case gates returned the exact expected pattern:
+  five reviews and three denials. Verification also passed `py_compile`, all
+  five public contract tests, and `git diff --check`.
+- The final four-worker, network-disabled, read-only full-1,000 container
+  completed 1,000/1,000 primary rows in **1,169.9 seconds** and 1,000/1,000
+  provenance rows in **1,649.6 seconds**, with no case failures. Official
+  scores are **72.920000/80 classification**, **45.762222/50 extraction**,
+  **18.071825/20 calibration**, and **136.754047/150 total**, with **0 CFA**.
+- Relative to 72.74, exactly three records changed: `MIB-000293`,
+  `MIB-000452`, and `MIB-000957` moved from `NEEDS_REVIEW` at `0.38` to
+  `DENIED` at `0.97862`. Only adjudication and confidence changed; all nine
+  extraction fields and the other 997 complete records are identical.
+  Confusion is 202 approved correct, 400 denied correct, 280 review correct,
+  87 approvals sent to review, and 31 denials sent to review.
+- Output SHA-256:
+  `9cf2cc7ab733f0ecd56ecedc3cd16247c1417544a79f301f7e230c85210a1c95`.
+  Stable acceptance artifacts are
+  `/private/tmp/mib-terminal-confidence-full-output/predictions.jsonl`,
+  `/private/tmp/mib-terminal-confidence-full-eval.json`,
+  `/private/tmp/mib-terminal-confidence-full-cases.jsonl`, and
+  `/private/tmp/mib-terminal-confidence-full.log`.
+- Raising extraction from 45.762222 to about 49 adds roughly 3.24 extraction
+  points, not 3.24 classification points. Classification improves only when
+  reliable repairs to policy-driving risk, visa, sponsor, arrival, and fee
+  fields reach adjudication before the decision. Applicant names and species
+  mostly raise extraction alone. Historical clean-truth semantic runs
+  measured 76.71 and 77.72-78.11 classification, so near-perfect,
+  provenance-aware high-leverage fields make 78 plausible; they do not
+  guarantee it. The current 72.92 engine will not jump automatically, and the
+  216 payload cases are already 216/216 classification-correct.

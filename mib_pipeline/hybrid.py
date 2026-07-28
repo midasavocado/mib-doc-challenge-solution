@@ -275,10 +275,14 @@ def apply_provenance_adjudication(
             and alternate["adjudication"] == "DENIED"
             and primary["risk_flags"] == "none"
             and primary_incomplete
+            and float(alternate["confidence"]) < 0.9
         ):
             # The alternate engine's fallback cells can populate missing
             # fields with modal values and then turn those invented premises
-            # into a denial. Missing evidence proves review, not denial.
+            # into a low-confidence denial. Missing evidence proves review,
+            # not denial. A calibrated high-confidence terminal denial is
+            # different: it remains sufficient even when an unrelated output
+            # field is incomplete.
             continue
         if (
             primary["adjudication"] == "DENIED"

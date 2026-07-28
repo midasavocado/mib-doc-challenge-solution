@@ -71,6 +71,9 @@ EMBARGOED_HOME_WORLDS = {"Eris Relay", "Wolf-1061c"}
 PACKET_SNAPSHOT_DATE = date(2026, 7, 7)
 
 _PRINT_LOCK = threading.Lock()
+# PDFium is process-global and not thread-safe, even across different
+# documents. Keep hidden-text extraction serialized while OCR remains parallel.
+_PDFIUM_TEXT_LOCK = threading.Lock()
 _OCR_VIEW_SEPARATOR = "\n[OCR VIEW 6]\n"
 _DESKEWED_VIEW_SEPARATOR = "\n[DESKEWED OCR VIEW]\n"
 _NATIVE_VIEW_SEPARATOR = "\n[PIXEL-VERIFIED NATIVE TEXT]\n"
@@ -3244,23 +3247,24 @@ _KEY_ORDER = (
 def _untrusted_key_claim_items(pdf_path: str) -> tuple[tuple[str, str], ...]:
     """Return one fully validated hidden payload as immutable cache data."""
     try:
-        import pypdfium2 as pdfium
+        with _PDFIUM_TEXT_LOCK:
+            import pypdfium2 as pdfium
 
-        document = pdfium.PdfDocument(pdf_path)
-        page_texts: list[str] = []
-        try:
-            for page_index in range(len(document)):
-                page = document[page_index]
-                try:
-                    text_page = page.get_textpage()
+            document = pdfium.PdfDocument(pdf_path)
+            page_texts: list[str] = []
+            try:
+                for page_index in range(len(document)):
+                    page = document[page_index]
                     try:
-                        page_texts.append(text_page.get_text_range())
+                        text_page = page.get_textpage()
+                        try:
+                            page_texts.append(text_page.get_text_range())
+                        finally:
+                            text_page.close()
                     finally:
-                        text_page.close()
-                finally:
-                    page.close()
-        finally:
-            document.close()
+                        page.close()
+            finally:
+                document.close()
     except Exception:
         return ()
 
