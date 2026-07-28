@@ -1194,6 +1194,61 @@ The accepted runtime therefore remains commit `28ae4db`, 70.81/80
 classification, 0 CFA. No failed source change, learned artifact, temporary
 test file, or generated model was retained.
 
+### 2026-07-28 — extraction session close: 49.322 -> 49.404, and what is left
+
+**Six accepted changes, +0.082 under unrecoverable-field scoring, 14 field slots
+recovered, zero regressions and no adjudication or confidence drift on any of
+them. +0.34 s/PDF (3.81 -> 4.15 on a controlled back-to-back r50).**
+
+| field | start | now | scored acc |
+|---|---:|---:|---:|
+| applicant_name | 922 | **930** | 97.6% |
+| sponsor_id | 913 | **917** | 97.5% |
+| arrival_date | 924 | **926** | 98.5% |
+| species_code | 962 | 962 | 99.9% |
+| home_world | 932 | 932 | 99.0% |
+| visa_class | 933 | 933 | 98.4% |
+| declared_purpose | 943 | 943 | 99.6% |
+| risk_flags | 850 | 850 | 99.6% |
+| fee_status | 923 | 923 | 98.7% |
+
+**The one idea that generalised.** Five of the six wins are the same defect:
+a value is chosen by counting occurrences across concatenated views, but each
+page contributes several OCR views and only one pixel-verified native view, so
+two mis-OCRed reads of one damaged page outvote a single clean text-layer read.
+Reading the text layer directly, case-bound, fixed sponsor id and arrival date.
+The sixth is the same shape at batch level: a name vocabulary reconstructed
+from the batch's own output separates a genuinely different applicant from a
+damaged spelling.
+
+**What is left: 19 errors, 0.107 points.** Nine applicant names, three sponsor
+ids, three arrival dates, and one each of visa class, declared purpose and fee
+status. Every remaining case needs discrimination that no measured signal
+provides. Approaches tried and rejected against them, all measured on the full
+1,000:
+
+| approach | result |
+|---|---|
+| native-text reader for visa_class | 2 gains, **19 losses** |
+| native-text reader for declared_purpose | 0 gains, 2 losses |
+| native-text reader for home_world, species_code | no change |
+| native intake name above the packet majority vote | 1 gain, **5 losses** — the intake is the least reliable name source at 90.9%, so the manual's stated precedence does not hold here |
+| labelled sponsor or date voted over OCR views | **-10 to -13** at 2 votes; never fires at 3 |
+| name backed by the most distinct document types | no change — already implicit |
+| sponsor or date backed by the most distinct document types | no change |
+| attestation sentence as a name source | 0 gains, 1 loss |
+| attestation sentence as a purpose source | 152/152 correct, never disagrees |
+| fuzzy vote-clustering before the agreement test | 0 gains, 14 losses at every threshold |
+| archived-adjacent-applicant block scrub | score-neutral; swaps `not active` for another real applicant's name |
+| aggressive snapping of names with no vocabulary support | 0 of 4 recovered at any threshold |
+| strengthened faded-ink recovery | +1 gain for +0.39 s/PDF — rejected on cost |
+
+**The honest ceiling.** Of the ~104 scored errors, 19 have the truth somewhere
+in the pipeline's own page text and 21 more have it only under the offline
+forensic rig, which spends runtime the 6 s budget cannot afford. The remaining
+64 have no channel carrying the value at all. Perfect extraction is not
+reachable: the organisers deleted the evidence.
+
 ### 2026-07-28 — rejected on cost: strengthened faded-ink recovery
 
 **Result: rejected. +1 gain, 0 losses (+0.005 extraction) for +0.39 s/PDF.**
