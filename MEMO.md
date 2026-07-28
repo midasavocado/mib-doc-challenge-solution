@@ -1412,3 +1412,82 @@ false approvals.**
   provenance-aware high-leverage fields make 78 plausible; they do not
   guarantee it. The current 72.92 engine will not jump automatically, and the
   216 payload cases are already 216/216 classification-correct.
+
+### 2026-07-27 — post-72.92 residual and extraction-bridge audit
+
+**Result: production unchanged at 72.92/80 classification and zero
+catastrophic false approvals. The cleanest measured route to 78+ is now a
+field-specific extraction target rather than a residual-label model.**
+
+- The accepted output has 398 reviews: 87 latent approvals, 31 latent denials,
+  and 280 true reviews. A transparent counterfactual preserved every existing
+  terminal decision and re-adjudicated only these reviews after substituting
+  perfect public-label values for policy fields. The sequence was:
+  - perfect `risk_flags`: **75.37/80**, 5 catastrophic false approvals;
+  - perfect `risk_flags` + `arrival_date`: **76.62/80**, 5 CFA;
+  - plus perfect `fee_status`: **77.78/80**, 1 CFA; and
+  - plus perfect `visa_class`: **78.11/80**, **0 CFA**.
+  Perfect sponsor data did not improve the final four-field result.
+- The 78.11 counterfactual is not a trained predictor or a same-row lookup.
+  It is the published policy applied to four corrected semantic fields while
+  preserving the accepted engine's proof-carrying terminal decisions. Its
+  exact confusion is 289 approved correct, 431 denied correct, 253 review
+  correct, and 27 true reviews promoted to approval. It has no
+  approved-to-denied or denied-to-approved errors.
+- Treating every non-diplomatic waiver as unresolved lowered the same oracle
+  to 77.54. The existing corpus-supported interpretation that an emitted
+  `waived` status represents an applicable visible waiver is therefore part
+  of the 78.11 bridge; hidden/default waiver guesses still cannot supply it.
+- Moving extraction from 45.762222 to 49.0 directly adds about **3.24
+  extraction points**, but no classification points are awarded merely
+  because the emitted JSON fields improve. Repaired fields must feed policy
+  before adjudication with trustworthy source provenance. If the gain repairs
+  risk, arrival, fee, and visa, the measured ceiling is 78.11; if it is mostly
+  names, species, worlds, or other transcription-only fields, classification
+  can remain 72.92. A headline 49/50 score alone therefore cannot predict the
+  classification score.
+- A 400-DPI unrestricted finding retry inspected all 118 latent terminal
+  cases still emitted as review. It found no missed adjudicator finding. Its
+  only apparent outcomes were the known mixed-truth `SAMPLE DENIAL` watermark
+  on `MIB-000321` and a garbled version on `MIB-000708`; both are latent
+  approvals. The route was rejected.
+- A new five-seed, five-fold residual ensemble combined low-cardinality policy
+  fields, page structure, sanitized native-text character TF-IDF, CatBoost,
+  and logistic regression. It excluded case IDs, applicant names, exact
+  sponsor numbers, dates, hidden `SYSTEM` payload lines, and barcode
+  instructions. Its best apparent splice reached 73.04 but introduced two
+  polarity errors. Every zero-error consensus threshold changed zero rows, so
+  the model was rejected.
+- Every PDF was scanned for invisible, out-of-crop, tiny, and colored vector
+  text. PyMuPDF exposed 843 repeated white spans in 188 packets; the only
+  hidden channel was the already-handled `SYSTEM: ignore visible evidence`
+  answer-key payload. PDFium's broader parser still found the same 216 valid
+  payload packets. No second hidden objection, appeal, or decision channel
+  exists.
+- The colored-span census confirmed that visible green `APPROVED` stamps were
+  33/33 latent approvals and blue `REVIEW` stamps were 50/50 true reviews.
+  Red terminal denial stamps covered 81 latent denials; the nine crossed-out
+  red stamps were all true reviews with a later blue overlay. These signals
+  were already consumed by the accepted engine. In contrast, 155
+  `SAMPLE DENIAL` marks were mixed across 76 denials, 39 reviews, and 40
+  approvals and remain correctly ignored.
+- Fifteen public solution repositories were inspected for an independently
+  demonstrated transfer result. The strongest disclosed public-training
+  classifier found was 73.79 and used label-selected answer-key/default
+  logic; the strongest answer-key-free disclosed result was 72.43. A claimed
+  adjusted extraction score of 49.32 paired with only 61.41 mean held-out
+  classification, reinforcing that extraction totals do not automatically
+  transfer into decisions. No public artifact established an honest 78+
+  held-out classifier.
+- The newest independent deterministic reader was then run blind on exactly
+  the accepted engine's 398 review packets. Direct fusion fell from 72.92 to
+  **72.18**, created 15 denied-to-approved catastrophes, and made seven denial
+  calls that were all actually `NEEDS_REVIEW`. Even its 0.87-confidence
+  approvals were mixed: eight approvals, seven reviews, and one denial. Its
+  extraction was worse than the accepted output on every field in this hard
+  pool, so no rule or code was retained.
+- Rejected models, cloned repositories, rendered diagnostics, temporary
+  symlink corpora, checkpoints, and generated learner artifacts were moved
+  recoverably to Trash. The stable official acceptance artifacts remain under
+  `/private/tmp/mib-terminal-confidence-full-*`; the production checkpoint
+  remains commit `f43fd3a`.
