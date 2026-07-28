@@ -1194,6 +1194,43 @@ The accepted runtime therefore remains commit `28ae4db`, 70.81/80
 classification, 0 CFA. No failed source change, learned artifact, temporary
 test file, or generated model was retained.
 
+### 2026-07-28 — rejected: loosening the key spelling gate to 0.70
+
+**Measured +6 gains, 0 losses (49.409 -> 49.421) and rejected anyway, because
+it is not the change it appears to be.**
+
+Sweeping `_repair_key_spelling`'s similarity gate shows a clean-looking knee:
+
+| gate | gains | losses |
+|---:|---:|---:|
+| 0.75 (current) | 0 | 0 |
+| 0.70 | 6 | 0 |
+| 0.65 | 8 | 1 |
+| 0.60 | 14 | 1 |
+| 0.55 | 21 | 3 |
+
+Every one of the six gains at 0.70 lands in a 0.700-0.717 band, and inspecting
+them shows why: **a constant prefix inflates the ratio.** `SPN-4271` against
+`SPN-2575` scores 0.714 because three of seven characters are the literal
+`SPN`, though every digit but one differs. `SPN-2020` -> `SPN-4040` is two
+digits. And `illegible_biometrics` -> `illegible_biometrics|sponsor_mismatch`
+scores 0.717 while *adding a risk flag*.
+
+So at 0.70 the gate stops testing "same value, glyph noise" and becomes the
+payload override that was declined earlier in the day — arriving through a
+threshold rather than a policy change.
+
+Re-tested with a gate on each field's variable content instead of the whole
+string (at most one differing digit for `sponsor_id` and `arrival_date`, flag
+sets never treated as spellings, unchanged 0.75 ratio elsewhere): **0 gains,
+0 losses.** That is the honest result — there are no remaining glyph-level
+payload repairs to collect, and the 0.75 whole-string gate is doing the right
+thing by accident rather than by construction.
+
+**Lesson worth keeping: a similarity ratio over a string with a fixed prefix or
+a shared long substring is not a similarity test on the field's content.**
+Check what a measured win actually consists of before shipping it.
+
 ### 2026-07-28 — accepted post-batch key spelling repair; key-override quantified but not taken
 
 **Result: accepted. Extraction 45.952 -> 45.968 / 50 public (49.404 -> 49.409
