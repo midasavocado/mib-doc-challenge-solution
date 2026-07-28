@@ -1526,3 +1526,63 @@ field-specific extraction target rather than a residual-label model.**
   (chi-square p-value 0.625945; repeated five-fold template AUC 0.489).
 - The probe changed no runtime source. Extracted portrait maps, rendered
   checks, and analysis artifacts were moved recoverably to Trash.
+
+### 2026-07-27 — sponsor, name, and generator-correlation audit
+
+**Result: the recurring revoked-sponsor rule is real and already complete;
+the remaining identity and layout correlations do not support a transferable
+terminal decision. Production remains at 72.92/80 with zero catastrophic
+false approvals.**
+
+- The 1,000 public labels contain 864 distinct sponsor IDs. Only 45 repeat at
+  all. The six recurring IDs already in `REVOKED_SPONSORS` are the only
+  high-support sponsor cells whose non-diplomatic cases are uniformly denied:
+  `SPN-0007`, `SPN-0139`, `SPN-2718`, `SPN-4040`, `SPN-7331`, and
+  `SPN-9090`. Their apparent approval/review exceptions are all `DIP-1`
+  overrides.
+- Six additional two-occurrence sponsors initially looked 2/2 denied:
+  `SPN-1720`, `SPN-1934`, `SPN-3417`, `SPN-4146`, `SPN-4699`, and
+  `SPN-6368`. Every one of their denials was already explained by a visible
+  independent rule such as `TRANSIT-7`, unpaid fee, stale arrival, embargoed
+  world, or a risk flag. None supplies evidence of sponsor revocation, so none
+  was added.
+- After removing hidden `SYSTEM` answer-key and barcode lines, the six accepted
+  revoked IDs were visibly present in 56-86 of the 5,000 validation packets
+  (`0007`: 81, `0139`: 76, `2718`: 56, `4040`: 86, `7331`: 59, `9090`:
+  69). This is strong transfer evidence for the existing entity-level rule.
+  In contrast, `SPN-7177` appeared in one validation packet and `SPN-1812`
+  appeared in none. Each occurs only once in public truth as well, so assigning
+  either a label would be a one-row identity lookup.
+- Five-seed, five-fold logistic probes over the accepted engine's 398 reviews
+  produced one-vs-rest AUCs of 0.488/0.389/0.498 for sponsor digits and
+  0.537/0.629/0.571 for name morphology
+  (APPROVED/DENIED/NEEDS_REVIEW). Neither view changed a row under the
+  scorer's expected-value decision. A frozen fold-local rule miner likewise
+  changed zero sponsor or name rows at minimum support 8 across all five
+  seeds. At support 5, the only name consensus was a single approval selected
+  by the letters `ar` at one fixed first-name position; this is not a policy
+  fact and was rejected.
+- The same frozen rule miner found no stable terminal rule from semantic field
+  pairs or page structure at support 8. Lowering support to 5 allowed a
+  two-case, +0.12 consensus only after combining all candidate families, while
+  individual folds contained regressions and catastrophic false approvals.
+  Raising support by three examples erased the entire result.
+- A separate sanitized native-text character model excluded case IDs, names,
+  exact sponsor IDs, dates, hidden payloads, and barcode instructions. Its
+  averaged out-of-fold splice selected three latent approvals
+  (`MIB-000228`, `MIB-000266`, and `MIB-000354`) for an apparent
+  73.10/80 with zero public polarity errors. Visual and raw-engine inspection
+  rejected the splice:
+  - `MIB-000228` has a visible clean B-13 but no fee receipt. The same
+    clean-B-13/no-fee evidence state occurs on latent approval
+    `MIB-000311` and true review `MIB-000517`, so it is not an approval
+    certificate.
+  - `MIB-000266` and `MIB-000354` contain intake, registry, and fee pages but
+    no biometric evidence. Their selection came from a small
+    `JOVIAN_GASFORM`/`Kepler-186f` cell rather than a visible policy fact.
+- `MIB-000763` and `MIB-000087` therefore remain a useful caution, not an
+  exact duplicate claim. They differ in applicant, sponsor, purpose, portrait,
+  and page order, but sponsor/name/portrait/layout probes do not generalize
+  those differences into their latent DENIED versus NEEDS_REVIEW outcomes.
+- No runtime source or model artifact changed. Temporary renders and
+  single-case traces were removed after the audit.
