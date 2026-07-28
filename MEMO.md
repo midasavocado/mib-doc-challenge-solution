@@ -1749,6 +1749,15 @@ reproduce 80.00/80 classification on the public 1,000 without a fitted tree.**
 - This is not an ID rule. Across the entire labeled 1,000, the literal visible
   `UNREADABLE` state occurs 14 times and all 14 are `NEEDS_REVIEW`; it occurs
   in none of the 87 latent approvals that perfect extraction should promote.
+- A visual negative control checked all seven latent approvals where ordinary
+  OCR failed to decode the intake arrival row (`MIB-000091`, `MIB-000093`,
+  `MIB-000303`, `MIB-000678`, `MIB-000708`, `MIB-000822`, and
+  `MIB-000976`). Every one still has visible date glyphs in the active
+  I-8090 arrival row. Even the heavily damaged `MIB-000822` row contains
+  visible value ink at 600 DPI. Therefore the classifier must detect
+  absent/unusable primary evidence, not merely an OCR miss; a generic
+  `arrival_date == unknown` shortcut would incorrectly retain these approvals
+  as review.
 - The separate 5,000-packet set provides independent controls. `UNREADABLE`
   occurs in 93 packets. Thirteen also carry an independently parsed visible
   finding, and all 13 findings are `NEEDS_REVIEW`. Among all 840 visible
