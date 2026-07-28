@@ -1897,3 +1897,51 @@ classification rule survived independent controls. Runtime remains
 - No classification source or model artifact changed, so the classification
   four-worker full-1,000 run was not repeated. This audit note was swept into
   the independently accepted extraction commit `49a7df3`.
+
+### 2026-07-28 — component-image, vision, language, and public-method audit
+
+**Result: five new evidence channels and the strongest new public method were
+tested. None produced a transferable zero-CFA promotion. Accepted
+classification remains 72.92/80.**
+
+- Extracted and OCRed every large embedded image object in the 31 residual
+  `DENIED -> NEEDS_REVIEW` PDFs. Twenty-three large component images existed;
+  none contained the missing risk or unpaid-fee fact. The damage is baked into
+  the component image rather than applied as a removable PDF overlay. All
+  residual PDFs also have a single PDF revision, so no older incremental
+  revision can be recovered.
+- A cached pretrained ResNet-18 embedded every alien portrait. The 1,000
+  packets contain only 12 distinct portrait embeddings, corresponding to the
+  reusable species assets. Five-fold AUC on the current review pool was
+  0.509 approval / 0.563 denial / 0.533 review; every terminal route lost
+  points.
+- Full non-decision-page ResNet embeddings improved review detection but not
+  the hidden terminal split: five-fold AUC reached 0.613 approval / 0.604
+  denial / 0.702 review across tested heads. Every official-score decision
+  rule lost 1.14-2.95 classification points and introduced 9-11 CFAs.
+- A direct CatBoost imputer predicted the missing hard-risk bit from all other
+  emitted fields, sponsor digit structure, arrival timing, confidence, and
+  PDF composition. It reached 0.819 overall OOF AUC and 0.744 on the unresolved
+  review pool, but every denial threshold lost points; its highest-risk rows
+  still contained more approvals than denials.
+- Sanitized native document language removed case IDs, names, sponsor IDs,
+  dates, extracted values, findings, and answer-key spans. Word 1-3 gram OOF
+  AUC was 0.649 approval / 0.646 denial / 0.718 review. The best score-aware
+  action lost 1.19 points and created 8 CFAs.
+- Public PR 32 reports 73.79/80 with zero same-set CFA using layout consensus
+  plus exact `(visa, purpose, page signature)` trap blocklists. Reproducing
+  its generic visible-fee plus registry-name-consensus rule on the accepted
+  residuals yielded 33 approvals, 11 denials, and 10 reviews: +1.06 but 11
+  CFAs. Its published trap table removed exactly those 21 false cases,
+  producing 33/33 approvals and +1.98 on the same 1,000.
+- The trap table did not survive an honest simulation. In 50 repeated
+  five-fold runs, each blocklist was learned only from the other 80% and then
+  applied to the held-out 20%. Every run produced 8-10 CFAs; none achieved
+  zero. Mean gains were +0.47 for broad visa/purpose cells and +1.12 to +1.17
+  for exact page-signature cells, but only by accepting hidden-denial errors.
+- The apparently pure broad cells also failed independent controls:
+  `JOVIAN_GASFORM` changed from 6/6 public-cohort approvals to 28 approved /
+  28 denied / 25 review among stamped controls; `Zeta Reticuli` became
+  22/21/24; `XW-1 + field repair` became 7/6/5.
+- No runtime source changed. No official full-1,000 run was warranted, and no
+  experimental model or downloaded competitor source is retained.
