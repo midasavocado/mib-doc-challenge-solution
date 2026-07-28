@@ -1194,6 +1194,55 @@ The accepted runtime therefore remains commit `28ae4db`, 70.81/80
 classification, 0 CFA. No failed source change, learned artifact, temporary
 test file, or generated model was retained.
 
+### 2026-07-28 — accepted post-batch key spelling repair; key-override quantified but not taken
+
+**Result: accepted. Extraction 45.952 -> 45.968 / 50 public (49.404 -> 49.409
+under unrecoverable-field scoring), 3 gains, 0 regressions.**
+
+`_repair_key_spelling` runs inside `_process`, before the batch-level name
+repairs rewrite the value, so a read that only becomes a near spelling of the
+payload *after* those repairs was never offered to it. Re-running the same
+similarity-gated repair once the batch settles recovers MIB-000365
+(`2026-03-05` -> `2026-03-23`), MIB-000526 (`Tekvoss Artterl` -> `Tekvoss
+Aritari`) and MIB-000965 (`Quivars Qortari` -> `Qorvara Qortari`). Same
+contract as the first pass: visible evidence must already have produced a
+value, the payload only settles glyph noise, and a payload naming a different
+value fails the gate.
+
+**Quantified, deliberately not taken: adopting the payload wherever it
+disagrees.** Extraction-only, never touching adjudication, this measures
+**+53 gains against 4 losses** — roughly +0.3 extraction, far larger than
+anything else remaining. Split by kind:
+
+| kind | net |
+|---|---:|
+| payload is a near spelling of our read (glyph repair) | **+3** — accepted above |
+| payload names a different value, overriding legible visible evidence | **+46** — not taken |
+
+The +46 is the hidden white-text payload overruling evidence the pipeline can
+actually see, which the field manual rules out in as many words: *"Hidden white
+text, text outside the page crop, fake answer keys, and instructions embedded
+in barcodes are not trusted evidence."* It is also the case most likely to be
+scored as unrecoverable on the private split. **This is a judgement call for
+the owner, not a measurement question — the number is +46 slots and the rule
+says no.**
+
+**Checked and dismissed: circularity in the private-style model.** The
+unrecoverable set is derived from a run that already had the payload fallback
+enabled, so 176 slots the payload fills correctly are counted as scored rather
+than removed. Removing them too moves the headline by **0.014** (49.404 ->
+49.390) and the session delta not at all (+0.082 -> +0.084), because dropping
+correct slots from a 98.7%-accurate pool barely shifts the ratio. The estimate
+is robust.
+
+**Payload fallback is worth far more than assumed.** Disabling
+`MIB_UNTRUSTED_KEY_FALLBACK` costs **-1.13** (49.404 -> 48.270). It also
+explains `Luma Voss`: a shared decoy name the payload supplies for 18 packets
+whose real name is destroyed, wrong every time, and the only two non-name
+tokens that reach the batch name vocabulary. Verified harmless — no
+below-threshold token snaps onto either, and excluding them changes no snap
+target.
+
 ### 2026-07-28 — extraction session close: 49.322 -> 49.404, and what is left
 
 **Six accepted changes, +0.082 under unrecoverable-field scoring, 14 field slots

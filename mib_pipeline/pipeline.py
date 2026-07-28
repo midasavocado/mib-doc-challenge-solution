@@ -4082,6 +4082,32 @@ def _repair_rare_arrival_years(predictions: dict[str, dict]) -> None:
             prediction["arrival_date"] = mode + value[4:]
 
 
+def _repair_key_spelling_after_batch(
+    pdfs: list[Path],
+    predictions: dict[str, dict],
+) -> None:
+    """Re-run the decoy-payload spelling repair once the batch repairs settle.
+
+    `_repair_key_spelling` runs inside `_process`, before the batch-level name
+    repairs rewrite the value.  A read that only becomes a near spelling of the
+    payload after those repairs was therefore never offered to it, which is how
+    MIB-000526 kept `Tekvoss Artterl` against a payload reading
+    `Tekvoss Aritari`.
+
+    Same contract as the first pass: the value has to already exist from
+    visible evidence, the payload only settles glyph-level noise, a payload
+    naming a different value fails the similarity gate, and adjudication is
+    never consulted or changed.
+    """
+    if os.environ.get("MIB_KEY_SPELLING_REPAIR", "1") != "1":
+        return
+    for pdf in pdfs:
+        prediction = predictions.get(pdf.stem)
+        if prediction is None:
+            continue
+        _repair_key_spelling(pdf, prediction)
+
+
 def main(input_dir: str, output_path: str) -> None:
     pdfs = sorted(Path(input_dir).glob("*.pdf"))
     workers = max(1, min(int(os.environ.get("MIB_MAX_WORKERS", "4")), 4))
@@ -4112,6 +4138,7 @@ def main(input_dir: str, output_path: str) -> None:
     _snap_names_to_batch_vocabulary(predictions)
     _impute_closed_vocabulary_modes(predictions)
     _repair_rare_arrival_years(predictions)
+    _repair_key_spelling_after_batch(pdfs, predictions)
     for prediction in predictions.values():
         prediction.pop("_registry_applicant_read", None)
     from .hybrid import apply_provenance_adjudication
