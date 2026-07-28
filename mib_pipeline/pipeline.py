@@ -1402,6 +1402,64 @@ def _fuzzy_labeled_applicant(text: str) -> str | None:
     return candidates.pop()
 
 
+def _case_bound_native_views(case_id: str, pages: list[str]) -> list[str]:
+    """Pixel-verified native text of pages that belong to this packet.
+
+    The native section is followed by the rotated and deskewed OCR views, so
+    the trailing separators have to be cut or this is not the text layer at
+    all.  Pixel verification already drops white-on-white text, but a few
+    packets print the decoy answer key in visible ink, so drop those lines too.
+    """
+    expected_id = case_id.split("-")[-1]
+    views: list[str] = []
+    for page in pages:
+        if _NATIVE_VIEW_SEPARATOR not in page:
+            continue
+        view = page.split(_NATIVE_VIEW_SEPARATOR, 1)[1]
+        for separator in ("\n[ROTATED OCR VIEW]\n", _DESKEWED_VIEW_SEPARATOR):
+            view = view.split(separator, 1)[0]
+        if re.search(
+            r"answer\s+key|ignore\s+visible\s+evidence|force\s+adjudication",
+            view,
+            re.I,
+        ):
+            continue
+        visible_ids = set(re.findall(r"\bMIB[- ]?(\d{6})\b", view, re.I))
+        if visible_ids and visible_ids != {expected_id}:
+            continue
+        views.append(view)
+    return views
+
+
+def _native_arrival_date(case_id: str, pages: list[str]) -> str | None:
+    """Arrival date from the packet's own text layer.
+
+    `_extract_date` runs over every view concatenated, so the same dilution
+    that affected the sponsor id applies: several OCR views of one damaged page
+    outweigh the single clean text-layer read.  On MIB-000691 the layer says
+    2026-03-23 and the output was 2026-02-22.
+    """
+    views = _case_bound_native_views(case_id, pages)
+    if not views:
+        return None
+    return _extract_date("\n".join(views), "Arrival Date")
+
+
+def _note_revoked_sponsor(case_id: str, pages: list[str]) -> str | None:
+    """Sponsor id named by a signed adjudicator note in the text layer.
+
+    A manual note is the highest-precedence evidence in the field manual, and
+    on MIB-000928 it names the sponsor outright where every other channel only
+    carries the manual's own revoked-sponsor list.  Native text only: an OCR
+    read of the same line turned SPN-2718 into SPN-4718 on MIB-000883.
+    """
+    for view in _case_bound_native_views(case_id, pages):
+        match = re.search(r"Revoked\s+sponsor\s*:\s*(SPN-\d{4})", view, re.I)
+        if match:
+            return match.group(1).upper()
+    return None
+
+
 def _native_labelled_sponsor(case_id: str, pages: list[str]) -> str | None:
     """Sponsor id from a labelled line in pixel-verified native text.
 
@@ -1409,9 +1467,7 @@ def _native_labelled_sponsor(case_id: str, pages: list[str]) -> str | None:
     takes the mode.  Each page contributes several OCR views but only one
     native view, so two mis-OCRed reads of one damaged page outvote a single
     clean text-layer read: on MIB-000057 the layer says SPN-8779 once and the
-    renders say 5779 twice.  Pixel verification has already discarded the
-    hidden answer key, and `_sponsor_from_labeled_line` requires a Sponsor-ID
-    label and rejects revoked-sponsor policy prose.
+    renders say 5779 twice.
 
     The text layer prints the intake form as a table, so the id sits on the
     line after its label and the same-line reader never fires on it; read it
@@ -1420,23 +1476,10 @@ def _native_labelled_sponsor(case_id: str, pages: list[str]) -> str | None:
     Extraction-only by construction: the caller must not let this reach the
     revoked-sponsor rule or the completeness check.
     """
-    expected_id = case_id.split("-")[-1]
-    native: list[str] = []
-    for page in pages:
-        if _NATIVE_VIEW_SEPARATOR not in page:
-            continue
-        view = page.split(_NATIVE_VIEW_SEPARATOR, 1)[1]
-        # The native section is followed by the rotated and deskewed OCR views;
-        # keeping them would defeat the point of reading the text layer.
-        for separator in ("\n[ROTATED OCR VIEW]\n", _DESKEWED_VIEW_SEPARATOR):
-            view = view.split(separator, 1)[0]
-        visible_ids = set(re.findall(r"\bMIB[- ]?(\d{6})\b", view, re.I))
-        if visible_ids and visible_ids != {expected_id}:
-            continue
-        native.append(view)
-    if not native:
+    views = _case_bound_native_views(case_id, pages)
+    if not views:
         return None
-    value = _labeled_value("\n".join(native), ("Sponsor ID",))
+    value = _labeled_value("\n".join(views), ("Sponsor ID",))
     if not value:
         return None
     match = re.search(r"\bSPN[-_ ]?((?:\d[\s-]*){4})\b", value, re.I)
@@ -2953,11 +2996,9 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
     # that completed an otherwise-unresolved packet and turned a NEEDS_REVIEW
     # into a catastrophic false approval, even though both recovered values
     # were correct.  Emit them, never adjudicate on them.
-    native_sponsor = (
-        _native_labelled_sponsor(case_id, pages)
-        if corrected_sponsor is None and not attestation_sponsors
-        else None
-    )
+    native_sponsor = _note_revoked_sponsor(case_id, pages)
+    if native_sponsor is None and corrected_sponsor is None and not attestation_sponsors:
+        native_sponsor = _native_labelled_sponsor(case_id, pages)
     sponsor_output = (
         native_sponsor
         or sponsor
@@ -2969,7 +3010,13 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
     # report but not to adjudicate on: letting it reach the completeness check
     # and the staleness rule measured -0.60 classification and one
     # catastrophic false approval on the full training set.
-    arrival_output = arrival if arrival is not None else _fuzzy_labeled_date(text)
+    # Extraction-only, same contract as `arrival` above: the text-layer read
+    # is reported but never adjudicated on.
+    arrival_output = (
+        _native_arrival_date(case_id, pages)
+        or arrival
+        or _fuzzy_labeled_date(text)
+    )
     purpose = _fuzzy_closed_value(
         text, ("Declared Purpose", "Purpose"), PURPOSES, 0.66
     )

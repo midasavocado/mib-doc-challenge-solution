@@ -1194,6 +1194,30 @@ The accepted runtime therefore remains commit `28ae4db`, 70.81/80
 classification, 0 CFA. No failed source change, learned artifact, temporary
 test file, or generated model was retained.
 
+### 2026-07-28 — accepted text-layer arrival date and note-named sponsor
+
+**Result: accepted. Extraction 45.926 -> 45.936 / 50 public (49.375 -> 49.386
+under unrecoverable-field scoring), 2 gains, 0 regressions, no policy drift.**
+
+- `_native_arrival_date`: `_extract_date` runs over every view concatenated, so
+  the dilution that affected the sponsor id applies to the date too — several
+  OCR views of one damaged page outweigh the single clean text-layer read. On
+  MIB-000691 the layer says 2026-03-23 and the output was 2026-02-22.
+- `_note_revoked_sponsor`: a signed adjudicator note is the manual's
+  highest-precedence evidence and on MIB-000928 it names the sponsor outright
+  (`Revoked sponsor: SPN-0139`) where every other channel carries only the
+  manual's own revoked list. Native text only — an OCR read of the same line
+  turned SPN-2718 into SPN-4718 on MIB-000883, which is exactly a net zero
+  (1 gain, 1 loss) if the OCR views are allowed in.
+- Both are extraction-only: they set `arrival_output` and `sponsor_output`, not
+  `arrival` or `sponsor`, so neither reaches the staleness rule, the
+  revoked-sponsor rule, or the completeness check.
+- Factored the shared page gate into `_case_bound_native_views`, which cuts the
+  trailing rotated/deskewed separators, drops pages carrying a foreign case id,
+  and drops the few packets that print the decoy answer key in visible ink
+  (MIB-000435 prints `...,waived,APPROVED,0.99` as inked text, and its fee
+  status is otherwise unrecoverable — there is no receipt in the packet).
+
 ### 2026-07-28 — accepted batch name-vocabulary snapping; registry Applicant label rejected
 
 **Result: accepted. Extraction 45.914 -> 45.926 / 50 public (49.363 -> 49.375
