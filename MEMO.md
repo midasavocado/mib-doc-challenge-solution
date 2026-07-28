@@ -1491,3 +1491,38 @@ field-specific extraction target rather than a residual-label model.**
   recoverably to Trash. The stable official acceptance artifacts remain under
   `/private/tmp/mib-terminal-confidence-full-*`; the production checkpoint
   remains commit `f43fd3a`.
+
+### 2026-07-27 — rejected passport-portrait leakage probe
+
+**Result: no image-to-biohazard signal. Production unchanged.**
+
+- The hypothesis was that the stock alien portrait might accidentally encode
+  an admin-only risk flag through appearance, color, background, or a reused
+  generator template. Active passport images were resolved only from intact
+  `FORM I-8090` pages, excluding registry and biometric images.
+- The 548 packets with a directly extractable active passport used only
+  **16 exact RGB portrait templates**. They contained 51
+  `biohazard_red` cases. Every portrait template that appeared on a
+  biohazard case was also reused on non-biohazard cases.
+- A 16-by-2 portrait-template versus biohazard contingency test found no
+  association: chi-square p-value **0.718686**. Ten repeated five-fold
+  logistic evaluations were also chance-level:
+  - portrait template AUC **0.491** (range 0.474-0.511);
+  - declared species AUC **0.474** (range 0.424-0.520); and
+  - portrait plus species AUC **0.467** (range 0.412-0.518).
+  Because the underlying portrait pixels are exact repeats, a larger vision
+  model cannot recover within-template information that is not present.
+- `MIB-000763`'s exact orange passport pixels occur on **44** intact passport
+  pages: only three are biohazard cases, while 41 are not. Their truth labels
+  are mixed across 19 approvals, 14 denials, and 11 reviews.
+  `MIB-000176` uses the exact same RGB portrait but is a risk-free latent
+  approval, providing a direct visual counterexample.
+- Among the accepted engine's review pool, 237 packets had intact active
+  passports spanning all 16 templates. Every portrait cell containing a
+  latent approval or denial was mixed with another truth class; no template
+  supplied a safe terminal promotion.
+- A broader check over 783 packets with any separately embedded 512-pixel
+  portrait-like image found the same result across 21 stock templates
+  (chi-square p-value 0.625945; repeated five-fold template AUC 0.489).
+- The probe changed no runtime source. Extracted portrait maps, rendered
+  checks, and analysis artifacts were moved recoverably to Trash.
