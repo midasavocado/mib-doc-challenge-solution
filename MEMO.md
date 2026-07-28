@@ -1651,6 +1651,16 @@ not active.**
   edit in `mib_pipeline/pipeline.py` was preserved and excluded from this
   checkpoint.
 
+### 2026-07-27 — full-fit tree removed
+
+- Deleted the tracked `mib_pipeline/adjudication_model.json` and
+  `mib_pipeline/adjudication_calibrator.json` artifacts at the user's request.
+  The active runtime already had no import or loader for either file.
+- Updated `README.md` so the repository inventory no longer describes those
+  memorized public-full-fit artifacts as retained.
+- Historical score discussions remain in this memo for auditability, but the
+  runnable repository no longer contains the tree or its calibrator.
+
 ### 2026-07-27 — cross-dataset residual-pattern audit
 
 **Result: three new pattern families were tested without training on the 398

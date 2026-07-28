@@ -29,8 +29,9 @@ after adjudication and can never become approval evidence.
 
 Trusted visible findings and source-proven policy denials remain authoritative.
 Unresolved or contradictory trusted evidence stays `NEEDS_REVIEW`. The active
-runtime does not load the public-full-fit adjudication model or its calibrator;
-those artifacts are retained only to reproduce an older public checkpoint.
+runtime contains no public-full-fit adjudication model or calibrator. Those
+historical artifacts were deleted because they memorized the public labels and
+were not part of the production path.
 
 Experimental classification results, including the non-identity 74.31
 out-of-fold composite and the checks that prevented its promotion, are recorded
@@ -58,8 +59,6 @@ The image uses CPU-only Poppler and Tesseract. The entrypoint accepts exactly:
 solution.py                         challenge entrypoint
 mib_pipeline/
   pipeline.py                      OCR, extraction, and adjudication pipeline
-  adjudication_model.json          quarantined historical checkpoint artifact
-  adjudication_calibrator.json     quarantined historical checkpoint artifact
 run.sh                             container entrypoint
 Dockerfile                         offline runtime image
 ```
