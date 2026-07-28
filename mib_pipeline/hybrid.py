@@ -25,6 +25,7 @@ from provenance_engine import (
     VisibleEvidenceExtractor,
 )
 
+from .pattern_policy import apply_evidence_pattern_policy
 from .visible_denials import apply_visible_slash_denials
 
 
@@ -301,3 +302,4 @@ def apply_provenance_adjudication(
 
     apply_visible_slash_denials(pdfs, predictions, workers)
     _apply_visible_review_safeguards(pdfs, predictions)
+    apply_evidence_pattern_policy(predictions)

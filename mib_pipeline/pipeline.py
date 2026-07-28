@@ -2972,6 +2972,8 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
     else:
         confidence = 0.58
 
+    from .pattern_policy import intake_arrival_state
+
     return {
         "case_id": case_id,
         "applicant_name": output_applicant or "unknown",
@@ -2984,6 +2986,7 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
         "risk_flags": "|".join(output_flags) if output_flags else "none",
         "fee_status": output_fee,
         "_fee_status_defaulted": fee_status_defaulted,
+        "_arrival_evidence_state": intake_arrival_state(case_id, pages),
         "adjudication": decision,
         "confidence": confidence,
     }

@@ -1774,3 +1774,36 @@ reproduce 80.00/80 classification on the public 1,000 without a fitted tree.**
   extraction lane supplies perfect values while classification retains this
   provenance bit. The concurrent extraction edit in
   `mib_pipeline/pipeline.py` was preserved and excluded.
+
+### 2026-07-27 — feature-flagged perfect-extraction policy
+
+**Result: exact 80.00/80 with perfect fields; rejected on current noisy
+fields and default-off.**
+
+- Added `mib_pipeline/pattern_policy.py` behind
+  `MIB_EVIDENCE_PATTERN_POLICY=1`. The unset default leaves production
+  classification unchanged.
+- The layer only routes existing low-confidence `NEEDS_REVIEW` rows. Settled
+  `APPROVED`/`DENIED` outcomes and confidence-0.99 direct findings retain
+  precedence, because fifteen correct visible denials rely on evidence richer
+  than the nine flat output columns.
+- The active I-8090 arrival detector distinguishes `observed_value`,
+  `explicit_unreadable`, `blank`, and `unknown`. It is case-scoped, ignores
+  foreign-case pages, accepts a date on the label's immediate next OCR line,
+  and retains literal pixel-verified `UNREADABLE`.
+- The 20-case visual gate recovered all seven explicit-unreadable reviews and
+  all six blank reviews without demoting any of the seven hard-to-read
+  approval controls. The complete approval audit found zero effective false
+  demotions across all 289 true approvals: 233 had observed value ink, 54
+  remained safely unknown, and two noisy blank reads were protected by
+  authenticated 0.99 approval findings.
+- Running the actual module over all 1,000 rows with perfect truth fields and
+  the detected arrival state produced exactly:
+  289 `APPROVED -> APPROVED`, 431 `DENIED -> DENIED`, and
+  280 `NEEDS_REVIEW -> NEEDS_REVIEW`, for **80.00/80** and zero errors.
+- The required negative control failed decisively on the current accepted
+  extracted fields: **70.93/80**, 109 errors, and 29 catastrophic false
+  approvals. The feature therefore remains default-off and is not an updated
+  live score. Production remains **72.92/80 classification** with zero CFA.
+  The bridge may be reconsidered only after the extraction lane supplies
+  trustworthy repaired values plus this field-local provenance state.

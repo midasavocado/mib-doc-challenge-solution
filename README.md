@@ -37,6 +37,14 @@ Experimental classification results, including the non-identity 74.31
 out-of-fold composite and the checks that prevented its promotion, are recorded
 in `MEMO.md`. They are not represented as live runtime scores.
 
+The perfect-extraction classification bridge is available only as the
+default-off `MIB_EVIDENCE_PATTERN_POLICY=1` experiment. It routes unresolved
+reviews from trusted extracted fields while preserving settled visible
+approvals, denials, and direct findings. The public perfect-field replay reaches
+80.00/80, but the same switch scores only 70.93/80 and creates 29 catastrophic
+false approvals with the current noisy fields. Do not enable it until the
+extractor also supplies trustworthy field values and arrival-cell provenance.
+
 ## Run
 
 ```bash
@@ -59,6 +67,7 @@ The image uses CPU-only Poppler and Tesseract. The entrypoint accepts exactly:
 solution.py                         challenge entrypoint
 mib_pipeline/
   pipeline.py                      OCR, extraction, and adjudication pipeline
+  pattern_policy.py                default-off perfect-extraction policy bridge
 run.sh                             container entrypoint
 Dockerfile                         offline runtime image
 ```
