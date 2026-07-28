@@ -251,18 +251,15 @@ def _fill_unresolved_fields(
                 primary[field] = replacement
 
 
-def apply_provenance_adjudication(
+def compute_provenance_rows(
     pdfs: list[Path],
-    predictions: dict[str, dict],
     workers: int,
-) -> None:
-    """Overlay only adjudication and confidence from the independent engine.
+) -> dict[str, dict]:
+    """Run the independent engine once and return its rows.
 
-    The vendored engine excludes hidden answer-key transcription and
-    public-label-selected purpose/layout approval cells. Authenticated direct
-    findings from the primary engine retain precedence.
+    Split out so the caller can use the extraction before the batch repairs run
+    and the adjudication after them, without paying for the engine twice.
     """
-
     processor = _processor()
     started = time.monotonic()
     rows: dict[str, dict] = {}
@@ -297,6 +294,24 @@ def apply_provenance_adjudication(
                     file=sys.stderr,
                     flush=True,
                 )
+
+    return rows
+
+
+def apply_provenance_adjudication(
+    pdfs: list[Path],
+    predictions: dict[str, dict],
+    workers: int,
+    rows: dict[str, dict] | None = None,
+) -> None:
+    """Overlay only adjudication and confidence from the independent engine.
+
+    The vendored engine excludes hidden answer-key transcription and
+    public-label-selected purpose/layout approval cells. Authenticated direct
+    findings from the primary engine retain precedence.
+    """
+    if rows is None:
+        rows = compute_provenance_rows(pdfs, workers)
 
     for case_id, alternate in rows.items():
         primary = predictions[case_id]
@@ -342,8 +357,6 @@ def apply_provenance_adjudication(
             continue
         primary["adjudication"] = alternate["adjudication"]
         primary["confidence"] = alternate["confidence"]
-
-    _fill_unresolved_fields(rows, predictions)
 
     apply_visible_slash_denials(pdfs, predictions, workers)
     _apply_visible_review_safeguards(pdfs, predictions)

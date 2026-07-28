@@ -1194,6 +1194,40 @@ The accepted runtime therefore remains commit `28ae4db`, 70.81/80
 classification, 0 CFA. No failed source change, learned artifact, temporary
 test file, or generated model was retained.
 
+### 2026-07-28 — accepted: run the independent engine before the batch repairs
+
+**Result: accepted. Extraction 46.238 -> 46.472 / 50 public (49.487 -> 49.534
+under unrecoverable-field scoring), 46 gains, 3 losses, no extra runtime.**
+
+The fill landed after `_impute_closed_vocabulary_modes`, which had already
+replaced every unresolved closed-vocabulary field with the batch mode. The fill
+then saw `Luyten-b`, `ORION_GRAYS`, `MED-3` or `reactor maintenance` in the
+slot, decided it was resolved, and skipped — so an invented modal guess was
+locking out a real read from the independent engine.
+
+`compute_provenance_rows` is now split out of `apply_provenance_adjudication`
+so `main` can use the extraction before the batch repairs and the adjudication
+after them, running the engine exactly once (verified: one progress sequence
+per run, not two).
+
+| field | gains | losses |
+|---|---:|---:|
+| home_world | 19 | 2 |
+| declared_purpose | 7 | 0 |
+| species_code | 7 | 0 |
+| visa_class | 7 | 1 |
+| sponsor_id | 4 | 0 |
+| applicant_name | 1 | 0 |
+| risk_flags | 1 | 0 |
+
+The three losses are packets where the modal guess happened to be right and the
+independent read was wrong (MIB-000235 visa, MIB-000455 and MIB-000860 home
+world). All nine changed slots on an end-to-end sample reproduce the offline
+simulation exactly.
+
+**Session total: 49.322 -> 49.534 private-style, 45.877 -> 46.472 public**,
+across nine accepted changes, for +0.34 s/PDF.
+
 ### 2026-07-28 — accepted: fill unresolved fields from the independent engine
 
 **Result: accepted. Extraction 45.968 -> 46.238 / 50 public (49.409 -> 49.487

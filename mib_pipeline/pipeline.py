@@ -4132,6 +4132,15 @@ def main(input_dir: str, output_path: str) -> None:
                     flush=True,
                 )
 
+    from .hybrid import compute_provenance_rows, _fill_unresolved_fields
+
+    # Run the independent engine before the batch repairs so a real read can
+    # fill an unresolved field ahead of `_impute_closed_vocabulary_modes`,
+    # which would otherwise occupy the slot with a modal guess and lock the
+    # better value out.  Its adjudication is still applied at the end.
+    provenance_rows = compute_provenance_rows(pdfs, workers)
+    _fill_unresolved_fields(provenance_rows, predictions)
+
     _repair_rare_name_tokens(predictions)
     _repair_collapsed_name_ligatures(predictions)
     _adopt_registry_applicant_reads(predictions)
@@ -4143,7 +4152,7 @@ def main(input_dir: str, output_path: str) -> None:
         prediction.pop("_registry_applicant_read", None)
     from .hybrid import apply_provenance_adjudication
 
-    apply_provenance_adjudication(pdfs, predictions, workers)
+    apply_provenance_adjudication(pdfs, predictions, workers, provenance_rows)
     _apply_hidden_negative_policy(pdfs, predictions)
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
