@@ -1194,10 +1194,37 @@ The accepted runtime therefore remains commit `28ae4db`, 70.81/80
 classification, 0 CFA. No failed source change, learned artifact, temporary
 test file, or generated model was retained.
 
+### 2026-07-28 — accepted: read declared purpose from its label first
+
+**Result: accepted. Extraction 46.436 -> 46.442 / 50 public (49.522 -> 49.525
+under unrecoverable-field scoring), 2 gains, 0 losses.**
+
+`_fuzzy_closed_value` starts with an exact scan for any vocabulary word
+anywhere in the packet. "transit" is both a declared purpose and a word in the
+policy sentence *"Transit class cannot authorize declared work"*, so a denial
+reason was being read as the applicant's purpose (MIB-000457, MIB-000479).
+Anchoring on the label first and falling back to the scan fixes it.
+
+Deliberately opt-in rather than the default: the same change applied to
+`visa_class` loses **15** packets, because the unanchored scan is what feeds the
+TRANSIT-7 recovery when no visa line survives. `home_world` is unaffected.
+
+**Measurement note that cost a wrong number.** The A/B copy under
+`scratchpad/ab` is rebuilt from `solution/` per experiment. Reusing it without
+rebuilding silently carried the rejected 0.70 key-spelling gate into two
+measurements and inflated them by six slots (49.534 reported where the tree
+gives 49.522). Rebuild the copy every time, and if a diff shows fields the
+change cannot touch — sponsor ids moving when only purpose parsing changed —
+the baseline is wrong, not the candidate.
+
 ### 2026-07-28 — accepted: run the independent engine before the batch repairs
 
-**Result: accepted. Extraction 46.238 -> 46.472 / 50 public (49.487 -> 49.534
+**Result: accepted. Extraction 46.238 -> 46.436 / 50 public (49.487 -> 49.522
 under unrecoverable-field scoring), 46 gains, 3 losses, no extra runtime.**
+
+(An earlier draft of this entry read 46.472 / 49.534. That measurement reused a
+stale A/B copy still carrying the rejected 0.70 key-spelling gate, which is
+worth six slots. Corrected against a clean copy of the committed tree.)
 
 The fill landed after `_impute_closed_vocabulary_modes`, which had already
 replaced every unresolved closed-vocabulary field with the batch mode. The fill
@@ -1225,7 +1252,7 @@ independent read was wrong (MIB-000235 visa, MIB-000455 and MIB-000860 home
 world). All nine changed slots on an end-to-end sample reproduce the offline
 simulation exactly.
 
-**Session total: 49.322 -> 49.534 private-style, 45.877 -> 46.472 public**,
+**Session total: 49.322 -> 49.522 private-style, 45.877 -> 46.436 public**,
 across nine accepted changes, for +0.34 s/PDF.
 
 ### 2026-07-28 — accepted: fill unresolved fields from the independent engine

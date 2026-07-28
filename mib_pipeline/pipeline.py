@@ -180,9 +180,20 @@ def _fuzzy_closed_value(
     labels: tuple[str, ...],
     values: tuple[str, ...],
     threshold: float = 0.70,
+    prefer_labelled: bool = False,
 ) -> str | None:
+    """Read a closed-vocabulary field, exact scan first unless told otherwise.
+
+    `prefer_labelled` exists for `declared_purpose`.  The exact scan looks for a
+    vocabulary word anywhere in the packet, and "transit" is both a declared
+    purpose and a word in the policy sentence "Transit class cannot authorize
+    declared work", so a denial reason was being read as the applicant's
+    purpose.  Anchoring on the label first fixes that and still falls back to
+    the scan when no label survives.  It is deliberately not the default:
+    `visa_class` loses 15 packets without the unanchored scan.
+    """
     exact = _vocabulary_value(text, values)
-    if exact:
+    if exact and not prefer_labelled:
         return exact
     best: tuple[float, str] = (0.0, "")
     for candidate in _labeled_values(text, labels):
@@ -192,7 +203,9 @@ def _fuzzy_closed_value(
             score = difflib.SequenceMatcher(None, candidate_key, value_key).ratio()
             if score > best[0]:
                 best = (score, value)
-    return best[1] if best[0] >= threshold else None
+    if best[0] >= threshold:
+        return best[1]
+    return exact or None
 
 
 _OCR_MEMO = threading.local()
@@ -3244,7 +3257,8 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
         or _fuzzy_labeled_date(text)
     )
     purpose = _fuzzy_closed_value(
-        text, ("Declared Purpose", "Purpose"), PURPOSES, 0.66
+        text, ("Declared Purpose", "Purpose"), PURPOSES, 0.66,
+        prefer_labelled=True,
     )
     flags, flags_state = _extract_scoped_flags(case_id, pages)
     visible_flags = _extract_visible_flags(text)
