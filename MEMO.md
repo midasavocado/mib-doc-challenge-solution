@@ -2405,3 +2405,56 @@ source remains unchanged from the pushed extraction checkpoint.**
 - All experimental code was run ephemerally. The rejected source diff was
   reversed, generated caches and the 840-case control corpus were moved
   recoverably to Trash, and the branch returned to a clean state.
+
+### 2026-07-28 — accepted visible manual-reason field recovery
+
+**Result: the integrated branch passed the official four-worker full-1,000
+Docker run at 46.333333/50 extraction and retained the accepted 72.92/80
+classification score with zero catastrophic false approvals.**
+
+- Added default-on, opt-out `MIB_MANUAL_REASON_FIELD_RECOVERY=0` support for
+  risk flags explicitly printed in an active case's visible manual
+  adjudicator note. The recovery reads rendered OCR views only, requires the
+  page to contain exactly the active case id, rejects answer-key/training/
+  forced-adjudication language, and accepts only a unique fuzzy flag match
+  with a minimum winning margin.
+- The recovery runs after adjudication and confidence are final. It can fill
+  the extracted `risk_flags` field but cannot create a second policy
+  transition. This preserves the visible finding as the classification
+  authority while making the corresponding extracted reason usable.
+- A cached replay over all 415 review outputs found 46 candidate flags. Every
+  candidate was a subset of truth, three made the field newly exact, and none
+  broke an exact field. Direct checks found three more exact candidates among
+  terminal outputs. On 840 independently stamped controls, 270 explicit
+  risk-reason notes already agreed with the emitted flags; the best non-risk
+  reason-prefix similarity was 0.414, below the 0.58 label threshold.
+- The official acceptance used the organizer's read-only, network-disabled,
+  4-CPU/8-GiB Docker contract. All 1,000 primary reads and all 1,000
+  independent provenance reads completed. The output contained exactly 1,000
+  valid records and has SHA-256
+  `10a00cffb7148949b855008b1ad8e079f599a6ba82cd711c9fdd18bca806c2b7`.
+- Against the last accepted official artifact, extraction raw points moved
+  **41,186 -> 41,700** and extraction score moved
+  **45.762222 -> 46.333333/50**. Classification remained
+  **72.92/80**, calibration remained **18.071825/20**, total moved
+  **136.754047 -> 137.325158/150**, and CFA remained **0**. The 514-point
+  integrated extraction gain includes the earlier pushed extraction commits
+  since that artifact and is not attributed entirely to this rule.
+- The full candidate newly made the intended risk field exact for
+  `MIB-000151`, `MIB-000298`, `MIB-000338`, `MIB-000691`, and
+  `MIB-000889` relative to the last accepted artifact. `MIB-000293` did not
+  recover its reason under Linux. A same-image, eight-case Linux flag-off
+  repeat directly isolated the `MIB-000338` risk repair with zero decision or
+  confidence changes; one unrelated name read varied concurrently, so the
+  repeat was not used to claim deterministic attribution for every full-run
+  difference.
+- Syntax compilation, `git diff --check`, and all five public contract tests
+  passed. No test files, learned model, generated cache, or competitor
+  material is retained.
+- Generator-only pattern forensics were also exhausted without a runtime
+  change. Exact ReportLab creation timestamps were recovered from trailer IDs,
+  but blocked timing models were unstable (linear residual AUC 0.488; tree
+  0.562 with a fold as low as 0.289). A lag-128 sequence blip had no honest
+  forward phase rule. The existing perfect-field policy still scored only
+  70.93/80 with 29 CFAs on noisy emitted fields. All three routes were
+  rejected.

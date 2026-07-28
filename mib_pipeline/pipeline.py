@@ -2431,6 +2431,124 @@ def _extract_visible_flags(text: str) -> list[str]:
     return found
 
 
+_MANUAL_RISK_REASON_LABELS = (
+    "reason disqualifying risk flag",
+    "reason review only risk flag present",
+    "disqualifying risk flag",
+    "review only risk flag present",
+)
+
+
+def _rendered_page_views(page: str) -> list[str]:
+    """Return OCR-derived page views while excluding native PDF text."""
+
+    parts = re.split(
+        r"\n\[(OCR VIEW 6|PIXEL-VERIFIED NATIVE TEXT|"
+        r"ROTATED OCR VIEW|DESKEWED OCR VIEW)\]\n",
+        page,
+    )
+    views = [parts[0]]
+    for index in range(1, len(parts), 2):
+        label = parts[index]
+        view = parts[index + 1] if index + 1 < len(parts) else ""
+        if label != "PIXEL-VERIFIED NATIVE TEXT":
+            views.append(view)
+    return views
+
+
+def _manual_reason_flag_candidate(view: str) -> str | None:
+    """Fuzzily read one explicitly named risk flag from a manual-note reason."""
+
+    lines = [line.strip() for line in view.splitlines() if line.strip()]
+    found: set[str] = set()
+    compact_labels = tuple(_compact(label) for label in _MANUAL_RISK_REASON_LABELS)
+    for index, line in enumerate(lines):
+        if ":" not in line:
+            continue
+        prefix, value = line.rsplit(":", 1)
+        if (
+            index + 1 < len(lines)
+            and ":" not in lines[index + 1]
+            and len(_compact(lines[index + 1])) <= 25
+        ):
+            # A damaged note can wrap one flag across two short lines, as in
+            # ``act`` / ``arrant`` for ``active_warrant``.
+            value = f"{value} {lines[index + 1]}"
+
+        label_score = max(
+            difflib.SequenceMatcher(
+                None,
+                _compact(prefix),
+                target,
+            ).ratio()
+            for target in compact_labels
+        )
+        if label_score < 0.58:
+            continue
+
+        ranked = sorted(
+            (
+                difflib.SequenceMatcher(
+                    None,
+                    _compact(value),
+                    _compact(flag),
+                ).ratio(),
+                flag,
+            )
+            for flag in RISK_FLAGS
+        )
+        best_score, best_flag = ranked[-1]
+        runner_up = ranked[-2][0]
+        if best_score >= 0.55 and best_score - runner_up >= 0.08:
+            found.add(best_flag)
+    return found.pop() if len(found) == 1 else None
+
+
+def _manual_note_reason_flags(case_id: str, pages: list[str]) -> list[str]:
+    """Recover risk flags explicitly named by an active-case manual note.
+
+    This is deliberately extraction-only. The note's finding already controls
+    adjudication through the authoritative decision parser; recovering its
+    surviving reason text must not create a second policy transition.
+    """
+
+    expected_id = case_id.removeprefix("MIB-")
+    candidates: set[str] = set()
+    targets = ("MANUALADJUDICATORNOTE", "ADJUDICATORNOTE")
+    for page in pages:
+        visible_ids = set(
+            re.findall(r"\bMIB[- ]?(\d{6})\b", page, re.I)
+        )
+        if visible_ids != {expected_id}:
+            continue
+        if not any(
+            max(
+                difflib.SequenceMatcher(
+                    None,
+                    _compact(line),
+                    target,
+                ).ratio()
+                for target in targets
+            )
+            >= 0.54
+            for line in page.splitlines()
+            if len(_compact(line)) >= 12
+        ):
+            continue
+        for view in _rendered_page_views(page):
+            if re.search(
+                r"answer\s+key|training\s+example|sample\s+denial|"
+                r"force\s+adjudication",
+                view,
+                re.I,
+            ):
+                continue
+            candidate = _manual_reason_flag_candidate(view)
+            if candidate is not None:
+                candidates.add(candidate)
+    return sorted(candidates) if len(candidates) == 1 else []
+
+
 def _supplementary_decision(case_id: str, pages: list[str]) -> str | None:
     expected_id = case_id.split("-")[-1]
     candidates: set[str] = set()
@@ -3321,6 +3439,17 @@ def _process(pdf: Path) -> dict:
             result,
             trusted_late_flags,
         )
+        if os.environ.get("MIB_MANUAL_REASON_FIELD_RECOVERY", "1") == "1":
+            manual_reason_flags = _manual_note_reason_flags(pdf.stem, pages)
+            if manual_reason_flags:
+                existing_flags = {
+                    flag
+                    for flag in str(result["risk_flags"]).split("|")
+                    if flag in RISK_FLAGS
+                }
+                result["risk_flags"] = "|".join(
+                    sorted(existing_flags | set(manual_reason_flags))
+                )
         # Ask the high-resolution pass only for the fields this packet still
         # cannot answer.  It is 55% of pipeline CPU, and a full read of all four
         # fields is wasted whenever the earlier stages already resolved three.
