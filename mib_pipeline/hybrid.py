@@ -207,6 +207,50 @@ def _processor() -> OutputConfidenceRecalibrationProcessor:
     )
 
 
+_UNRESOLVED = {
+    "applicant_name": "unknown",
+    "species_code": "unknown",
+    "home_world": "unknown",
+    "visa_class": "unknown",
+    "sponsor_id": "SPN-0000",
+    "arrival_date": "1900-01-01",
+    "declared_purpose": "unknown",
+    "risk_flags": "none",
+}
+
+
+def _fill_unresolved_fields(
+    rows: dict[str, dict],
+    predictions: dict[str, dict],
+) -> None:
+    """Fill fields the primary engine could not resolve from the independent one.
+
+    The independent engine already runs for adjudication and its extraction was
+    being discarded.  It is the weaker reader overall — adopting it wholesale
+    costs far more than it gains — but where the primary produced no value at
+    all there is nothing to lose by asking it.  Measured over the 1,000 public
+    packets this fills 42 slots correctly and breaks none.
+
+    `fee_status` is deliberately excluded.  Its "unknown" is a determination the
+    fee rules reach on purpose, not a missing marker: a zero-dollar receipt with
+    no waiver code cannot prove paid or waived.  Overwriting it is the only part
+    of this that loses, and it loses every time it fires (MIB-000008,
+    MIB-000076, MIB-000171, MIB-000371, all "unknown" overwritten with "paid").
+
+    Extraction only: adjudication and confidence are untouched here.
+    """
+    for case_id, alternate in rows.items():
+        primary = predictions.get(case_id)
+        if primary is None:
+            continue
+        for field, unresolved in _UNRESOLVED.items():
+            if primary.get(field) != unresolved:
+                continue
+            replacement = alternate.get(field)
+            if replacement and replacement != unresolved:
+                primary[field] = replacement
+
+
 def apply_provenance_adjudication(
     pdfs: list[Path],
     predictions: dict[str, dict],
@@ -298,6 +342,8 @@ def apply_provenance_adjudication(
             continue
         primary["adjudication"] = alternate["adjudication"]
         primary["confidence"] = alternate["confidence"]
+
+    _fill_unresolved_fields(rows, predictions)
 
     apply_visible_slash_denials(pdfs, predictions, workers)
     _apply_visible_review_safeguards(pdfs, predictions)

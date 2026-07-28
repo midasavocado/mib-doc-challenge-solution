@@ -1194,6 +1194,43 @@ The accepted runtime therefore remains commit `28ae4db`, 70.81/80
 classification, 0 CFA. No failed source change, learned artifact, temporary
 test file, or generated model was retained.
 
+### 2026-07-28 — accepted: fill unresolved fields from the independent engine
+
+**Result: accepted. Extraction 45.968 -> 46.238 / 50 public (49.409 -> 49.487
+under unrecoverable-field scoring), 42 gains, 0 losses, and no runtime cost at
+all — the engine already runs.**
+
+The provenance engine extracts every field, and `apply_provenance_adjudication`
+was discarding all of it except adjudication and confidence. It is the weaker
+reader overall — adopting it wholesale is heavily negative (it would fix 117
+slots the primary misses and break 288) — but where the primary produced no
+value there is nothing to lose by asking it.
+
+| use of the independent engine | private-style |
+|---|---:|
+| baseline | 49.409 |
+| adopt for `home_world` only (its best field, 943 vs 932) | 49.367 |
+| adopt for `species_code` only | 49.351 |
+| adopt for `declared_purpose` only | 49.355 |
+| **fill unresolved fields, excluding `fee_status`** | **49.487** |
+| fill unresolved fields including `fee_status` | 49.477 |
+
+`fee_status` is excluded on principle and it is also the only part that loses.
+Its `"unknown"` is a determination the fee rules reach deliberately — a
+zero-dollar receipt with no waiver code cannot prove paid or waived — not a
+missing marker. Overwriting it fired four times and was wrong all four
+(MIB-000008, MIB-000076, MIB-000171, MIB-000371, each `unknown` -> `paid`
+against a truth of `unknown`).
+
+`risk_flags` "none" is kept in the fill despite being a legitimate value,
+because it loses nothing: consistent with the earlier finding that the pipeline
+never invents a flag and only ever misses one.
+
+Of the 42 correct fills, 12 land on slots this memo's model counts as scored
+and 30 on slots it already treats as unrecoverable, so the private-side gain is
+carried by those 12 plus the absence of losses. The public gain is larger
+(+0.27) because public scoring charges for the other 30.
+
 ### 2026-07-28 — rejected: loosening the key spelling gate to 0.70
 
 **Measured +6 gains, 0 losses (49.409 -> 49.421) and rejected anyway, because
