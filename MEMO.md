@@ -1586,3 +1586,67 @@ false approvals.**
   those differences into their latent DENIED versus NEEDS_REVIEW outcomes.
 - No runtime source or model artifact changed. Temporary renders and
   single-case traces were removed after the audit.
+
+### 2026-07-27 — independent 5,000-packet stamped-control audit
+
+**Result: the six exact revoked-sponsor entities and known embargo-world
+policy transfer strongly. Generic sponsor digits, species, and species/world
+cells do not provide a safe new terminal rule. The historical full-fit tree is
+not active.**
+
+- Colored manual-finding stamps were first validated against the labeled
+  1,000. There were 162 unambiguous visible controls: 33 `APPROVED`, 79
+  `DENIED`, and 50 `NEEDS_REVIEW`, with zero disagreements against public
+  truth. Applying the identical stamp detector to the separate 5,000 found
+  840 controls: 242 approved, 340 denied, and 258 review.
+- Manual corrections must take precedence over the earlier printed value.
+  `MIB-100353`, for example, visibly crosses out `SPN-0007`, replaces it with
+  `SPN-4114`, and is approved. In contrast, `MIB-101414` leaves `SPN-0007`
+  active and its visible finding says `DENIED. Reason: Revoked sponsor:
+  SPN-0007.` A parser that used the first sponsor value would manufacture a
+  false counterexample.
+- After resolving those corrections and supplementing intact sponsor
+  attestations, 48 stamped controls had one of the six revoked sponsors plus a
+  visibly known non-`DIP-1` visa. All 48 were denied. Fourteen had a revoked
+  sponsor with `DIP-1`: 10 were approved and four were review, with zero
+  denials. Another 25 had an unresolved visa: 24 denied and one review.
+- The manual findings themselves contained 66 explicit
+  `Revoked sponsor: SPN-####` reasons. Sixty-five were denied. The sole review,
+  `MIB-103225`, visibly says the sponsor attests to `DIP-1`, matching the
+  exception. Counts by sponsor were `0007` 11/11 denied; `0139` 5/5;
+  `2718` 12 denied plus the one diplomatic review; `4040` 11/11; `7331`
+  6/6; and `9090` 20/20.
+- Generic digit correlations broke on the independent controls. In the public
+  engine's 398-review residual pool, a zero in sponsor digit position three
+  looked 31 review / 1 denied / 2 approved. The matching validation controls
+  split 29 denied / 11 review / 7 approved. Prefix `27` similarly changed from
+  8 review / 1 approved publicly to 14 denied / 4 review / 4 approved in the
+  controls. A regularized digit-only probe scored 40.25/80 versus 38.43/80 for
+  all-review on this control subset, but caused four catastrophic false
+  approvals. It is unsafe and was rejected; these subset scores are diagnostic
+  and are not comparable to the official full-1,000 score.
+- Species alone was not a policy key. A train-count species lookup scored
+  37.31/80 on the controls, below the 38.43 all-review baseline. A
+  species/world lookup scored 37.80 and caused 10 catastrophic false
+  approvals. The previously tempting `JOVIAN_GASFORM` / `Kepler-186f` cell
+  contains two approvals and two reviews among stamped validation controls:
+  `MIB-101479` is visibly approved while `MIB-100069` is visibly review.
+  `ANDROMEDAN` / `Mars Dome-7` is also mixed at two approvals and one denial.
+- Home world does carry real policy evidence, but it is the already-known
+  embargo policy rather than a new latent correlation. All 15 stamped
+  `TRAPPIST-1e` controls and all nine stamped `Eris Relay` controls were
+  denied. `Wolf-1061c` was 26 denied, two review, and two
+  exception-qualified approvals; 21 findings explicitly named the embargo
+  world, with the two reviews preserving ambiguity or a diplomatic exception.
+  A world-only lookup modestly beat all-review at 39.76/80 with zero
+  catastrophic approvals, and the active engine already encodes the relevant
+  visible world/risk policy.
+- The active runtime does not import or load
+  `mib_pipeline/adjudication_model.json`. That tree and its calibrator remain
+  quarantined historical artifacts for reproducing the invalid full-fit
+  checkpoint. Current classification uses visible-evidence rules, the
+  independent provenance adjudicator with frozen policy/recovery heads, and
+  confidence calibration.
+- This audit changed no runtime source. The separate in-progress extraction
+  edit in `mib_pipeline/pipeline.py` was preserved and excluded from this
+  checkpoint.
