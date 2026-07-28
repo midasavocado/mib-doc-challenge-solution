@@ -1194,6 +1194,63 @@ The accepted runtime therefore remains commit `28ae4db`, 70.81/80
 classification, 0 CFA. No failed source change, learned artifact, temporary
 test file, or generated model was retained.
 
+### 2026-07-28 — rejected on cost: strengthened faded-ink recovery
+
+**Result: rejected. +1 gain, 0 losses (+0.005 extraction) for +0.39 s/PDF.**
+
+Adding a second contrast window (210-252) and a deskewed view to
+`_faded_ink_recovery` recovers MIB-000678's arrival date. Controlled
+back-to-back timings on the same random 50, same machine state:
+
+| build | s/PDF | vs pre-session |
+|---|---:|---:|
+| pre-session baseline | 3.81 | — |
+| six accepted changes (+0.082 pts) | 4.15 | +0.34 |
+| plus strengthened faded pass (+0.005 pts) | 4.54 | +0.73 |
+
+That is **0.013 extraction points per s/PDF against 0.24 for the accepted
+work**, and it cuts budget margin from 31% to 24% on hardware that is very
+likely faster than the grader's. Band-tiled OCR was already removed at a far
+better ratio (0.05 pts per s/PDF), so this does not clear the bar.
+
+**Two ordering bugs found while building it, worth knowing if it is revisited:**
+
+1. **Adding variants up front loses gains.** Harvesting the extra window and
+   deskew alongside the first pass turned two clear wins into ties and dropped
+   them (MIB-000409, MIB-000618 regressed to sentinels): a value is only taken
+   when the views do not disagree. The extra variants have to be staged behind
+   the earlier ones, paid for only when those come back empty.
+2. **`all` versus `any` in the escalation gate.** Gating on "no requested field
+   was found" means finding one field blocks escalation for the others, so a
+   packet needing name+sponsor+date stops after the easy one. It must escalate
+   while *any* requested field is still unread.
+
+**Also rejected this round:**
+
+- Voting a case-bound labelled sponsor or date over OCR views: **-10 to -13**
+  at 2 votes; displaces the clean text-layer reads that the accepted native
+  reader just fixed. At 3 votes it never fires.
+- Native-text readers for the other closed-vocabulary fields:
+  visa_class **2 gains / 19 losses**, declared_purpose **0/2**, home_world and
+  species_code no change. The native trick pays only where no
+  higher-precedence override already exists — visa has one (manual correction,
+  then attestation), and bypassing it is what causes the losses.
+- Extending the vocabulary-gated applicant read from registry pages to all
+  non-intake pages: **49.404 -> 49.398**. A conflicting `Applicant:` read on a
+  second page suppresses the good one (MIB-000564 regressed). A two-tier
+  version, registry first and other pages as fallback, is byte-identical to
+  registry-only, so the fallback never pays.
+- Attestation `attests that X is expected` as a name fallback: 0 gains, 1 loss
+  against current output. As a purpose source it is 152/152 correct but never
+  disagrees with what the pipeline already produces.
+
+**Remaining headroom, measured two ways.** Of the ~104 scored errors, 19 have
+the truth somewhere in the pipeline's own page text and 21 more have it only
+under the stronger offline forensic rig (500 dpi, orientation sweep, two
+contrast windows, deskew) — about 0.118 points that is reachable only by
+spending runtime the budget does not have. The remaining 64 have no channel
+carrying the value at all.
+
 ### 2026-07-28 — accepted vocabulary-gated registry applicant read
 
 **Result: accepted. Extraction 45.936 -> 45.952 / 50 public (49.386 -> 49.404
