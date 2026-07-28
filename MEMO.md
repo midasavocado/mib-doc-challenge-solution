@@ -1650,3 +1650,62 @@ not active.**
 - This audit changed no runtime source. The separate in-progress extraction
   edit in `mib_pipeline/pipeline.py` was preserved and excluded from this
   checkpoint.
+
+### 2026-07-27 — cross-dataset residual-pattern audit
+
+**Result: three new pattern families were tested without training on the 398
+unresolved labels. None produced a safe terminal change. The accepted score
+therefore remains 72.92/80 with zero catastrophic false approvals.**
+
+- The accepted review pool contains 398 packets: 87 latent approvals, 31
+  latent denials, and 280 true reviews. All 118 scoring misses are conservative
+  reviews; the accepted engine has no approved/denied polarity error.
+- A targeted audit of the 31 latent denials found 25-26 missing hard-risk
+  facts and six unpaid-fee facts, with two packets overlapping those groups.
+  A 300-400-DPI, all-page fee probe found no visible `unpaid` witness in the
+  six remaining fee misses. Contact sheets and individual renders of every
+  risk miss showed that many packets physically omit the B-13 page; the
+  missing hard flag cannot be recovered by enlarging a different page.
+- Five-seed, five-fold identity-free visual models were evaluated only on
+  rendered/document features and bounded semantic state. ExtraTrees reached
+  one-vs-rest AUC 0.865/0.793/0.919 and CatBoost reached
+  0.873/0.794/0.923 (approved/denied/review), but every score-positive routing
+  threshold introduced polarity errors. Every zero-polarity threshold changed
+  zero rows. A denial-only model trained over all terminal cases reversed on
+  the unresolved pool, confirming a missing-evidence distribution shift.
+- The 840 independently labeled colored-stamp controls from the 5,000 set
+  were then used as a separate training panel. A semantic CatBoost model
+  reached target AUC 0.777/0.567/0.828; adding the 602 already-certain public
+  terminal cases changed this to 0.773/0.492/0.850. Both confidently called
+  latent denials approved. Their best zero-polarity thresholds changed zero
+  rows.
+- An exact association-rule miner used only those 840 independent controls.
+  At support at least eight and 95-100% control purity it found 121 one- to
+  three-condition terminal rules. Applied to the unresolved public pool,
+  those rules corrected zero cases: ten hits were true reviews and one was a
+  polarity error. At support 20 or higher, no rule fired.
+- A second cross-dataset model added 217 rendered/PDF features from all
+  non-decision pages. Every page carrying a colored stamp, finding, or manual
+  note was excluded before feature extraction, so the model could not learn
+  the label glyph. Its AUC was 0.730/0.456/0.828, its best raw routing gained
+  zero, and its best zero-polarity threshold again changed zero rows.
+- The hidden-answer-key negative transform is already saturated: all 216
+  public payload packets are currently correct. Broadening it into the
+  remaining ambiguous hidden-policy cells would turn known review controls
+  into terminal decisions.
+- A census of 97 retained 1,000-row artifacts found that every 78.76 output
+  repeats the same 113 review promotions from the quarantined public-full-fit
+  tree. The genuinely independent visible engines do not form a safe
+  complementary consensus on the accepted residuals.
+- Per the requested feature-flag boundary, any future learned pattern layer
+  must be opt-in and default-off until a clean four-worker full-1,000 run shows
+  a real gain with zero polarity catastrophes. No flag or model artifact was
+  added here because every candidate abstained at its safety threshold; a dead
+  switch around a rejected model would only disguise failed code.
+- No official run was repeated because no runtime source changed. The stable
+  accepted artifact remains
+  `/private/tmp/mib-terminal-confidence-full-output/predictions.jsonl` at
+  **72.92/80 classification**, **45.762222/50 extraction**,
+  **18.071825/20 calibration**, **136.754047/150 total**, and **0 CFA**.
+  The separate in-progress extraction edit in `mib_pipeline/pipeline.py` was
+  preserved and excluded from this checkpoint.
