@@ -1440,6 +1440,36 @@ def _fuzzy_labeled_applicant(text: str) -> str | None:
     return candidates.pop()
 
 
+def _supporting_applicant_names(case_id: str, pages: list[str]) -> set[str]:
+    """Every `Applicant:`-labelled name on this packet's supporting documents.
+
+    Excludes the intake form, which is the decoy carrier, and any page showing
+    another packet's case id.  Returned unfiltered: which of these is credible
+    is decided at batch level, where the name vocabulary exists.
+    """
+    expected_id = case_id.split("-")[-1]
+    shape = re.compile(r"[A-Za-z][A-Za-z'-]+ [A-Za-z][A-Za-z'-]+")
+    intake = re.compile(r"FORM\s+I-?8090|Work\s+Authorization\s+Intake", re.I)
+    found: set[str] = set()
+    for page in pages:
+        if intake.search(page):
+            continue
+        page_ids = re.findall(r"\bMIB[- ]?(\d{6})\b", page, re.I)
+        if any(page_id not in (expected_id, "000000") for page_id in page_ids):
+            continue
+        for view in re.split(
+            rf"{re.escape(_OCR_VIEW_SEPARATOR)}|"
+            rf"{re.escape(_NATIVE_VIEW_SEPARATOR)}|"
+            r"\n\[ROTATED OCR VIEW\]\n",
+            page,
+        ):
+            for value in _labeled_values(view, ("Applicant",)):
+                value = re.sub(r"\s{2,}.*$", "", value).strip()
+                if shape.fullmatch(value):
+                    found.add(value)
+    return found
+
+
 def _case_bound_native_views(case_id: str, pages: list[str]) -> list[str]:
     """Pixel-verified native text of pages that belong to this packet.
 
@@ -3448,6 +3478,12 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
         "_arrival_evidence_state": intake_arrival_state(case_id, pages),
         "_registry_applicant_read": registry_applicant_read,
         "_source_applicant_reads": source_applicant_reads,
+        "_supporting_applicant_names": frozenset(
+            _supporting_applicant_names(case_id, pages)
+        ),
+        "_packet_words": frozenset(
+            word.casefold() for word in re.findall(r"[A-Za-z]{4,}", text)
+        ),
         "adjudication": decision,
         "confidence": confidence,
     }
@@ -4439,6 +4475,41 @@ def _adopt_valid_source_applicant_reads(
             prediction["applicant_name"] = candidates.pop()
 
 
+def _replace_unsupported_name(predictions: dict[str, dict]) -> None:
+    """Drop a name the packet never shows in favour of one it does.
+
+    After the repairs above, a name can survive that appears nowhere in its own
+    packet — a snap that landed on the wrong vocabulary entry, for instance.
+    When the packet's supporting documents name exactly one applicant and that
+    name is spelled with known tokens, it is better evidence than a value the
+    document does not contain (MIB-000039, `Tekdane Ixotari` -> `Tekdane
+    Ixoix`).
+    """
+    counts: Counter[str] = Counter()
+    for prediction in predictions.values():
+        if prediction["applicant_name"] == "unknown":
+            continue
+        for token in prediction["applicant_name"].split():
+            counts[token] += 1
+    vocabulary = {token for token, count in counts.items() if count >= 4}
+    if len(vocabulary) < 20:
+        return
+    for prediction in predictions.values():
+        name = prediction["applicant_name"]
+        if name == "unknown":
+            continue
+        words = prediction.get("_packet_words") or frozenset()
+        if all(token.casefold() in words for token in name.split()):
+            continue
+        supported = {
+            candidate
+            for candidate in (prediction.get("_supporting_applicant_names") or ())
+            if all(token in vocabulary for token in candidate.split())
+        }
+        if len(supported) == 1:
+            prediction["applicant_name"] = supported.pop()
+
+
 def _impute_closed_vocabulary_modes(predictions: dict[str, dict]) -> None:
     """Fill unresolved output fields from this batch without affecting policy."""
     fields = {
@@ -4559,12 +4630,15 @@ def main(input_dir: str, output_path: str) -> None:
     _adopt_registry_applicant_reads(predictions)
     _snap_names_to_batch_vocabulary(predictions)
     _adopt_valid_source_applicant_reads(predictions)
+    _replace_unsupported_name(predictions)
     _impute_closed_vocabulary_modes(predictions)
     _repair_rare_arrival_years(predictions)
     _repair_key_spelling_after_batch(pdfs, predictions)
     for prediction in predictions.values():
         prediction.pop("_registry_applicant_read", None)
         prediction.pop("_source_applicant_reads", None)
+        prediction.pop("_packet_words", None)
+        prediction.pop("_supporting_applicant_names", None)
     from .hybrid import apply_provenance_adjudication
 
     apply_provenance_adjudication(pdfs, predictions, workers, provenance_rows)
