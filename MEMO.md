@@ -1871,10 +1871,11 @@ classification rule survived independent controls. Runtime remains
   extraction maximum. It does not remove the case's adjudication: every one of
   the 1,000 classifications still has 8 raw points available.
 - The public labels omit `unrecoverable_fields`, so the exact private
-  extraction score cannot be reproduced locally. The unchanged public
-  extraction score is 45.762222/50; the prior forensic curve estimates about
-  48.25-49.95/50 privately, with 49.30 at the measured 85% destroyed-field
-  assumption. This is an estimate, not an official score.
+  extraction score cannot be reproduced locally. The accepted classification
+  artifact carried 45.762222/50 public extraction; concurrent extraction
+  checkpoints have since raised the extractor to 45.898/50 public and 49.345
+  under the available unrecoverable-field replay. The broader forensic curve
+  remains an estimate rather than an official private score.
 - All 22 packets carrying a visible/native `BARCODE PAYLOAD` are already
   classified correctly: 16 denied, 5 review, and 1 approved. That channel has
   zero residual headroom.
@@ -1893,5 +1894,6 @@ classification rule survived independent controls. Runtime remains
 - Confidence-based approval promotion was also rejected. The narrowest tested
   runtime-observable slice gained only 0.33 classification points while
   creating 7 catastrophic false approvals.
-- No source or model artifact changed, so the four-worker full-1,000 run was
-  not repeated and no commit was created.
+- No classification source or model artifact changed, so the classification
+  four-worker full-1,000 run was not repeated. This audit note was swept into
+  the independently accepted extraction commit `49a7df3`.
