@@ -1106,6 +1106,93 @@ def _registered_field_repairs(
     return repairs
 
 
+def _faded_ink_recovery(pdf: Path, needed: frozenset[str]) -> dict[str, str]:
+    expected_id = pdf.stem.split("-")[-1]
+    votes: dict[str, Counter[str]] = {field: Counter() for field in needed}
+    try:
+        with tempfile.TemporaryDirectory(prefix="mib-faded-") as temp:
+            temp_dir = Path(temp)
+            prefix = temp_dir / "page"
+            subprocess.run(
+                ["pdftoppm", "-gray", "-r", "400", str(pdf), str(prefix)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=90,
+                check=True,
+            )
+            for index, image in enumerate(sorted(temp_dir.glob("page-*.pgm"))):
+                array = _pgm_array(image)
+                widened = np.clip(
+                    (array.astype(np.float32) - 150.0) * (255.0 / 105.0), 0, 255
+                ).astype(np.uint8)
+                view_path = temp_dir / f"widened-{index}.pgm"
+                _write_pgm_array(widened, view_path)
+                variants = [(view_path, 6)]
+                before = {f: sum(votes[f].values()) for f in needed}
+
+                def _harvest(paths):
+                    for path, psm in paths:
+                        view = _ocr_page(path, psm)
+                        visible_ids = set(
+                            re.findall(r"\bMIB[- ]?(\d{6})\b", view, re.I)
+                        )
+                        if visible_ids and visible_ids != {expected_id}:
+                            continue
+                        if "sponsor_id" in needed:
+                            value = _sponsor_from_labeled_line(view)
+                            if value:
+                                votes["sponsor_id"][value] += 1
+                        if "arrival_date" in needed:
+                            value = _extract_date(view, "Arrival Date")
+                            if value:
+                                votes["arrival_date"][value] += 1
+                        if "applicant_name" in needed:
+                            for value in _labeled_values(
+                                view,
+                                ("Applicant Name", "Applicant", "Registry Name"),
+                            ):
+                                value = re.sub(r"\s{2,}.*$", "", value).strip()
+                                if re.fullmatch(
+                                    r"[A-Za-z][A-Za-z'-]+ [A-Za-z][A-Za-z'-]+",
+                                    value,
+                                ) and not re.search(
+                                    r"cut out|unknown|whiteout|not active",
+                                    value,
+                                    re.I,
+                                ):
+                                    votes["applicant_name"][value] += 1
+
+                _harvest(variants)
+                if all(
+                    sum(votes[f].values()) == before[f] for f in needed
+                ):
+                    # Nothing on this page upright.  pdftoppm renders the page
+                    # as stored, and the worst scans are also rotated, so the
+                    # rows are sideways rather than absent.  Only pay for the
+                    # rotations when the upright read came back empty.
+                    for clockwise in (False, True):
+                        spun = temp_dir / f"spun-{index}-{int(clockwise)}.pgm"
+                        _rotate_pgm(view_path, spun, clockwise)
+                        _harvest([(spun, 4)])
+                        if any(
+                            sum(votes[f].values()) != before[f] for f in needed
+                        ):
+                            break
+    except Exception:
+        return {}
+    recovered: dict[str, str] = {}
+    for field, counter in votes.items():
+        if not counter:
+            continue
+        ranked = counter.most_common()
+        # A sentinel is wrong by construction, so a single label-anchored read
+        # is still an improvement in expectation.  Require only that the views
+        # do not disagree: a clear winner, never a tie.
+        if len(ranked) == 1 or ranked[0][1] > ranked[1][1]:
+            recovered[field] = ranked[0][0]
+    return recovered
+
+
 def _high_resolution_field_repairs(
     pdf: Path,
     needed: frozenset[str] | None = None,
@@ -3175,6 +3262,15 @@ def _process(pdf: Path) -> dict:
                         and recovered.get(field) != _FIELD_SENTINELS[field]
                     ):
                         result[field] = recovered[field]
+        faded_needed = frozenset(
+            field
+            for field in ("applicant_name", "sponsor_id", "arrival_date")
+            if result.get(field) == _FIELD_SENTINELS[field]
+        )
+        if faded_needed and os.environ.get("MIB_FADED_INK_RETRY", "1") == "1":
+            for field, value in _faded_ink_recovery(pdf, faded_needed).items():
+                if result[field] == _FIELD_SENTINELS[field]:
+                    result[field] = value
         for field, value in result.pop("_deferred_enrichment", {}).items():
             # Last resort: the enriched view only lands where the targeted
             # reader also came up empty.

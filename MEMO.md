@@ -1180,19 +1180,56 @@ supported by recoverable evidence.**
   74.54, whose author explicitly enables fake-answer-key field transcription
   and a purpose-by-page-signature table optimized on all 1,000 public labels.
   The newest answer-key-free visible submission reports 72.43.
-- Most importantly, the organizer explicitly answered the missing-risk issue:
-  when the disqualifying flag is not recoverable from the PDF, the packet is
-  under-determined and `NEEDS_REVIEW` is the correct operational output
-  ([issue 4](https://github.com/8090-inc/mib-doc-challenge/issues/4),
-  [issue 5](https://github.com/8090-inc/mib-doc-challenge/issues/5)).
-  The public training CSV can still carry the latent denied label, and the
-  public evaluator gives a correct operational review only 2/8 raw points.
-  Predicting those latent draws is exactly the memorization/gaming behavior
-  the private-set audit is designed to reject.
+- Missing-risk packets can be under-determined from the visible PDF, making
+  `NEEDS_REVIEW` the conservative operational output. However,
+  [issue 4](https://github.com/8090-inc/mib-doc-challenge/issues/4) and
+  [issue 5](https://github.com/8090-inc/mib-doc-challenge/issues/5) are
+  unanswered user questions, not organizer confirmation. The public training
+  CSV can still carry a latent denied label, and the public evaluator gives a
+  conservative review only 2/8 raw points. The measured ambiguity is real;
+  the earlier attribution of that interpretation to an organizer response was
+  incorrect.
 
 The accepted runtime therefore remains commit `28ae4db`, 70.81/80
 classification, 0 CFA. No failed source change, learned artifact, temporary
 test file, or generated model was retained.
+
+### 2026-07-27 — accepted faded-ink last-resort field recovery
+
+**Result: accepted. Extraction 45.888 -> 45.898 / 50 public (49.334 -> 49.345
+under unrecoverable-field scoring), 2 gains, 0 regressions, +0.07 s/PDF.**
+
+- `_render_and_ocr` renders at 180 dpi and the existing repairs stretch
+  contrast by percentile. On the worst-faded intake scans the field rows sit
+  around grey 150-250 on white paper, so a percentile stretch leaves them under
+  the binarisation threshold and the row is absent from every existing view.
+- `_faded_ink_recovery` re-renders at 400 dpi and maps [150, 255] across the
+  full range. It runs only where a sentinel survived every other stage (96 of
+  1,000 packets), fills only sentinels, and never reaches adjudication or
+  confidence.
+- Orientation is the other half. `pdftoppm` renders the page as stored and the
+  worst scans are also rotated, so the rows are sideways rather than absent.
+  The rotated retry fires only when the upright read came back empty, which is
+  what keeps the cost at +0.07 s/PDF (3.74 -> 3.81 measured on the same random
+  50, against a 6 s budget).
+- Gains: MIB-000409 `applicant_name` unknown -> `Tekvara Mirarix`, MIB-000618
+  `arrival_date` 1900-01-01 -> 2026-04-28. Zero losses across 9,000 slots.
+
+**Two measurement traps found the hard way, both of which produced false
+readings before being caught:**
+
+1. **Never shard a run.** `_impute_closed_vocabulary_modes` and
+   `_repair_rare_*` are batch-statistical. Running a candidate as two
+   500-packet shards against a single 1,000-packet baseline moved the corpus
+   mode and reshuffled every imputed value: it showed 8 gains and 11 losses
+   where the true difference was zero. Measured cost of sharding alone:
+   **-0.055 private-style** (49.334 single batch vs 49.279 as two shards).
+2. **A consensus threshold can silently disable a stage.** The first version of
+   this pass required `count >= 2` while emitting one view per page, so no
+   value could ever reach threshold and the stage was a no-op. Its output files
+   were byte-identical to the control, which is what exposed it. A sentinel is
+   wrong by construction, so the accepted version requires only a unique best
+   read rather than a repeated one.
 
 ### 2026-07-27 — accepted biometric-slip applicant source
 
@@ -1822,3 +1859,39 @@ reproduce 80.00/80 classification on the public 1,000 without a fitted tree.**
   extraction lane supplies perfect values while classification retains this
   provenance bit. The concurrent extraction edit in
   `mib_pipeline/pipeline.py` was preserved and excluded.
+
+### 2026-07-27 — denominator confirmation and residual-pattern audit
+
+**Result: the private extraction denominator adjustment is confirmed; no new
+classification rule survived independent controls. Runtime remains
+72.92/80 classification with zero catastrophic false approvals.**
+
+- `challenge-kit/scripts/evaluate.py` removes every admin-labeled
+  `unrecoverable_field` from both the extraction numerator opportunity and
+  extraction maximum. It does not remove the case's adjudication: every one of
+  the 1,000 classifications still has 8 raw points available.
+- The public labels omit `unrecoverable_fields`, so the exact private
+  extraction score cannot be reproduced locally. The unchanged public
+  extraction score is 45.762222/50; the prior forensic curve estimates about
+  48.25-49.95/50 privately, with 49.30 at the measured 85% destroyed-field
+  assumption. This is an estimate, not an official score.
+- All 22 packets carrying a visible/native `BARCODE PAYLOAD` are already
+  classified correctly: 16 denied, 5 review, and 1 approved. That channel has
+  zero residual headroom.
+- Exact B-13 `Observed flags: none` plus a clean-looking DIP/no-fee pattern was
+  falsified on the separate 5,000 controls. Matching packets include denials
+  for a missing mandatory fee and reviews for a missing trusted arrival date,
+  so the apparent approval rule is unsafe.
+- A raw-object scan of all 31 remaining `DENIED -> NEEDS_REVIEW` PDFs found no
+  extra risk or fee evidence in compressed streams, attachments, optional
+  layers, annotations, or widgets.
+- A five-fold identity-free fee model reached 91.9% overall out-of-fold
+  accuracy because visible fee pages are easy. On the 212 current-review
+  packets without a visible fee value, it recovered zero of six hidden
+  `unpaid` cases; all six received only 1.0%-1.8% unpaid probability. Context
+  cannot safely reconstruct the missing decisive fee.
+- Confidence-based approval promotion was also rejected. The narrowest tested
+  runtime-observable slice gained only 0.33 classification points while
+  creating 7 catastrophic false approvals.
+- No source or model artifact changed, so the four-worker full-1,000 run was
+  not repeated and no commit was created.
