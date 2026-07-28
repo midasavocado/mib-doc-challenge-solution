@@ -1194,6 +1194,54 @@ The accepted runtime therefore remains commit `28ae4db`, 70.81/80
 classification, 0 CFA. No failed source change, learned artifact, temporary
 test file, or generated model was retained.
 
+### 2026-07-27 — accepted biometric-slip applicant source
+
+**Result: accepted. Extraction 45.877 -> 45.888 / 50 public (49.322 -> 49.334
+under unrecoverable-field scoring), 2 gains, 0 regressions.**
+
+- Per-source applicant accuracy measured over all 1,000 public packets, native
+  text only: registry extract 436/436 (100%), B-13 biometric slip 299/299
+  (100%), sponsor attestation 286/293 (97.6%), intake form 489/538 (90.9%).
+  The intake form is the decoy carrier; the other three are clean.
+- `_parse_packet` fell back from `_registry_name` straight to a whole-packet
+  majority vote over every name-shaped string, which is dominated by the intake
+  form and by repeated OCR views of one page. Added `_biometric_name` between
+  them, sharing `_registry_name`'s case-id binding via a new
+  `_case_bound_labelled_name` helper. No behavioural change to `_registry_name`.
+- Gains: MIB-000320 (`not active` -> `Lurix Tekzarn`) and MIB-000945
+  (`Xanul Xantari` -> `Zavoss Ixoul`). Zero losses across all 9,000 field slots.
+  `MIB-000320` also demonstrates a live label-reader defect: an unanchored
+  `re.search` in `_labeled_value` matched "applicant" inside the sentence
+  "Archived adjacent applicant - not active". The B-13 source now outranks it,
+  but the reader itself is still unanchored (2 packets affected).
+
+**Measured at zero, not shipped:**
+
+- Fee status-line fallback when Amount/Waiver are destroyed: 50 such packets,
+  2 gains and 2 losses, net 0.
+- Preferring pixel-verified native text over repeated OCR views for
+  `sponsor_id`: +1 across 268 packets, with a loss mode where the native layer
+  carries `SPN-0007` from revoked-sponsor policy prose rather than the packet's
+  sponsor. Noise; not shipped.
+- Faded-ink last-resort recovery (300-400 dpi re-render, [150,255] contrast
+  window, sentinel-only fill): **verdict unresolved.** The A/B was confounded by
+  running the candidate as two 500-packet shards against a single 1,000-packet
+  baseline. `_impute_closed_vocabulary_modes` and `_repair_rare_*` are
+  batch-statistical, so shard boundaries change the corpus mode and reshuffle
+  every imputed value. Re-test as a single batch before drawing a conclusion.
+
+**Extraction headroom, measured:** a channel-by-channel forensic pass over all
+773 field errors of the pre-change run found only 86 (11%) where the truth
+value is present in any visible channel — worth about +0.5 extraction. 605
+(78%) are organiser-destroyed or absent, 31 exist only in the hidden answer
+key, and 51 are legible decoys whose true value was removed. Full breakdown in
+the project-root `work/extraction-error-forensics.md`.
+
+**Tooling note:** `_render_and_ocr` output for all 1,000 train packets can be
+cached to disk, and the provenance overlay only writes adjudication and
+confidence. An extraction A/B therefore costs ~8 minutes instead of ~65. Always
+run the full 1,000 as one batch.
+
 ### 2026-07-27 — accepted visible-uncertainty review safeguards
 
 **Result: accepted. Classification 70.81 -> 71.02 with zero catastrophic

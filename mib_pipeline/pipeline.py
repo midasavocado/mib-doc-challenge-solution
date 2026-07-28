@@ -1678,15 +1678,23 @@ def _sponsor_attested_visa(
     return winners[0] if len(winners) == 1 else None
 
 
-def _registry_name(
+def _case_bound_labelled_name(
     case_id: str,
     pages: list[str],
+    document: str,
+    labels: tuple[str, ...],
 ) -> str | None:
+    """Read one applicant name from a named, case-bound document.
+
+    Only pages whose every visible case id is this packet's (or the archival
+    `000000`) are considered, and a view must agree with itself, so a decoy
+    page for another applicant cannot contribute a vote.
+    """
     expected_id = case_id.split("-")[-1]
     votes: Counter[str] = Counter()
     spellings: dict[str, str] = {}
     for page in pages:
-        if not re.search(r"\b(?:Planetary\s+)?Registry\s+Extract\b", page, re.I):
+        if not re.search(document, page, re.I):
             continue
         page_ids = re.findall(r"\bMIB[- ]?(\d{6})\b", page, re.I)
         if expected_id not in page_ids or any(
@@ -1707,7 +1715,7 @@ def _registry_name(
             ):
                 continue
             candidates = set()
-            for candidate in _labeled_values(view, ("Registry Name",)):
+            for candidate in _labeled_values(view, labels):
                 candidate = re.sub(r"\s{2,}.*$", "", candidate).strip()
                 if re.fullmatch(
                     r"[A-Za-z][A-Za-z'-]+ [A-Za-z][A-Za-z'-]+",
@@ -1724,6 +1732,33 @@ def _registry_name(
         if count >= 2
     ]
     return spellings[winners[0]] if len(winners) == 1 else None
+
+
+def _registry_name(case_id: str, pages: list[str]) -> str | None:
+    return _case_bound_labelled_name(
+        case_id,
+        pages,
+        r"\b(?:Planetary\s+)?Registry\s+Extract\b",
+        ("Registry Name",),
+    )
+
+
+def _biometric_name(case_id: str, pages: list[str]) -> str | None:
+    """Applicant name from the case-bound B-13 biometric slip.
+
+    Measured over the 1,000 public packets, the name printed on a legible
+    biometric slip matches the label 299/299 times, against 489/538 for the
+    intake form, which is the decoy carrier.  The manual ranks the biometric
+    slip above the attestation and the text layer, so this belongs between the
+    registry extract and the whole-packet majority vote that currently follows
+    it.
+    """
+    return _case_bound_labelled_name(
+        case_id,
+        pages,
+        r"\bFORM\s+B-13\b|\bBiometric\s+Scan\s+Slip\b",
+        ("Applicant",),
+    )
 
 
 def _trusted_fee_evidence(
@@ -2708,7 +2743,7 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
         Counter(cleaned_names).most_common(1)[0][0]
         if cleaned_names else None
     )
-    applicant = _registry_name(case_id, pages)
+    applicant = _registry_name(case_id, pages) or _biometric_name(case_id, pages)
     applicant = applicant or parsed_applicant
     output_applicant = (
         _manual_applicant_correction(case_id, pages)
@@ -2971,6 +3006,7 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
         confidence = 0.38
     else:
         confidence = 0.58
+
 
     return {
         "case_id": case_id,
