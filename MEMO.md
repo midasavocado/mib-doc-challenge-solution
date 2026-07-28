@@ -1194,6 +1194,42 @@ The accepted runtime therefore remains commit `28ae4db`, 70.81/80
 classification, 0 CFA. No failed source change, learned artifact, temporary
 test file, or generated model was retained.
 
+### 2026-07-28 — accepted batch name-vocabulary snapping; registry Applicant label rejected
+
+**Result: accepted. Extraction 45.914 -> 45.926 / 50 public (49.363 -> 49.375
+under unrecoverable-field scoring), 2 gains, 0 regressions, no policy drift.**
+
+- Applicant names are two tokens from a closed pool. Over the 1,000 public
+  packets the pool is exactly **144 tokens and every one occurs at least five
+  times** — no singletons — so it reconstructs from the batch's own output at
+  runtime: a `count >= 4` threshold recovers 144/144 with two junk entries. No
+  public label is consulted, so this behaves the same on an unseen split.
+- `_snap_names_to_batch_vocabulary` moves a below-threshold token onto the pool
+  only when one candidate is both a close match (>= 0.72) and clearly closer
+  than the runner-up (>= 0.06 margin). Gains MIB-000381 `Tekmera ixovara` ->
+  `Tekmora Ixovara` and MIB-000886 `Lumom Zakesh` -> `Lumora Zakesh`. Four
+  further names change and stay wrong; those are decoys, not glyph damage.
+
+**Rejected: adding `Applicant` to the registry extract's labels.** Several
+rasterised registry pages label the name `Applicant:` rather than
+`Registry Name`, so `_registry_name` never fires and the packet falls back to
+the intake decoy (MIB-000477, MIB-000881, MIB-000986). Adding the label reads
+those pages, but their OCR spellings are corrupted (`Xanzam` for `Xanzarn`,
+`Andane` for `Aridane`), and it displaces a clean read the majority vote was
+already getting: **3 gains against 16 losses at parse level, 49.363 -> 49.339
+end to end.** Vocabulary snapping does not rescue it (49.357, still below).
+Revisit only with a per-view spelling preference that favours native text.
+
+**Also rejected: fuzzy vote-clustering in `_case_bound_labelled_name`.**
+Merging near-identical reads before voting lets the *most frequent* spelling
+win, which on damaged pages is the corrupted one: 0 gains, 14 losses at every
+threshold from 0.80 to 0.90. The exact-agreement rule is load-bearing because
+it implicitly requires the clean native spelling to be one of the two votes.
+
+**Reachable set after this change: 25 errors, 0.139 points.** Of the 111 scored
+errors, only 25 have the truth anywhere in the pipeline's own page text; 84 are
+absent from every channel and are not addressable by any reader.
+
 ### 2026-07-28 — accepted native-text sponsor id, and a false-positive audit
 
 **Result: accepted. Extraction 45.898 -> 45.914 / 50 public (49.345 -> 49.363
