@@ -1194,6 +1194,49 @@ The accepted runtime therefore remains commit `28ae4db`, 70.81/80
 classification, 0 CFA. No failed source change, learned artifact, temporary
 test file, or generated model was retained.
 
+### 2026-07-28 — accepted vocabulary-gated registry applicant read
+
+**Result: accepted. Extraction 45.936 -> 45.952 / 50 public (49.386 -> 49.404
+under unrecoverable-field scoring), 3 gains, 0 regressions, no policy drift.**
+
+Some rasterised registry extracts label the name `Applicant:` rather than
+`Registry Name`, so `_registry_name` never fires and the packet falls back to
+the intake form, which is the decoy carrier.
+
+Reading that label unconditionally **loses**, and it was rejected twice before
+it worked:
+
+- as an extra label on `_registry_name`: 3 gains, 16 losses at parse level and
+  **49.363 -> 49.339** end to end;
+- again after batch vocabulary snapping was in place, on the theory that
+  snapping would repair the damaged spellings: **49.386 -> 49.374**, 3 gains
+  and 5 losses. Snapping made it worse in kind, not better — a corrupted token
+  lands on the wrong known name (`Andane` -> `Xandane`, `Soltari` -> `Solul`),
+  which is a confident wrong answer rather than an obvious bad read;
+- as a sentinel-only filler: fires **0 times** in 1,000 packets.
+
+What works is gating on the batch's own name vocabulary. The read is stashed
+during parsing and adopted at batch level only when **both its tokens are
+already known names before any repair**. That separates the two populations
+cleanly: an undamaged read naming a different applicant is the registry
+correctly outranking the intake form; a read that would need repair is scan
+damage, and is dropped. 3 gains, 0 losses.
+
+The stash rides on the prediction dict as `_registry_applicant_read` and is
+removed before output — the same pattern as `_deferred_enrichment`.
+
+**Also rejected: attestation sentence as a name fallback.** `attests that X is
+expected` is 286/293 correct when unanimous, and as a fallback it measures +1 at
+parse level — but both its gains (`Arizam` -> `Arizarn`, `Solzam` -> `Solzarn`)
+are already fixed by the existing ligature repair, so against the real pipeline
+output it is **net -1**. Parse-level prototypes must be checked against current
+full-pipeline output, not against `_parse_packet` alone.
+
+**Reachability measure corrected.** The earlier "truth is present in the page
+text" check used a substring test, so `paid` matched inside `unpaid` and three
+fee cases counted as reachable when they are not. With word boundaries the
+reachable set is **22 errors, 0.125 points**, of which 13 are applicant names.
+
 ### 2026-07-28 — accepted text-layer arrival date and note-named sponsor
 
 **Result: accepted. Extraction 45.926 -> 45.936 / 50 public (49.375 -> 49.386

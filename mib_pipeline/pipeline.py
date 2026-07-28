@@ -2917,6 +2917,17 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
         Counter(cleaned_names).most_common(1)[0][0]
         if cleaned_names else None
     )
+    # Some rasterised registry extracts label the name `Applicant:` rather than
+    # `Registry Name`, so the reader above never fires and the packet falls back
+    # to the intake form, which is the decoy carrier.  That read is often
+    # glyph-damaged, so it is not trusted here: it is stashed and adopted at
+    # batch level only when it is already spelled with known name tokens.
+    registry_applicant_read = _case_bound_labelled_name(
+        case_id,
+        pages,
+        r"\b(?:Planetary\s+)?Registry\s+Extract\b",
+        ("Applicant",),
+    )
     applicant = _registry_name(case_id, pages) or _biometric_name(case_id, pages)
     applicant = applicant or parsed_applicant
     output_applicant = (
@@ -3204,6 +3215,7 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
         "risk_flags": "|".join(output_flags) if output_flags else "none",
         "fee_status": output_fee,
         "_fee_status_defaulted": fee_status_defaulted,
+        "_registry_applicant_read": registry_applicant_read,
         "adjudication": decision,
         "confidence": confidence,
     }
@@ -3932,6 +3944,38 @@ def _repair_collapsed_name_ligatures(predictions: dict[str, dict]) -> None:
         prediction["applicant_name"] = " ".join(repaired)
 
 
+def _adopt_registry_applicant_reads(predictions: dict[str, dict]) -> None:
+    """Adopt a registry-page `Applicant:` read that is spelled with known tokens.
+
+    The registry extract outranks the intake form — measured 436/436 against
+    489/538 on the public packets — but a rasterised one labels the name
+    `Applicant:`, which `_registry_name` does not look for.  Reading it
+    unconditionally loses: those pages are damaged, and their spellings
+    displace clean intake reads (3 gains against 5 losses end to end, and
+    snapping afterwards maps a corrupted token onto the wrong name, `Andane` to
+    `Xandane`).
+
+    Gating on the batch's own name vocabulary separates the two cases: a read
+    whose tokens are already known is a different applicant, correctly
+    preferred; a read that needs repair is damage, and is dropped.
+    """
+    counts: Counter[str] = Counter()
+    for prediction in predictions.values():
+        if prediction["applicant_name"] == "unknown":
+            continue
+        for token in prediction["applicant_name"].split():
+            counts[token] += 1
+    vocabulary = {token for token, count in counts.items() if count >= 4}
+    if len(vocabulary) < 20:
+        return
+    for prediction in predictions.values():
+        candidate = prediction.get("_registry_applicant_read")
+        if not candidate or candidate == prediction["applicant_name"]:
+            continue
+        if all(token in vocabulary for token in candidate.split()):
+            prediction["applicant_name"] = candidate
+
+
 def _snap_names_to_batch_vocabulary(predictions: dict[str, dict]) -> None:
     """Snap a corrupted name token onto the batch's own name vocabulary.
 
@@ -4064,9 +4108,12 @@ def main(input_dir: str, output_path: str) -> None:
 
     _repair_rare_name_tokens(predictions)
     _repair_collapsed_name_ligatures(predictions)
+    _adopt_registry_applicant_reads(predictions)
     _snap_names_to_batch_vocabulary(predictions)
     _impute_closed_vocabulary_modes(predictions)
     _repair_rare_arrival_years(predictions)
+    for prediction in predictions.values():
+        prediction.pop("_registry_applicant_read", None)
     from .hybrid import apply_provenance_adjudication
 
     apply_provenance_adjudication(pdfs, predictions, workers)
