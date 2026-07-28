@@ -2363,3 +2363,45 @@ classification remains 72.92/80.**
   22/21/24; `XW-1 + field repair` became 7/6/5.
 - No runtime source changed. No official full-1,000 run was warranted, and no
   experimental model or downloaded competitor source is retained.
+
+### 2026-07-28 — rejected provenance-completion and generator-inversion audit
+
+**Result: no classification candidate survived independent controls. Runtime
+source remains unchanged from the pushed extraction checkpoint.**
+
+- A provenance-completion rule tracked fields filled by the independent
+  reader and considered a `NEEDS_REVIEW -> APPROVED` promotion only when an
+  arrival-date fill survived every later repair, the final policy tuple was
+  clean, and a new 600-DPI RGB intake check found the same date in at least
+  two OCR layouts. On the labeled 1,000 replay, only `MIB-000093` and
+  `MIB-000678` moved, projecting **72.92 -> 73.04/80** with 0 CFA.
+- That +0.12 was not accepted as transfer evidence. A fresh four-worker run
+  over all **840** independently stamped controls from the separate 5,000
+  produced the exact visible confusion **242/242 approved, 340/340 denied,
+  and 258/258 review**, but the proposed rule fired **zero** times. Because
+  the rule had no positive independent opportunity, it could not validate the
+  two public-set promotions. The entire source change and feature flag were
+  removed; no official full-1,000 acceptance run was warranted.
+- Per-case generator-seed inversion was tested independently against ordinary
+  visible fields before being considered for hidden facts. The first 320
+  32-bit outputs from Python `random.Random`, NumPy `RandomState`, and NumPy
+  `default_rng` were generated for integer case numbers, predecessor numbers,
+  case-ID strings, and MD5/SHA-256-derived seeds. Across species, world, visa,
+  purpose, fee, and adjudication, every best association remained at
+  multiple-testing chance. No tested seed formula reproduced even a normal
+  visible category, so none was used for risk or fee inference.
+- A field-targeted domain-transfer experiment trained only on the 840 stamped
+  controls' visible reason categories, removed every finding/decision page,
+  hidden-answer-key line, explicit risk phrase, and explicit fee phrase, then
+  scored the accepted classifier's 398 public reviews. Sanitized text models
+  reached only **0.506-0.550 AUC** for hidden hard risk and put at most one
+  true risk in their top 20. Unpaid-fee AUC was **0.607-0.633**, but the
+  ranking recovered at most two of six positives and was not actionable.
+- A separate 132-feature PDF-object/layout model used stream sizes, page-type
+  order, image/resource counts, operators, file size, and page count while
+  zeroing every decision page. ExtraTrees, random forest, and CatBoost reached
+  only **0.364-0.594 transfer AUC** for hard risk and **0.401-0.592** for
+  unpaid fee; every top-20 hard-risk list contained zero true positives.
+- All experimental code was run ephemerally. The rejected source diff was
+  reversed, generated caches and the 840-case control corpus were moved
+  recoverably to Trash, and the branch returned to a clean state.
