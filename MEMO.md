@@ -2725,3 +2725,35 @@ The accepted classification score therefore remains 72.92/80. The next honest
 classification work remains source-state recovery for active intake, B-13,
 trusted fee, and manual-finding evidence; output text, PDF anatomy, and clean
 field tuples remain unsafe terminal-label substitutes.
+
+### 2026-07-29 — exact ReportLab timestamp seed falsification
+
+**Result: the exact PDF creation clock is recoverable, but it does not seed a
+per-document PRNG that reproduces fields or adjudication. No runtime source
+changed.**
+
+- ReportLab's trailer ID is an MD5 digest over a fixed prefix, the exact
+  floating-point creation timestamp, and the PDF metadata fields. Grouping
+  packets by their visible whole-second `CreationDate` allowed all 4,194,304
+  representable sub-second floats to be checked once per group. All
+  **1,000/1,000** public timestamps were recovered across 110 creation-second
+  groups. The scan checked 403,184,454 float candidates in 66.6 seconds with
+  four local workers.
+- The first packet's exact timestamp was `1782793208.003389`; neighboring
+  packets included binary-clock representations such as
+  `1782793208.0042691`. A microsecond-only prototype recovered 72/100 and
+  skipped the finer binary values, so its partial seed scores were discarded
+  before interpretation.
+- The complete probe tried Python `random.Random` with the exact float, its
+  ASCII representation, whole seconds, rounded microseconds, rounded
+  nanoseconds, and fractional binary ticks. Both `randrange(n)` and
+  `int(random()*n)` streams were scanned through 128 burn positions.
+- Cases 1-600 fitted only the output-to-category mapping, cases 601-800 chose
+  the seed transform/sampler/burn position, and cases 801-1000 remained
+  untouched. Final accuracy was chance-level: species **10.5% vs 8.5%**
+  majority baseline, home world **7.0% vs 9.0%**, visa **28.5% vs 31.0%**,
+  purpose **16.0% vs 12.5%**, fee **64.0% vs 64.0%**, and adjudication
+  **44.0% vs 44.0%**.
+- The exact timestamp is therefore useful forensic metadata, not a hidden
+  per-PDF generator seed. No timestamp decoder, seed table, experiment file,
+  or model was retained.
