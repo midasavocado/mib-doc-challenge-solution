@@ -2819,3 +2819,46 @@ The accepted classification score is still 72.92/80. The remaining 118
 terminal misses still require positive source recovery or a new generator
 channel that survives independent controls; a clean-looking output row is not
 approval provenance.
+
+### 2026-07-29 — image bit-plane and global-seed falsification
+
+**Result: neither low-level image statistics nor a small global Python PRNG
+seed supplied a transferable terminal-label rule. Runtime source remains at
+the accepted 46.687778/72.92 checkpoint.**
+
+- The image test targeted a channel not covered by resized page models:
+  full-resolution embedded-image histograms, all eight bit planes, adjacent
+  low-bit transitions, modulo-four pairs, spatial blocks, stream compression
+  ratios, and image geometry. Models used only the 398 current review outputs.
+  Cases 1-600 trained, 601-800 selected thresholds, and 801-1000 remained
+  untouched.
+- Image features detected review-style damage but not a safe terminal
+  decision. On the untouched block, the strongest model reached 0.853
+  one-vs-rest review AUC and 0.777 approval AUC, but no approval threshold
+  passed the zero-false-approval selection gate. The only validation-positive
+  denial threshold gained two raw classification units in selection and lost
+  14 raw units on the untouched block. No image model or feature cache was
+  retained.
+- Applicant names were confirmed to use the complete 12-root by 12-suffix
+  grammar, motivating a stricter global-generator probe. The first six public
+  sponsors are ordinary, non-revoked values, so their numbers were tested as
+  possible 14-bit Python `getrandbits`/`randrange` observations with realistic
+  six-to-55-output gaps between rows.
+- Five million integer seeds were exhaustively checked under both direct
+  `0..9999` and offset `1000..9999` interpretations. The direct route produced
+  no three-sponsor prefix. The offset route produced one chance three-sponsor
+  match at seed 3,541,629, which failed on sponsor four.
+- The alternate `int(random() * range)` implementation was checked over the
+  same five million seeds. It produced three isolated three-sponsor matches;
+  all failed on sponsor four. Common string seeds based on the challenge name,
+  8090, dates, MIB, and Centauri did not match even the first sponsor in a
+  realistic prefix.
+- A first multiprocessing harness launched from standard input failed because
+  macOS `spawn` could not re-import `<stdin>`. That run was terminated and
+  discarded. The successful scans used an explicit `fork` context and are the
+  only results reported above. No experiment file or process was left behind.
+
+These tests do not prove that the generator used no PRNG; they reject the
+useful hypothesis that ordinary sponsor values expose a small, conventional
+global `random.Random` seed. Recovering hidden facts would require a different
+observable state channel, not a wider sponsor-digit superstition net.
