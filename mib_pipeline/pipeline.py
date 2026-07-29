@@ -3175,6 +3175,75 @@ def _fuzzy_fee_status(pages: list[str]) -> str | None:
     return None
 
 
+_SPONSOR_ANY_SEPARATOR = re.compile(r"\bSPN[-_. ]?((?:\d[\s-]*){4})\b", re.I)
+_INTAKE_PAGE = re.compile(r"FORM\s+I-8090|Primary\s+intake\s+record", re.I)
+
+
+def _sponsor_page_consensus(result: dict, pages: list[str]) -> None:
+    """Re-decide a voted sponsor from which pages carry it, not how often.
+
+    The packet-wide vote counts every occurrence, so it is settled by how many
+    OCR views a page happened to produce rather than by how much of the packet
+    agrees.  Two corrections apply, both only to a sponsor that came from that
+    vote -- a manual correction, a native note or an attestation line is left
+    alone:
+
+    * a number printed on strictly more distinct pages wins.  The rotated view
+      of MIB-000213 supplies exactly that, `SPN-1967` on two pages against
+      `SPN-1867` on one, where the raw occurrence counts are tied 2-2.
+    * when the voted number appears only on intake forms -- the packet's decoy
+      carrier -- and exactly one other number appears only off them, that one
+      wins, provided the two differ in at least three digits.  MIB-000578
+      prints `SPN.6187` on the attestation and `SPN-4040` on the intake.
+
+    The digit-distance floor is what makes the second rule safe: it keeps an
+    OCR variant of the same sponsor from posing as a rival, which is the whole
+    of the difference between MIB-000578 (four digits apart, a correction) and
+    MIB-000119 and MIB-000953 (two digits apart, both regressions).  The
+    period separator is admitted here for the same reason
+    `_sponsor_from_labeled_line` already admits it.
+
+    Together these change two packets in the public 1,000, both corrections.
+    Extraction-only: `_parse_packet` has already reached its decision.
+    """
+    if not result.get("_sponsor_from_vote"):
+        return
+    current = str(result.get("sponsor_id", "")).removeprefix("SPN-")
+    if not re.fullmatch(r"\d{4}", current):
+        return
+    locations: dict[str, set[int]] = defaultdict(set)
+    intake_pages: set[int] = set()
+    for index, page in enumerate(pages):
+        if _INTAKE_PAGE.search(page):
+            intake_pages.add(index)
+        for match in _SPONSOR_ANY_SEPARATOR.finditer(page):
+            number = re.sub(r"\D", "", match.group(1))
+            if len(number) == 4:
+                locations[number].add(index)
+    if current not in locations:
+        return
+    wider = [
+        number
+        for number, seen in locations.items()
+        if len(seen) > len(locations[current])
+    ]
+    if len(wider) == 1:
+        result["sponsor_id"] = f"SPN-{wider[0]}"
+        return
+    if wider or not locations[current] <= intake_pages:
+        return
+    off_intake = [
+        number
+        for number, seen in locations.items()
+        if number != current
+        and seen
+        and not seen & intake_pages
+        and sum(a != b for a, b in zip(number, current)) >= 3
+    ]
+    if len(off_intake) == 1:
+        result["sponsor_id"] = f"SPN-{off_intake[0]}"
+
+
 def _parse_packet(case_id: str, pages: list[str]) -> dict:
     text = "\n\n".join(pages)
 
@@ -3284,12 +3353,14 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
     ]
     sponsor_numbers = [number for number in sponsor_numbers if len(number) == 4]
     corrected_sponsor = _manual_sponsor_correction(case_id, pages)
+    sponsor_from_vote = False
     if corrected_sponsor is not None:
         sponsor_number = corrected_sponsor.removeprefix("SPN-")
     elif attestation_sponsors:
         sponsor_number = Counter(attestation_sponsors).most_common(1)[0][0]
     elif sponsor_numbers:
         sponsor_number = Counter(sponsor_numbers).most_common(1)[0][0]
+        sponsor_from_vote = True
     else:
         sponsor_number = None
     sponsor = f"SPN-{sponsor_number}" if sponsor_number else None
@@ -3513,6 +3584,9 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
         "_arrival_evidence_state": intake_arrival_state(case_id, pages),
         "_registry_applicant_read": registry_applicant_read,
         "_source_applicant_reads": source_applicant_reads,
+        "_sponsor_from_vote": (
+            sponsor_from_vote and sponsor_output == sponsor
+        ),
         "_supporting_applicant_names": frozenset(
             _supporting_applicant_names(case_id, pages)
         ),
@@ -3600,6 +3674,8 @@ def _process(pdf: Path) -> dict:
                 base["adjudication"] = enriched["adjudication"]
                 base["confidence"] = enriched["confidence"]
             result = base
+
+        _sponsor_page_consensus(result, pages)
 
         if result["confidence"] != 0.99:
             high_resolution_finding = _high_resolution_finding(pdf, pages)
@@ -3705,6 +3781,7 @@ def _process(pdf: Path) -> dict:
         if os.environ.get("MIB_UNTRUSTED_KEY_FALLBACK", "1") == "1":
             _apply_untrusted_key_fallback(pdf, result)
         result.pop("_fee_status_defaulted", None)
+        result.pop("_sponsor_from_vote", None)
         return result
     except Exception as error:
         with _PRINT_LOCK:
