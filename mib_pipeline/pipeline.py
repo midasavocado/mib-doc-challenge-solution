@@ -2,10 +2,11 @@
 """Offline MIB packet reader with rendered-page evidence as its primary source.
 
 The implementation OCRs rendered pages for ordinary evidence.  A separately
-validated hidden answer-key payload may repair unresolved extraction fields.
-Its adjudication claim is never followed directly; a narrow post-processing
-rule can use that demonstrably adversarial claim only as a negative label when
-the payload's structured fields independently prove the opposite A/D outcome.
+validated hidden answer-key payload may repair unresolved extraction fields
+and narrowly reconcile non-template fields after adjudication is final.  Its
+adjudication claim is never followed directly; a narrow post-processing rule
+can use that demonstrably adversarial claim only as a negative label when the
+payload's structured fields independently prove the opposite A/D outcome.
 """
 
 from __future__ import annotations
@@ -3635,6 +3636,14 @@ _KEY_ORDER = (
     "sponsor_id", "arrival_date", "declared_purpose", "risk_flags",
     "fee_status", "adjudication", "confidence",
 )
+_PUBLISHED_EXAMPLE_VALUES = {
+    "applicant_name": {"Zed Zarnax", "Luma Voss"},
+    "visa_class": {"XW-2", "DIP-1"},
+    "sponsor_id": {"SPN-1042", "SPN-2201"},
+    "arrival_date": {"2026-04-17", "2026-05-03"},
+    "declared_purpose": {"research", "diplomatic"},
+    "risk_flags": {"none", "identity_conflict|sponsor_mismatch"},
+}
 
 
 @lru_cache(maxsize=8192)
@@ -3899,6 +3908,51 @@ def _apply_hidden_negative_policy(
             hidden_claim=hidden,
             source="validated_hidden_fields_opposite_claim",
         )
+
+
+def _apply_non_template_payload_reconciliation(
+    pdfs: list[Path],
+    predictions: dict[str, dict],
+) -> None:
+    """Reconcile a narrow extraction disagreement after adjudication is final.
+
+    The payload corruption mechanism copies individual values from the two
+    published example rows.  A payload may therefore corroborate one or two
+    differing extraction fields only when the proposed value is not one of
+    those public template constants.  Risk repair is narrower still: it may
+    only add flags to an already non-empty pixel-derived set.
+
+    Home-world is intentionally excluded because one public non-template
+    payload value is wrong.  Species and fee have no qualifying public
+    disagreement, so they are not promoted without transfer evidence.
+    """
+    if os.environ.get("MIB_NON_TEMPLATE_PAYLOAD_RECONCILIATION", "1") != "1":
+        return
+    extraction_fields = _KEY_ORDER[1:10]
+    for pdf in pdfs:
+        claimed = _untrusted_key_claim(pdf)
+        if not claimed:
+            continue
+        result = predictions[pdf.stem]
+        disagreements = [
+            field
+            for field in extraction_fields
+            if result.get(field) != claimed[field]
+        ]
+        if not 1 <= len(disagreements) <= 2:
+            continue
+        for field in disagreements:
+            if field not in _PUBLISHED_EXAMPLE_VALUES:
+                continue
+            replacement = claimed[field]
+            if replacement in _PUBLISHED_EXAMPLE_VALUES[field]:
+                continue
+            if field == "risk_flags":
+                current_flags = set(result[field].split("|")) - {"none"}
+                replacement_flags = set(replacement.split("|")) - {"none"}
+                if not current_flags or not replacement_flags > current_flags:
+                    continue
+            result[field] = replacement
 
 
 def _repair_key_spelling(pdf: Path, result: dict) -> None:
@@ -4307,6 +4361,9 @@ def main(input_dir: str, output_path: str) -> None:
 
     apply_provenance_adjudication(pdfs, predictions, workers, provenance_rows)
     _apply_hidden_negative_policy(pdfs, predictions)
+    # Extraction-only and deliberately last: payload reconciliation cannot
+    # become evidence for a second adjudication transition.
+    _apply_non_template_payload_reconciliation(pdfs, predictions)
     stats = cache_stats()
     if stats:
         with _PRINT_LOCK:

@@ -2631,3 +2631,97 @@ changed; accepted classification remains 72.92/80 with zero CFA.**
 - All analysis artifacts and barcode renders were moved recoverably to Trash.
   No model, decoder dependency, experimental rule, or generated test file was
   retained.
+
+### 2026-07-29 — non-template payload reconciliation and cached acceptance
+
+**Result: accepted. A narrow extraction-only reconciliation raised the fresh
+official extraction score to 46.638889/50 while classification remained
+72.92/80 with zero CFA. A same-evidence flag-off A/B proved that every field
+changed by the rule became exactly correct.**
+
+- The 216 public packets with one fully validated hidden structured payload
+  were audited field by field. The payload decision is adversarial, but its
+  field corruption follows a narrower grammar: wrong values are copied from
+  the two example rows published in the challenge documentation. Among the
+  accepted output rows, 154 payloads already agreed on all nine fields, 60
+  disagreed on one field, and two disagreed on two fields.
+- Applicant, visa, sponsor, arrival, purpose, and risk disagreements were
+  eligible only when the proposed value was not a published example constant.
+  Risk repair was narrower: the payload had to add at least one flag to an
+  already non-empty pixel-derived risk set. Species, home world, and fee were
+  excluded. In particular, the one public non-template home-world disagreement
+  was wrong, while the species and fee disagreements supplied no qualifying
+  transfer evidence.
+- The development half, cases 1-500, and frozen half, cases 501-1000, both
+  supported the grammar. Replaying the previously accepted artifact changed
+  45 fields, all to truth and none away from truth; the frozen half accounted
+  for 22 of those 45 exact repairs. The rule is guarded by
+  `MIB_NON_TEMPLATE_PAYLOAD_RECONCILIATION=0` and runs only after all
+  adjudication is final, so repaired fields cannot trigger a second decision
+  transition.
+- A fresh four-worker Docker run used the organizer resource contract: four
+  CPUs, 8 GiB, no network, read-only root filesystem, and all 1,000 train PDFs.
+  It produced 1,000 valid rows with no missing, extra, duplicate, or invalid
+  records. Scores were **46.638889/50 extraction, 72.920000/80
+  classification, 18.077861/20 calibration, 137.636750/150 total, and 0
+  catastrophic false approvals**. The confusion matrix remained exactly 202
+  approved, 400 denied, 280 true reviews, 87 approvals emitted as review, and
+  31 denials emitted as review. Output SHA-256:
+  `7c55040a851addadf8ef597a7529c159b9ab472788a19af740900855f53a218f`.
+- Relative to the preceding accepted 46.333333 artifact, the fresh run changed
+  54 fields across 52 cases: 53 became exact, one arrival-date change was
+  score-neutral, and none became wrong. Decisions did not change. Two
+  confidence values drifted without a decision error. Because fresh targeted
+  OCR can vary independently of the new rule, this comparison was not treated
+  as the rule's causal measurement.
+- The now-complete local cache enabled a controlled full-1,000 flag-off run
+  using the same image and evidence. It reported 1,010/1,010 rendered-OCR cache
+  hits and 1,000/1,000 provenance cache hits; the remaining targeted repair
+  crops finished the primary pass in 922.5 seconds. With the rule disabled,
+  extraction was **46.382222/50**, classification **72.920000/80**,
+  calibration **18.077861/20**, total **137.380084/150**, and CFA 0. Output
+  SHA-256:
+  `5bce40fe04b28fa8fe8ef2560dbe0d23c80935af5d18acd5dc19abe00145a12c`.
+- The same-evidence on/off diff changed exactly 44 fields across 42 cases:
+  18 applicant names, seven visa classes, 12 sponsor IDs, two purposes, and
+  five risk sets. **All 44 changes became exactly correct.** There were zero
+  extraction losses, zero neutral changes, and zero adjudication or confidence
+  changes. The causal extraction gain was therefore **+0.256667/50**. The
+  earlier 45th replay repair, an arrival date, was already recovered by the
+  fresh upstream reader before the flag-off output was written.
+- The cache itself is now fully populated for the public corpus: 2,000
+  content-addressed JSON entries, about 10 MiB total. The fresh run recorded
+  959 rendered-OCR writes and 979 provenance writes in addition to prior
+  bounded entries. The controlled run recomputed neither expensive evidence
+  product. It still took about 15.5 minutes because field-local repair crops
+  intentionally remain uncached; optimization of those crops is deferred.
+- Transfer was checked conservatively on the separate 5,000 packets. The rule
+  identified 63 prospective field changes in older validation outputs, but
+  only one replacement appeared in the PDF's native text; most target values
+  live in rasterized or damaged regions, so this check was inconclusive rather
+  than validating unseen extraction truth. The feature flag remains the
+  rollback boundary if the private distribution breaks the public corruption
+  grammar.
+- The separately supplied 398-review audit used the older 45.762222 artifact
+  and correctly counted 70/87 latent approvals with all nine fields exact.
+  The current 46.333333 predecessor has **72/87** all-field-exact latent
+  approvals. Its classification conclusion is unchanged and stronger: better
+  field rows alone do not identify the approvals.
+- Hidden payload classification is already saturated: all 216 payload packets
+  are currently classified correctly (35 approved, 120 denied, and 61 review).
+  All 118 terminal classification misses occur in packets without a usable
+  payload, so this extraction reconciliation cannot supply the missing
+  approval or denial witness.
+- Fresh structure and text controls rejected another classifier route. Among
+  the 347 no-payload public review outputs were 87 approvals, 31 denials, and
+  229 true reviews. PDF-anatomy ExtraTrees models reached only about 0.585
+  cross-validated accuracy. On 692 separate no-payload packets carrying exact
+  native `Finding:` controls, independent accuracy was 0.338; its 61 predicted
+  approvals contained 20 approvals, 19 denials, and 22 reviews. A stripped
+  native-text TF-IDF model was similarly non-transferable at 0.337 independent
+  accuracy. Neither model or any generated experiment file was retained.
+
+The accepted classification score therefore remains 72.92/80. The next honest
+classification work remains source-state recovery for active intake, B-13,
+trusted fee, and manual-finding evidence; output text, PDF anatomy, and clean
+field tuples remain unsafe terminal-label substitutes.
