@@ -25,6 +25,7 @@ from provenance_engine import (
     VisibleEvidenceExtractor,
 )
 
+from .local_cache import load_json, store_json
 from .pattern_policy import apply_evidence_pattern_policy
 from .visible_denials import apply_visible_slash_denials
 
@@ -43,6 +44,10 @@ _REVIEW_ONLY_FLAGS = {
     "rescinded_denial",
     "sponsor_mismatch",
 }
+_PROVENANCE_CACHE_SCHEMA = (
+    "visible-provenance-v1:packet-page-markers:"
+    "pinned-calibrator:pinned-exceptions:pinned-recalibrator"
+)
 
 
 def _normalized_letters(value: str) -> str:
@@ -208,28 +213,94 @@ def _processor() -> OutputConfidenceRecalibrationProcessor:
     )
 
 
-def apply_provenance_adjudication(
-    pdfs: list[Path],
+_UNRESOLVED = {
+    "applicant_name": "unknown",
+    "species_code": "unknown",
+    "home_world": "unknown",
+    "visa_class": "unknown",
+    "sponsor_id": "SPN-0000",
+    "arrival_date": "1900-01-01",
+    "declared_purpose": "unknown",
+    "risk_flags": "none",
+}
+
+
+def _fill_unresolved_fields(
+    rows: dict[str, dict],
     predictions: dict[str, dict],
-    workers: int,
 ) -> None:
-    """Overlay only adjudication and confidence from the independent engine.
+    """Fill fields the primary engine could not resolve from the independent one.
 
-    The vendored engine excludes hidden answer-key transcription and
-    public-label-selected purpose/layout approval cells. Authenticated direct
-    findings from the primary engine retain precedence.
+    The independent engine already runs for adjudication and its extraction was
+    being discarded.  It is the weaker reader overall — adopting it wholesale
+    costs far more than it gains — but where the primary produced no value at
+    all there is nothing to lose by asking it.  Measured over the 1,000 public
+    packets this fills 42 slots correctly and breaks none.
+
+    `fee_status` is deliberately excluded.  Its "unknown" is a determination the
+    fee rules reach on purpose, not a missing marker: a zero-dollar receipt with
+    no waiver code cannot prove paid or waived.  Overwriting it is the only part
+    of this that loses, and it loses every time it fires (MIB-000008,
+    MIB-000076, MIB-000171, MIB-000371, all "unknown" overwritten with "paid").
+
+    Extraction only: adjudication and confidence are untouched here.
     """
+    for case_id, alternate in rows.items():
+        primary = predictions.get(case_id)
+        if primary is None:
+            continue
+        for field, unresolved in _UNRESOLVED.items():
+            if primary.get(field) != unresolved:
+                continue
+            replacement = alternate.get(field)
+            if replacement and replacement != unresolved:
+                primary[field] = replacement
 
-    processor = _processor()
+
+def compute_provenance_rows(
+    pdfs: list[Path],
+    workers: int,
+) -> dict[str, dict]:
+    """Run the independent engine once and return its rows.
+
+    Split out so the caller can use the extraction before the batch repairs run
+    and the adjudication after them, without paying for the engine twice.
+    """
     started = time.monotonic()
     rows: dict[str, dict] = {}
+    uncached: list[Path] = []
+    for pdf in pdfs:
+        cached = load_json(
+            pdf,
+            "visible-provenance",
+            _PROVENANCE_CACHE_SCHEMA,
+        )
+        if (
+            isinstance(cached, dict)
+            and cached.get("case_id") == pdf.stem
+        ):
+            rows[pdf.stem] = cached
+        else:
+            uncached.append(pdf)
+
+    if rows:
+        with _PRINT_LOCK:
+            print(
+                f"[provenance cache] {len(rows)}/{len(pdfs)} hits",
+                file=sys.stderr,
+                flush=True,
+            )
+    if not uncached:
+        return rows
+
+    processor = _processor()
     with concurrent.futures.ThreadPoolExecutor(
         max_workers=workers,
         thread_name_prefix="mib-provenance",
     ) as executor:
         futures = {
             executor.submit(processor.process_case, pdf): pdf
-            for pdf in pdfs
+            for pdf in uncached
         }
         for completed, future in enumerate(
             concurrent.futures.as_completed(futures),
@@ -237,7 +308,14 @@ def apply_provenance_adjudication(
         ):
             pdf = futures[future]
             try:
-                rows[pdf.stem] = future.result().to_dict()
+                row = future.result().to_dict()
+                rows[pdf.stem] = row
+                store_json(
+                    pdf,
+                    "visible-provenance",
+                    _PROVENANCE_CACHE_SCHEMA,
+                    row,
+                )
             except Exception as error:
                 with _PRINT_LOCK:
                     print(
@@ -248,12 +326,30 @@ def apply_provenance_adjudication(
             with _PRINT_LOCK:
                 elapsed = time.monotonic() - started
                 print(
-                    f"[provenance {completed}/{len(pdfs)}] {pdf.stem} "
+                    f"[provenance {completed}/{len(uncached)}] {pdf.stem} "
                     f"elapsed={elapsed:.1f}s "
                     f"rate={completed / max(elapsed, 0.01):.2f}/s",
                     file=sys.stderr,
                     flush=True,
                 )
+
+    return rows
+
+
+def apply_provenance_adjudication(
+    pdfs: list[Path],
+    predictions: dict[str, dict],
+    workers: int,
+    rows: dict[str, dict] | None = None,
+) -> None:
+    """Overlay only adjudication and confidence from the independent engine.
+
+    The vendored engine excludes hidden answer-key transcription and
+    public-label-selected purpose/layout approval cells. Authenticated direct
+    findings from the primary engine retain precedence.
+    """
+    if rows is None:
+        rows = compute_provenance_rows(pdfs, workers)
 
     for case_id, alternate in rows.items():
         primary = predictions[case_id]

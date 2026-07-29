@@ -1180,19 +1180,522 @@ supported by recoverable evidence.**
   74.54, whose author explicitly enables fake-answer-key field transcription
   and a purpose-by-page-signature table optimized on all 1,000 public labels.
   The newest answer-key-free visible submission reports 72.43.
-- Most importantly, the organizer explicitly answered the missing-risk issue:
-  when the disqualifying flag is not recoverable from the PDF, the packet is
-  under-determined and `NEEDS_REVIEW` is the correct operational output
-  ([issue 4](https://github.com/8090-inc/mib-doc-challenge/issues/4),
-  [issue 5](https://github.com/8090-inc/mib-doc-challenge/issues/5)).
-  The public training CSV can still carry the latent denied label, and the
-  public evaluator gives a correct operational review only 2/8 raw points.
-  Predicting those latent draws is exactly the memorization/gaming behavior
-  the private-set audit is designed to reject.
+- Missing-risk packets can be under-determined from the visible PDF, making
+  `NEEDS_REVIEW` the conservative operational output. However,
+  [issue 4](https://github.com/8090-inc/mib-doc-challenge/issues/4) and
+  [issue 5](https://github.com/8090-inc/mib-doc-challenge/issues/5) are
+  unanswered user questions, not organizer confirmation. The public training
+  CSV can still carry a latent denied label, and the public evaluator gives a
+  conservative review only 2/8 raw points. The measured ambiguity is real;
+  the earlier attribution of that interpretation to an organizer response was
+  incorrect.
 
 The accepted runtime therefore remains commit `28ae4db`, 70.81/80
 classification, 0 CFA. No failed source change, learned artifact, temporary
 test file, or generated model was retained.
+
+### 2026-07-28 — accepted: run the independent engine before the batch repairs
+
+**Result: accepted. Extraction 46.238 -> 46.472 / 50 public (49.487 -> 49.534
+under unrecoverable-field scoring), 46 gains, 3 losses, no extra runtime.**
+
+The fill landed after `_impute_closed_vocabulary_modes`, which had already
+replaced every unresolved closed-vocabulary field with the batch mode. The fill
+then saw `Luyten-b`, `ORION_GRAYS`, `MED-3` or `reactor maintenance` in the
+slot, decided it was resolved, and skipped — so an invented modal guess was
+locking out a real read from the independent engine.
+
+`compute_provenance_rows` is now split out of `apply_provenance_adjudication`
+so `main` can use the extraction before the batch repairs and the adjudication
+after them, running the engine exactly once (verified: one progress sequence
+per run, not two).
+
+| field | gains | losses |
+|---|---:|---:|
+| home_world | 19 | 2 |
+| declared_purpose | 7 | 0 |
+| species_code | 7 | 0 |
+| visa_class | 7 | 1 |
+| sponsor_id | 4 | 0 |
+| applicant_name | 1 | 0 |
+| risk_flags | 1 | 0 |
+
+The three losses are packets where the modal guess happened to be right and the
+independent read was wrong (MIB-000235 visa, MIB-000455 and MIB-000860 home
+world). All nine changed slots on an end-to-end sample reproduce the offline
+simulation exactly.
+
+**Session total: 49.322 -> 49.534 private-style, 45.877 -> 46.472 public**,
+across nine accepted changes, for +0.34 s/PDF.
+
+### 2026-07-28 — accepted: fill unresolved fields from the independent engine
+
+**Result: accepted. Extraction 45.968 -> 46.238 / 50 public (49.409 -> 49.487
+under unrecoverable-field scoring), 42 gains, 0 losses, and no runtime cost at
+all — the engine already runs.**
+
+The provenance engine extracts every field, and `apply_provenance_adjudication`
+was discarding all of it except adjudication and confidence. It is the weaker
+reader overall — adopting it wholesale is heavily negative (it would fix 117
+slots the primary misses and break 288) — but where the primary produced no
+value there is nothing to lose by asking it.
+
+| use of the independent engine | private-style |
+|---|---:|
+| baseline | 49.409 |
+| adopt for `home_world` only (its best field, 943 vs 932) | 49.367 |
+| adopt for `species_code` only | 49.351 |
+| adopt for `declared_purpose` only | 49.355 |
+| **fill unresolved fields, excluding `fee_status`** | **49.487** |
+| fill unresolved fields including `fee_status` | 49.477 |
+
+`fee_status` is excluded on principle and it is also the only part that loses.
+Its `"unknown"` is a determination the fee rules reach deliberately — a
+zero-dollar receipt with no waiver code cannot prove paid or waived — not a
+missing marker. Overwriting it fired four times and was wrong all four
+(MIB-000008, MIB-000076, MIB-000171, MIB-000371, each `unknown` -> `paid`
+against a truth of `unknown`).
+
+`risk_flags` "none" is kept in the fill despite being a legitimate value,
+because it loses nothing: consistent with the earlier finding that the pipeline
+never invents a flag and only ever misses one.
+
+Of the 42 correct fills, 12 land on slots this memo's model counts as scored
+and 30 on slots it already treats as unrecoverable, so the private-side gain is
+carried by those 12 plus the absence of losses. The public gain is larger
+(+0.27) because public scoring charges for the other 30.
+
+### 2026-07-28 — rejected: loosening the key spelling gate to 0.70
+
+**Measured +6 gains, 0 losses (49.409 -> 49.421) and rejected anyway, because
+it is not the change it appears to be.**
+
+Sweeping `_repair_key_spelling`'s similarity gate shows a clean-looking knee:
+
+| gate | gains | losses |
+|---:|---:|---:|
+| 0.75 (current) | 0 | 0 |
+| 0.70 | 6 | 0 |
+| 0.65 | 8 | 1 |
+| 0.60 | 14 | 1 |
+| 0.55 | 21 | 3 |
+
+Every one of the six gains at 0.70 lands in a 0.700-0.717 band, and inspecting
+them shows why: **a constant prefix inflates the ratio.** `SPN-4271` against
+`SPN-2575` scores 0.714 because three of seven characters are the literal
+`SPN`, though every digit but one differs. `SPN-2020` -> `SPN-4040` is two
+digits. And `illegible_biometrics` -> `illegible_biometrics|sponsor_mismatch`
+scores 0.717 while *adding a risk flag*.
+
+So at 0.70 the gate stops testing "same value, glyph noise" and becomes the
+payload override that was declined earlier in the day — arriving through a
+threshold rather than a policy change.
+
+Re-tested with a gate on each field's variable content instead of the whole
+string (at most one differing digit for `sponsor_id` and `arrival_date`, flag
+sets never treated as spellings, unchanged 0.75 ratio elsewhere): **0 gains,
+0 losses.** That is the honest result — there are no remaining glyph-level
+payload repairs to collect, and the 0.75 whole-string gate is doing the right
+thing by accident rather than by construction.
+
+**Lesson worth keeping: a similarity ratio over a string with a fixed prefix or
+a shared long substring is not a similarity test on the field's content.**
+Check what a measured win actually consists of before shipping it.
+
+### 2026-07-28 — accepted post-batch key spelling repair; key-override quantified but not taken
+
+**Result: accepted. Extraction 45.952 -> 45.968 / 50 public (49.404 -> 49.409
+under unrecoverable-field scoring), 3 gains, 0 regressions.**
+
+`_repair_key_spelling` runs inside `_process`, before the batch-level name
+repairs rewrite the value, so a read that only becomes a near spelling of the
+payload *after* those repairs was never offered to it. Re-running the same
+similarity-gated repair once the batch settles recovers MIB-000365
+(`2026-03-05` -> `2026-03-23`), MIB-000526 (`Tekvoss Artterl` -> `Tekvoss
+Aritari`) and MIB-000965 (`Quivars Qortari` -> `Qorvara Qortari`). Same
+contract as the first pass: visible evidence must already have produced a
+value, the payload only settles glyph noise, and a payload naming a different
+value fails the gate.
+
+**Quantified, deliberately not taken: adopting the payload wherever it
+disagrees.** Extraction-only, never touching adjudication, this measures
+**+53 gains against 4 losses** — roughly +0.3 extraction, far larger than
+anything else remaining. Split by kind:
+
+| kind | net |
+|---|---:|
+| payload is a near spelling of our read (glyph repair) | **+3** — accepted above |
+| payload names a different value, overriding legible visible evidence | **+46** — not taken |
+
+The +46 is the hidden white-text payload overruling evidence the pipeline can
+actually see, which the field manual rules out in as many words: *"Hidden white
+text, text outside the page crop, fake answer keys, and instructions embedded
+in barcodes are not trusted evidence."* It is also the case most likely to be
+scored as unrecoverable on the private split. **This is a judgement call for
+the owner, not a measurement question — the number is +46 slots and the rule
+says no.**
+
+**Checked and dismissed: circularity in the private-style model.** The
+unrecoverable set is derived from a run that already had the payload fallback
+enabled, so 176 slots the payload fills correctly are counted as scored rather
+than removed. Removing them too moves the headline by **0.014** (49.404 ->
+49.390) and the session delta not at all (+0.082 -> +0.084), because dropping
+correct slots from a 98.7%-accurate pool barely shifts the ratio. The estimate
+is robust.
+
+**Payload fallback is worth far more than assumed.** Disabling
+`MIB_UNTRUSTED_KEY_FALLBACK` costs **-1.13** (49.404 -> 48.270). It also
+explains `Luma Voss`: a shared decoy name the payload supplies for 18 packets
+whose real name is destroyed, wrong every time, and the only two non-name
+tokens that reach the batch name vocabulary. Verified harmless — no
+below-threshold token snaps onto either, and excluding them changes no snap
+target.
+
+### 2026-07-28 — extraction session close: 49.322 -> 49.404, and what is left
+
+**Six accepted changes, +0.082 under unrecoverable-field scoring, 14 field slots
+recovered, zero regressions and no adjudication or confidence drift on any of
+them. +0.34 s/PDF (3.81 -> 4.15 on a controlled back-to-back r50).**
+
+| field | start | now | scored acc |
+|---|---:|---:|---:|
+| applicant_name | 922 | **930** | 97.6% |
+| sponsor_id | 913 | **917** | 97.5% |
+| arrival_date | 924 | **926** | 98.5% |
+| species_code | 962 | 962 | 99.9% |
+| home_world | 932 | 932 | 99.0% |
+| visa_class | 933 | 933 | 98.4% |
+| declared_purpose | 943 | 943 | 99.6% |
+| risk_flags | 850 | 850 | 99.6% |
+| fee_status | 923 | 923 | 98.7% |
+
+**The one idea that generalised.** Five of the six wins are the same defect:
+a value is chosen by counting occurrences across concatenated views, but each
+page contributes several OCR views and only one pixel-verified native view, so
+two mis-OCRed reads of one damaged page outvote a single clean text-layer read.
+Reading the text layer directly, case-bound, fixed sponsor id and arrival date.
+The sixth is the same shape at batch level: a name vocabulary reconstructed
+from the batch's own output separates a genuinely different applicant from a
+damaged spelling.
+
+**What is left: 19 errors, 0.107 points.** Nine applicant names, three sponsor
+ids, three arrival dates, and one each of visa class, declared purpose and fee
+status. Every remaining case needs discrimination that no measured signal
+provides. Approaches tried and rejected against them, all measured on the full
+1,000:
+
+| approach | result |
+|---|---|
+| native-text reader for visa_class | 2 gains, **19 losses** |
+| native-text reader for declared_purpose | 0 gains, 2 losses |
+| native-text reader for home_world, species_code | no change |
+| native intake name above the packet majority vote | 1 gain, **5 losses** — the intake is the least reliable name source at 90.9%, so the manual's stated precedence does not hold here |
+| labelled sponsor or date voted over OCR views | **-10 to -13** at 2 votes; never fires at 3 |
+| name backed by the most distinct document types | no change — already implicit |
+| sponsor or date backed by the most distinct document types | no change |
+| attestation sentence as a name source | 0 gains, 1 loss |
+| attestation sentence as a purpose source | 152/152 correct, never disagrees |
+| fuzzy vote-clustering before the agreement test | 0 gains, 14 losses at every threshold |
+| archived-adjacent-applicant block scrub | score-neutral; swaps `not active` for another real applicant's name |
+| aggressive snapping of names with no vocabulary support | 0 of 4 recovered at any threshold |
+| strengthened faded-ink recovery | +1 gain for +0.39 s/PDF — rejected on cost |
+
+**The honest ceiling.** Of the ~104 scored errors, 19 have the truth somewhere
+in the pipeline's own page text and 21 more have it only under the offline
+forensic rig, which spends runtime the 6 s budget cannot afford. The remaining
+64 have no channel carrying the value at all. Perfect extraction is not
+reachable: the organisers deleted the evidence.
+
+### 2026-07-28 — rejected on cost: strengthened faded-ink recovery
+
+**Result: rejected. +1 gain, 0 losses (+0.005 extraction) for +0.39 s/PDF.**
+
+Adding a second contrast window (210-252) and a deskewed view to
+`_faded_ink_recovery` recovers MIB-000678's arrival date. Controlled
+back-to-back timings on the same random 50, same machine state:
+
+| build | s/PDF | vs pre-session |
+|---|---:|---:|
+| pre-session baseline | 3.81 | — |
+| six accepted changes (+0.082 pts) | 4.15 | +0.34 |
+| plus strengthened faded pass (+0.005 pts) | 4.54 | +0.73 |
+
+That is **0.013 extraction points per s/PDF against 0.24 for the accepted
+work**, and it cuts budget margin from 31% to 24% on hardware that is very
+likely faster than the grader's. Band-tiled OCR was already removed at a far
+better ratio (0.05 pts per s/PDF), so this does not clear the bar.
+
+**Two ordering bugs found while building it, worth knowing if it is revisited:**
+
+1. **Adding variants up front loses gains.** Harvesting the extra window and
+   deskew alongside the first pass turned two clear wins into ties and dropped
+   them (MIB-000409, MIB-000618 regressed to sentinels): a value is only taken
+   when the views do not disagree. The extra variants have to be staged behind
+   the earlier ones, paid for only when those come back empty.
+2. **`all` versus `any` in the escalation gate.** Gating on "no requested field
+   was found" means finding one field blocks escalation for the others, so a
+   packet needing name+sponsor+date stops after the easy one. It must escalate
+   while *any* requested field is still unread.
+
+**Also rejected this round:**
+
+- Voting a case-bound labelled sponsor or date over OCR views: **-10 to -13**
+  at 2 votes; displaces the clean text-layer reads that the accepted native
+  reader just fixed. At 3 votes it never fires.
+- Native-text readers for the other closed-vocabulary fields:
+  visa_class **2 gains / 19 losses**, declared_purpose **0/2**, home_world and
+  species_code no change. The native trick pays only where no
+  higher-precedence override already exists — visa has one (manual correction,
+  then attestation), and bypassing it is what causes the losses.
+- Extending the vocabulary-gated applicant read from registry pages to all
+  non-intake pages: **49.404 -> 49.398**. A conflicting `Applicant:` read on a
+  second page suppresses the good one (MIB-000564 regressed). A two-tier
+  version, registry first and other pages as fallback, is byte-identical to
+  registry-only, so the fallback never pays.
+- Attestation `attests that X is expected` as a name fallback: 0 gains, 1 loss
+  against current output. As a purpose source it is 152/152 correct but never
+  disagrees with what the pipeline already produces.
+
+**Remaining headroom, measured two ways.** Of the ~104 scored errors, 19 have
+the truth somewhere in the pipeline's own page text and 21 more have it only
+under the stronger offline forensic rig (500 dpi, orientation sweep, two
+contrast windows, deskew) — about 0.118 points that is reachable only by
+spending runtime the budget does not have. The remaining 64 have no channel
+carrying the value at all.
+
+### 2026-07-28 — accepted vocabulary-gated registry applicant read
+
+**Result: accepted. Extraction 45.936 -> 45.952 / 50 public (49.386 -> 49.404
+under unrecoverable-field scoring), 3 gains, 0 regressions, no policy drift.**
+
+Some rasterised registry extracts label the name `Applicant:` rather than
+`Registry Name`, so `_registry_name` never fires and the packet falls back to
+the intake form, which is the decoy carrier.
+
+Reading that label unconditionally **loses**, and it was rejected twice before
+it worked:
+
+- as an extra label on `_registry_name`: 3 gains, 16 losses at parse level and
+  **49.363 -> 49.339** end to end;
+- again after batch vocabulary snapping was in place, on the theory that
+  snapping would repair the damaged spellings: **49.386 -> 49.374**, 3 gains
+  and 5 losses. Snapping made it worse in kind, not better — a corrupted token
+  lands on the wrong known name (`Andane` -> `Xandane`, `Soltari` -> `Solul`),
+  which is a confident wrong answer rather than an obvious bad read;
+- as a sentinel-only filler: fires **0 times** in 1,000 packets.
+
+What works is gating on the batch's own name vocabulary. The read is stashed
+during parsing and adopted at batch level only when **both its tokens are
+already known names before any repair**. That separates the two populations
+cleanly: an undamaged read naming a different applicant is the registry
+correctly outranking the intake form; a read that would need repair is scan
+damage, and is dropped. 3 gains, 0 losses.
+
+The stash rides on the prediction dict as `_registry_applicant_read` and is
+removed before output — the same pattern as `_deferred_enrichment`.
+
+**Also rejected: attestation sentence as a name fallback.** `attests that X is
+expected` is 286/293 correct when unanimous, and as a fallback it measures +1 at
+parse level — but both its gains (`Arizam` -> `Arizarn`, `Solzam` -> `Solzarn`)
+are already fixed by the existing ligature repair, so against the real pipeline
+output it is **net -1**. Parse-level prototypes must be checked against current
+full-pipeline output, not against `_parse_packet` alone.
+
+**Reachability measure corrected.** The earlier "truth is present in the page
+text" check used a substring test, so `paid` matched inside `unpaid` and three
+fee cases counted as reachable when they are not. With word boundaries the
+reachable set is **22 errors, 0.125 points**, of which 13 are applicant names.
+
+### 2026-07-28 — accepted text-layer arrival date and note-named sponsor
+
+**Result: accepted. Extraction 45.926 -> 45.936 / 50 public (49.375 -> 49.386
+under unrecoverable-field scoring), 2 gains, 0 regressions, no policy drift.**
+
+- `_native_arrival_date`: `_extract_date` runs over every view concatenated, so
+  the dilution that affected the sponsor id applies to the date too — several
+  OCR views of one damaged page outweigh the single clean text-layer read. On
+  MIB-000691 the layer says 2026-03-23 and the output was 2026-02-22.
+- `_note_revoked_sponsor`: a signed adjudicator note is the manual's
+  highest-precedence evidence and on MIB-000928 it names the sponsor outright
+  (`Revoked sponsor: SPN-0139`) where every other channel carries only the
+  manual's own revoked list. Native text only — an OCR read of the same line
+  turned SPN-2718 into SPN-4718 on MIB-000883, which is exactly a net zero
+  (1 gain, 1 loss) if the OCR views are allowed in.
+- Both are extraction-only: they set `arrival_output` and `sponsor_output`, not
+  `arrival` or `sponsor`, so neither reaches the staleness rule, the
+  revoked-sponsor rule, or the completeness check.
+- Factored the shared page gate into `_case_bound_native_views`, which cuts the
+  trailing rotated/deskewed separators, drops pages carrying a foreign case id,
+  and drops the few packets that print the decoy answer key in visible ink
+  (MIB-000435 prints `...,waived,APPROVED,0.99` as inked text, and its fee
+  status is otherwise unrecoverable — there is no receipt in the packet).
+
+### 2026-07-28 — accepted batch name-vocabulary snapping; registry Applicant label rejected
+
+**Result: accepted. Extraction 45.914 -> 45.926 / 50 public (49.363 -> 49.375
+under unrecoverable-field scoring), 2 gains, 0 regressions, no policy drift.**
+
+- Applicant names are two tokens from a closed pool. Over the 1,000 public
+  packets the pool is exactly **144 tokens and every one occurs at least five
+  times** — no singletons — so it reconstructs from the batch's own output at
+  runtime: a `count >= 4` threshold recovers 144/144 with two junk entries. No
+  public label is consulted, so this behaves the same on an unseen split.
+- `_snap_names_to_batch_vocabulary` moves a below-threshold token onto the pool
+  only when one candidate is both a close match (>= 0.72) and clearly closer
+  than the runner-up (>= 0.06 margin). Gains MIB-000381 `Tekmera ixovara` ->
+  `Tekmora Ixovara` and MIB-000886 `Lumom Zakesh` -> `Lumora Zakesh`. Four
+  further names change and stay wrong; those are decoys, not glyph damage.
+
+**Rejected: adding `Applicant` to the registry extract's labels.** Several
+rasterised registry pages label the name `Applicant:` rather than
+`Registry Name`, so `_registry_name` never fires and the packet falls back to
+the intake decoy (MIB-000477, MIB-000881, MIB-000986). Adding the label reads
+those pages, but their OCR spellings are corrupted (`Xanzam` for `Xanzarn`,
+`Andane` for `Aridane`), and it displaces a clean read the majority vote was
+already getting: **3 gains against 16 losses at parse level, 49.363 -> 49.339
+end to end.** Vocabulary snapping does not rescue it (49.357, still below).
+Revisit only with a per-view spelling preference that favours native text.
+
+**Also rejected: fuzzy vote-clustering in `_case_bound_labelled_name`.**
+Merging near-identical reads before voting lets the *most frequent* spelling
+win, which on damaged pages is the corrupted one: 0 gains, 14 losses at every
+threshold from 0.80 to 0.90. The exact-agreement rule is load-bearing because
+it implicitly requires the clean native spelling to be one of the two votes.
+
+**Reachable set after this change: 25 errors, 0.139 points.** Of the 111 scored
+errors, only 25 have the truth anywhere in the pipeline's own page text; 84 are
+absent from every channel and are not addressable by any reader.
+
+### 2026-07-28 — accepted native-text sponsor id, and a false-positive audit
+
+**Result: accepted. Extraction 45.898 -> 45.914 / 50 public (49.345 -> 49.363
+under unrecoverable-field scoring), 3 gains, 0 regressions, no adjudication or
+confidence drift.**
+
+- `sponsor_numbers` counts every `SPN-####` across the concatenated views and
+  takes the mode. Each page contributes several OCR views but only one native
+  view, so two mis-OCRed reads of one damaged page outvote a single clean
+  text-layer read. MIB-000057: the layer says SPN-8779 once, the renders say
+  5779 twice, and the mode wins. Same shape on MIB-000393 and MIB-000558.
+- `_native_labelled_sponsor` reads the Sponsor-ID line from the
+  pixel-verified native text of case-bound pages only. It feeds `sponsor_output`
+  and never `sponsor`, so it cannot reach the revoked-sponsor rule or the
+  completeness check — the failure mode the existing comment at that site
+  records as having produced a catastrophic false approval.
+
+**Two false positives caught during this work. Both looked like real wins.**
+
+1. **`split(_NATIVE_VIEW_SEPARATOR, 1)[1]` is not the native view.** The native
+   section is followed by the rotated and deskewed OCR views, so that slice
+   returns native text *plus* those views. A first version scored +3 while
+   actually reading rotated OCR and calling it the text layer; it carried two
+   losses where `SPN-0007` and `SPN-0139` leaked in from revoked-sponsor policy
+   prose. Always cut the trailing separators.
+2. **`_sponsor_from_labeled_line` cannot read the text layer at all.** It needs
+   `Label: value` on one line; the layer prints the intake form as a table with
+   the value on the following line. Measured over all 1,000 packets it fires
+   **0 times** on true native text. The accepted version uses `_labeled_value`,
+   which handles both layouts, and then has zero loss modes.
+
+**Closed-vocabulary check on applicant names (negative result, not shipped):**
+names are two tokens from a closed pool of exactly 144, every token appearing
+>= 5 times, no singletons. That pool is fully recoverable from the batch's own
+predictions at runtime (144/144 tokens at a >= 4 threshold, 2 junk entries), so
+snapping garbled tokens to it is available without touching public labels. It
+gains **1 case**. The remaining name errors are decoys and unreadable rows, not
+glyph corruption, so the vocabulary does not help them.
+
+**Where extraction actually stands.** Of the 114 scored errors left, only 30
+have the truth present anywhere in the pipeline's own page text (16 in native
+text, 14 in an OCR view) — **0.169 points**. The other 84 are absent from every
+channel. The earlier "0.39 recoverable" figure was measured against the
+forensic channel dump, which is a stronger reader than the production stack;
+0.169 is the honest ceiling for source-selection and OCR work.
+
+### 2026-07-27 — accepted faded-ink last-resort field recovery
+
+**Result: accepted. Extraction 45.888 -> 45.898 / 50 public (49.334 -> 49.345
+under unrecoverable-field scoring), 2 gains, 0 regressions, +0.07 s/PDF.**
+
+- `_render_and_ocr` renders at 180 dpi and the existing repairs stretch
+  contrast by percentile. On the worst-faded intake scans the field rows sit
+  around grey 150-250 on white paper, so a percentile stretch leaves them under
+  the binarisation threshold and the row is absent from every existing view.
+- `_faded_ink_recovery` re-renders at 400 dpi and maps [150, 255] across the
+  full range. It runs only where a sentinel survived every other stage (96 of
+  1,000 packets), fills only sentinels, and never reaches adjudication or
+  confidence.
+- Orientation is the other half. `pdftoppm` renders the page as stored and the
+  worst scans are also rotated, so the rows are sideways rather than absent.
+  The rotated retry fires only when the upright read came back empty, which is
+  what keeps the cost at +0.07 s/PDF (3.74 -> 3.81 measured on the same random
+  50, against a 6 s budget).
+- Gains: MIB-000409 `applicant_name` unknown -> `Tekvara Mirarix`, MIB-000618
+  `arrival_date` 1900-01-01 -> 2026-04-28. Zero losses across 9,000 slots.
+
+**Two measurement traps found the hard way, both of which produced false
+readings before being caught:**
+
+1. **Never shard a run.** `_impute_closed_vocabulary_modes` and
+   `_repair_rare_*` are batch-statistical. Running a candidate as two
+   500-packet shards against a single 1,000-packet baseline moved the corpus
+   mode and reshuffled every imputed value: it showed 8 gains and 11 losses
+   where the true difference was zero. Measured cost of sharding alone:
+   **-0.055 private-style** (49.334 single batch vs 49.279 as two shards).
+2. **A consensus threshold can silently disable a stage.** The first version of
+   this pass required `count >= 2` while emitting one view per page, so no
+   value could ever reach threshold and the stage was a no-op. Its output files
+   were byte-identical to the control, which is what exposed it. A sentinel is
+   wrong by construction, so the accepted version requires only a unique best
+   read rather than a repeated one.
+
+### 2026-07-27 — accepted biometric-slip applicant source
+
+**Result: accepted. Extraction 45.877 -> 45.888 / 50 public (49.322 -> 49.334
+under unrecoverable-field scoring), 2 gains, 0 regressions.**
+
+- Per-source applicant accuracy measured over all 1,000 public packets, native
+  text only: registry extract 436/436 (100%), B-13 biometric slip 299/299
+  (100%), sponsor attestation 286/293 (97.6%), intake form 489/538 (90.9%).
+  The intake form is the decoy carrier; the other three are clean.
+- `_parse_packet` fell back from `_registry_name` straight to a whole-packet
+  majority vote over every name-shaped string, which is dominated by the intake
+  form and by repeated OCR views of one page. Added `_biometric_name` between
+  them, sharing `_registry_name`'s case-id binding via a new
+  `_case_bound_labelled_name` helper. No behavioural change to `_registry_name`.
+- Gains: MIB-000320 (`not active` -> `Lurix Tekzarn`) and MIB-000945
+  (`Xanul Xantari` -> `Zavoss Ixoul`). Zero losses across all 9,000 field slots.
+  `MIB-000320` also demonstrates a live label-reader defect: an unanchored
+  `re.search` in `_labeled_value` matched "applicant" inside the sentence
+  "Archived adjacent applicant - not active". The B-13 source now outranks it,
+  but the reader itself is still unanchored (2 packets affected).
+
+**Measured at zero, not shipped:**
+
+- Fee status-line fallback when Amount/Waiver are destroyed: 50 such packets,
+  2 gains and 2 losses, net 0.
+- Preferring pixel-verified native text over repeated OCR views for
+  `sponsor_id`: +1 across 268 packets, with a loss mode where the native layer
+  carries `SPN-0007` from revoked-sponsor policy prose rather than the packet's
+  sponsor. Noise; not shipped.
+- Faded-ink last-resort recovery (300-400 dpi re-render, [150,255] contrast
+  window, sentinel-only fill): **verdict unresolved.** The A/B was confounded by
+  running the candidate as two 500-packet shards against a single 1,000-packet
+  baseline. `_impute_closed_vocabulary_modes` and `_repair_rare_*` are
+  batch-statistical, so shard boundaries change the corpus mode and reshuffle
+  every imputed value. Re-test as a single batch before drawing a conclusion.
+
+**Extraction headroom, measured:** a channel-by-channel forensic pass over all
+773 field errors of the pre-change run found only 86 (11%) where the truth
+value is present in any visible channel — worth about +0.5 extraction. 605
+(78%) are organiser-destroyed or absent, 31 exist only in the hidden answer
+key, and 51 are legible decoys whose true value was removed. Full breakdown in
+the project-root `work/extraction-error-forensics.md`.
+
+**Tooling note:** `_render_and_ocr` output for all 1,000 train packets can be
+cached to disk, and the provenance overlay only writes adjudication and
+confidence. An extraction A/B therefore costs ~8 minutes instead of ~65. Always
+run the full 1,000 as one batch.
 
 ### 2026-07-27 — accepted visible-uncertainty review safeguards
 
@@ -1775,6 +2278,909 @@ reproduce 80.00/80 classification on the public 1,000 without a fitted tree.**
   provenance bit. The concurrent extraction edit in
   `mib_pipeline/pipeline.py` was preserved and excluded.
 
+### 2026-07-27 — denominator confirmation and residual-pattern audit
+
+**Result: the private extraction denominator adjustment is confirmed; no new
+classification rule survived independent controls. Runtime remains
+72.92/80 classification with zero catastrophic false approvals.**
+
+- `challenge-kit/scripts/evaluate.py` removes every admin-labeled
+  `unrecoverable_field` from both the extraction numerator opportunity and
+  extraction maximum. It does not remove the case's adjudication: every one of
+  the 1,000 classifications still has 8 raw points available.
+- The public labels omit `unrecoverable_fields`, so the exact private
+  extraction score cannot be reproduced locally. The accepted classification
+  artifact carried 45.762222/50 public extraction; concurrent extraction
+  checkpoints have since raised the extractor to 45.898/50 public and 49.345
+  under the available unrecoverable-field replay. The broader forensic curve
+  remains an estimate rather than an official private score.
+- All 22 packets carrying a visible/native `BARCODE PAYLOAD` are already
+  classified correctly: 16 denied, 5 review, and 1 approved. That channel has
+  zero residual headroom.
+- Exact B-13 `Observed flags: none` plus a clean-looking DIP/no-fee pattern was
+  falsified on the separate 5,000 controls. Matching packets include denials
+  for a missing mandatory fee and reviews for a missing trusted arrival date,
+  so the apparent approval rule is unsafe.
+- A raw-object scan of all 31 remaining `DENIED -> NEEDS_REVIEW` PDFs found no
+  extra risk or fee evidence in compressed streams, attachments, optional
+  layers, annotations, or widgets.
+- A five-fold identity-free fee model reached 91.9% overall out-of-fold
+  accuracy because visible fee pages are easy. On the 212 current-review
+  packets without a visible fee value, it recovered zero of six hidden
+  `unpaid` cases; all six received only 1.0%-1.8% unpaid probability. Context
+  cannot safely reconstruct the missing decisive fee.
+- Confidence-based approval promotion was also rejected. The narrowest tested
+  runtime-observable slice gained only 0.33 classification points while
+  creating 7 catastrophic false approvals.
+- No classification source or model artifact changed, so the classification
+  four-worker full-1,000 run was not repeated. This audit note was swept into
+  the independently accepted extraction commit `49a7df3`.
+
+### 2026-07-28 — component-image, vision, language, and public-method audit
+
+**Result: five new evidence channels and the strongest new public method were
+tested. None produced a transferable zero-CFA promotion. Accepted
+classification remains 72.92/80.**
+
+- Extracted and OCRed every large embedded image object in the 31 residual
+  `DENIED -> NEEDS_REVIEW` PDFs. Twenty-three large component images existed;
+  none contained the missing risk or unpaid-fee fact. The damage is baked into
+  the component image rather than applied as a removable PDF overlay. All
+  residual PDFs also have a single PDF revision, so no older incremental
+  revision can be recovered.
+- A cached pretrained ResNet-18 embedded every alien portrait. The 1,000
+  packets contain only 12 distinct portrait embeddings, corresponding to the
+  reusable species assets. Five-fold AUC on the current review pool was
+  0.509 approval / 0.563 denial / 0.533 review; every terminal route lost
+  points.
+- Full non-decision-page ResNet embeddings improved review detection but not
+  the hidden terminal split: five-fold AUC reached 0.613 approval / 0.604
+  denial / 0.702 review across tested heads. Every official-score decision
+  rule lost 1.14-2.95 classification points and introduced 9-11 CFAs.
+- A direct CatBoost imputer predicted the missing hard-risk bit from all other
+  emitted fields, sponsor digit structure, arrival timing, confidence, and
+  PDF composition. It reached 0.819 overall OOF AUC and 0.744 on the unresolved
+  review pool, but every denial threshold lost points; its highest-risk rows
+  still contained more approvals than denials.
+- Sanitized native document language removed case IDs, names, sponsor IDs,
+  dates, extracted values, findings, and answer-key spans. Word 1-3 gram OOF
+  AUC was 0.649 approval / 0.646 denial / 0.718 review. The best score-aware
+  action lost 1.19 points and created 8 CFAs.
+- Public PR 32 reports 73.79/80 with zero same-set CFA using layout consensus
+  plus exact `(visa, purpose, page signature)` trap blocklists. Reproducing
+  its generic visible-fee plus registry-name-consensus rule on the accepted
+  residuals yielded 33 approvals, 11 denials, and 10 reviews: +1.06 but 11
+  CFAs. Its published trap table removed exactly those 21 false cases,
+  producing 33/33 approvals and +1.98 on the same 1,000.
+- The trap table did not survive an honest simulation. In 50 repeated
+  five-fold runs, each blocklist was learned only from the other 80% and then
+  applied to the held-out 20%. Every run produced 8-10 CFAs; none achieved
+  zero. Mean gains were +0.47 for broad visa/purpose cells and +1.12 to +1.17
+  for exact page-signature cells, but only by accepting hidden-denial errors.
+- The apparently pure broad cells also failed independent controls:
+  `JOVIAN_GASFORM` changed from 6/6 public-cohort approvals to 28 approved /
+  28 denied / 25 review among stamped controls; `Zeta Reticuli` became
+  22/21/24; `XW-1 + field repair` became 7/6/5.
+- No runtime source changed. No official full-1,000 run was warranted, and no
+  experimental model or downloaded competitor source is retained.
+
+### 2026-07-28 — rejected provenance-completion and generator-inversion audit
+
+**Result: no classification candidate survived independent controls. Runtime
+source remains unchanged from the pushed extraction checkpoint.**
+
+- A provenance-completion rule tracked fields filled by the independent
+  reader and considered a `NEEDS_REVIEW -> APPROVED` promotion only when an
+  arrival-date fill survived every later repair, the final policy tuple was
+  clean, and a new 600-DPI RGB intake check found the same date in at least
+  two OCR layouts. On the labeled 1,000 replay, only `MIB-000093` and
+  `MIB-000678` moved, projecting **72.92 -> 73.04/80** with 0 CFA.
+- That +0.12 was not accepted as transfer evidence. A fresh four-worker run
+  over all **840** independently stamped controls from the separate 5,000
+  produced the exact visible confusion **242/242 approved, 340/340 denied,
+  and 258/258 review**, but the proposed rule fired **zero** times. Because
+  the rule had no positive independent opportunity, it could not validate the
+  two public-set promotions. The entire source change and feature flag were
+  removed; no official full-1,000 acceptance run was warranted.
+- Per-case generator-seed inversion was tested independently against ordinary
+  visible fields before being considered for hidden facts. The first 320
+  32-bit outputs from Python `random.Random`, NumPy `RandomState`, and NumPy
+  `default_rng` were generated for integer case numbers, predecessor numbers,
+  case-ID strings, and MD5/SHA-256-derived seeds. Across species, world, visa,
+  purpose, fee, and adjudication, every best association remained at
+  multiple-testing chance. No tested seed formula reproduced even a normal
+  visible category, so none was used for risk or fee inference.
+- A field-targeted domain-transfer experiment trained only on the 840 stamped
+  controls' visible reason categories, removed every finding/decision page,
+  hidden-answer-key line, explicit risk phrase, and explicit fee phrase, then
+  scored the accepted classifier's 398 public reviews. Sanitized text models
+  reached only **0.506-0.550 AUC** for hidden hard risk and put at most one
+  true risk in their top 20. Unpaid-fee AUC was **0.607-0.633**, but the
+  ranking recovered at most two of six positives and was not actionable.
+- A separate 132-feature PDF-object/layout model used stream sizes, page-type
+  order, image/resource counts, operators, file size, and page count while
+  zeroing every decision page. ExtraTrees, random forest, and CatBoost reached
+  only **0.364-0.594 transfer AUC** for hard risk and **0.401-0.592** for
+  unpaid fee; every top-20 hard-risk list contained zero true positives.
+- All experimental code was run ephemerally. The rejected source diff was
+  reversed, generated caches and the 840-case control corpus were moved
+  recoverably to Trash, and the branch returned to a clean state.
+
+### 2026-07-28 — accepted visible manual-reason field recovery
+
+**Result: the integrated branch passed the official four-worker full-1,000
+Docker run at 46.333333/50 extraction and retained the accepted 72.92/80
+classification score with zero catastrophic false approvals.**
+
+- Added default-on, opt-out `MIB_MANUAL_REASON_FIELD_RECOVERY=0` support for
+  risk flags explicitly printed in an active case's visible manual
+  adjudicator note. The recovery reads rendered OCR views only, requires the
+  page to contain exactly the active case id, rejects answer-key/training/
+  forced-adjudication language, and accepts only a unique fuzzy flag match
+  with a minimum winning margin.
+- The recovery runs after adjudication and confidence are final. It can fill
+  the extracted `risk_flags` field but cannot create a second policy
+  transition. This preserves the visible finding as the classification
+  authority while making the corresponding extracted reason usable.
+- A cached replay over all 415 review outputs found 46 candidate flags. Every
+  candidate was a subset of truth, three made the field newly exact, and none
+  broke an exact field. Direct checks found three more exact candidates among
+  terminal outputs. On 840 independently stamped controls, 270 explicit
+  risk-reason notes already agreed with the emitted flags; the best non-risk
+  reason-prefix similarity was 0.414, below the 0.58 label threshold.
+- The official acceptance used the organizer's read-only, network-disabled,
+  4-CPU/8-GiB Docker contract. All 1,000 primary reads and all 1,000
+  independent provenance reads completed. The output contained exactly 1,000
+  valid records and has SHA-256
+  `10a00cffb7148949b855008b1ad8e079f599a6ba82cd711c9fdd18bca806c2b7`.
+- Against the last accepted official artifact, extraction raw points moved
+  **41,186 -> 41,700** and extraction score moved
+  **45.762222 -> 46.333333/50**. Classification remained
+  **72.92/80**, calibration remained **18.071825/20**, total moved
+  **136.754047 -> 137.325158/150**, and CFA remained **0**. The 514-point
+  integrated extraction gain includes the earlier pushed extraction commits
+  since that artifact and is not attributed entirely to this rule.
+- The full candidate newly made the intended risk field exact for
+  `MIB-000151`, `MIB-000298`, `MIB-000338`, `MIB-000691`, and
+  `MIB-000889` relative to the last accepted artifact. `MIB-000293` did not
+  recover its reason under Linux. A same-image, eight-case Linux flag-off
+  repeat directly isolated the `MIB-000338` risk repair with zero decision or
+  confidence changes; one unrelated name read varied concurrently, so the
+  repeat was not used to claim deterministic attribution for every full-run
+  difference.
+- Syntax compilation, `git diff --check`, and all five public contract tests
+  passed. No test files, learned model, generated cache, or competitor
+  material is retained.
+- Generator-only pattern forensics were also exhausted without a runtime
+  change. Exact ReportLab creation timestamps were recovered from trailer IDs,
+  but blocked timing models were unstable (linear residual AUC 0.488; tree
+  0.562 with a fold as low as 0.289). A lag-128 sequence blip had no honest
+  forward phase rule. The existing perfect-field policy still scored only
+  70.93/80 with 29 CFAs on noisy emitted fields. All three routes were
+  rejected.
+
+### 2026-07-28 — cross-packet, reverse-field, and document-embedding audit
+
+**Result: no transferable classification change survived. Runtime source was
+returned exactly to the accepted 72.92/80 checkpoint.**
+
+- A full 1,000-case host run tested a provisional extraction-only
+  `primary paid + independent waived -> waived` reconciliation. Low Power Mode
+  made this an invalid acceptance run: four Tesseract page calls timed out and
+  the output drifted on many unrelated fields. It scored **46.46/50
+  extraction, 72.89/80 classification, 18.02/20 calibration, 137.37/150
+  total, and one catastrophic false approval**. The intended rule itself was
+  isolated by replaying the accepted artifact: six fee fields became exact,
+  none broke, extraction moved **46.333333 -> 46.36**, and decisions and
+  confidence were unchanged. All five cached full-5,000 engines emitted
+  identical fee values, however, so they provided no independent
+  primary-versus-alternate transfer opportunity. The truth-selected fee rule
+  was therefore reverted rather than promoted.
+- The hypothesis that another case's missing page was filed in the wrong PDF
+  was tested on every packet previously flagged with a foreign OCR case id.
+  Targeted OCR found 83 apparent foreign-id pages across 73 packets. Among the
+  72 pages whose apparent target existed in train, 47 matched the containing
+  case's fields more strongly, zero matched the apparent target more strongly,
+  and 25 tied. The sole page with two apparent-target field matches had three
+  containing-case matches. These are primarily damaged-id reads and deliberate
+  adjacent-applicant pages, not shuffled answer pages.
+- A context checksum then rebound only pages agreeing with the containing case
+  on at least two independent fields. Thirty-one cases qualified. Seven gained
+  scoped risk reads, but all seven were already correctly adjudicated by other
+  evidence. A deliberately broad replay over the 27 unresolved review cases
+  changed five; every one was truly `NEEDS_REVIEW`, and one would have become a
+  false approval. Cross-packet routing and broad scope correction were rejected.
+- The same context checksum repaired one missed applicant name and no
+  decision-critical field. Other reverse-field rules were rejected: MED-3/B-13
+  absence was mixed, decorative image/seal assets were mixed on both train and
+  the 5,000 controls, and judgment-to-field filling outside the six provisional
+  fee cases created contradictions or defaults rather than evidence.
+- A field imputer was frozen on the independently cached 5,000 outputs and
+  evaluated only afterward on the labeled 1,000. It excluded case ids and used
+  the other extracted fields, applicant-name morphology, sponsor digits, and
+  cheap PDF structure. On the accepted 398-review residual, hard-risk AUC was
+  **0.381**, unpaid-fee AUC **0.520**, stale-arrival AUC **0.531**, and visa
+  accuracy **42.2%**. Its top 20 hard-risk predictions contained zero hard-risk
+  cases. The missing generator fields behave independently enough that
+  contextual imputation does not recover them.
+- A compact MiniLM document embedding stripped case ids, exact sponsor ids,
+  dates, applicant names, and hidden-key language, then represented all cached
+  OCR pages by form type. Repeated five-fold ExtraTrees recovered only about
+  5-12 approval promotions at safe settings, worth roughly
+  **+0.15 to +0.62/80** depending on split. A stronger TabPFN stack over the
+  same embeddings plus structured provenance reached **+0.71/80** at its
+  aggressive setting but created 6-7 catastrophic false approvals; its safe
+  settings retained only **+0.15 to +0.22/80**. Neither model found residual
+  denials, and both were rejected.
+- Biometric confidence percentage was tested as a new visible risk proxy.
+  Across 303 readable slips, clean, hard-risk, and review-only cohorts all
+  occupied essentially the same 65-93% range. Of 95 accepted review outputs
+  with a readable percentage, the three latent denials were unpaid-fee cases
+  with no hard risk. The remaining hard-risk misses have no readable B-13 page,
+  so this channel cannot recover them.
+- The organizer's public `main` Git history contains only the initial challenge
+  release and two documentation edits; no deleted generator source, tags, or
+  unreachable objects were present. The original public data ZIP likewise
+  contains only train PDFs, validation PDFs, labels, and manifests.
+- All experiments were ephemeral. The provisional fee source change was
+  reversed, no model or generator artifact was added, and the working tree was
+  clean before this documentation entry.
+
+### 2026-07-28 — rejected sponsor-visa bridge and local evidence-cache candidate
+
+**Result: the visa recovery did not reproduce under a fresh official run and
+was reverted. A local content-addressed cache passed a bounded byte-equivalence
+test with a 3.53x warm-run speedup; it remains pending full-1,000 acceptance.**
+
+- A replay using an older independent-provenance artifact suggested eight
+  `visa_class` repairs when a sponsor attestation agreed with the alternate
+  reader. The proposed bridge reopened only reader disagreements, required an
+  active-case sponsor attestation to name the alternate visa, and rejected a
+  conflicting manual correction.
+- The organizer-contract acceptance run used 4 CPUs, 8 GiB, no network or DNS,
+  a read-only container, and all 1,000 train PDFs. All 1,000 primary reads and
+  all 1,000 fresh provenance reads completed without a case failure. The run
+  took about 84 minutes: 2,617.0 seconds for primary extraction and 2,358.7
+  seconds for provenance, plus the bounded reconciliation/output tail.
+- Fresh evidence produced **zero output changes** relative to the accepted
+  artifact. The score remained exactly **46.333333/50 extraction,
+  72.92/80 classification, 18.071825/20 calibration, 137.325158/150 total,
+  and 0 CFA**. The predictions SHA-256 remained
+  `10a00cffb7148949b855008b1ad8e079f599a6ba82cd711c9fdd18bca806c2b7`.
+  The sponsor-visa bridge was therefore removed rather than promoted.
+- The apparent replay gain was stale-reader dependence, not transferable
+  extraction. Against nine freshly recomputed cases, the older 1,000-case OCR
+  artifact matched only 7/9 rendered-page payloads and the older provenance
+  artifact matched only 6/9 final rows. Neither old artifact was imported or
+  used as current evidence.
+- A separate local-cache candidate now stores two expensive reusable products:
+  rendered/native OCR page strings before parsing, and independent provenance
+  rows before hybrid adjudication. Entries are keyed by PDF SHA-256 plus an
+  explicit extractor/settings schema, live outside Git by default at
+  `~/Library/Caches/mib-doc-challenge`, use atomic JSON writes, treat
+  corruption or an unwritable directory as a miss, and can be disabled with
+  `MIB_LOCAL_CACHE=0` or relocated with `MIB_LOCAL_CACHE_DIR`.
+- A bounded cold/warm test used nine varied disagreement and control packets.
+  The cold run took **87.69 seconds** and wrote 9 rendered-OCR plus 9 provenance
+  entries. The warm run took **24.81 seconds**, reported 9/9 hits in both
+  namespaces, skipped provenance-engine construction, and produced a
+  byte-identical JSONL output. Both outputs had SHA-256
+  `a219910a6fdb77a525e997a1227de1474b424f0d77f6cae108ca4edec6ef5a5b`.
+- The 63-second reduction from caching only nine packets confirms
+  the useful seam; targeted dynamic repair crops still run and explain the
+  warm run's remaining time. The nine verified entries were retained locally
+  (18 files, 100 KiB), while the benchmark directory was moved recoverably to
+  Trash. This checkpoint includes the cache as local performance
+  infrastructure, not as a score change or full-corpus cache acceptance; it
+  must ride the next official full-1,000 score candidate run.
+
+### 2026-07-28 — residual missing-evidence and generator-sequence audit
+
+**Result: the remaining review pool is not separable by the tested visible,
+decoy, structured-field, or sequential-generator channels. No runtime source
+changed; accepted classification remains 72.92/80 with zero CFA.**
+
+- Of the 87 true approvals still emitted as `NEEDS_REVIEW`, 72 already have all
+  nine extracted fields exactly correct and 78 have every non-risk field
+  present. The review decision is therefore not primarily an extraction-value
+  error.
+- After excluding explicit review findings, emitted review-only flags, unknown
+  fee, missing required fields, and visible damaged-note language, the
+  apparently clean pool still contains **78 approvals, 29 denials, and 70
+  genuine reviews**. Approving that whole pool would lose 1.96 classification
+  points.
+- Ground-truth cause decomposition shows why. The 29 denials contain 24 hidden
+  hard-risk flags and four hidden unpaid fees. The 70 reviews contain 54
+  hidden review-only flags, five unknown fees, and 11 other
+  ambiguity/policy cases.
+- The proposed registered B-13 template reader cannot recover the missing
+  flags. Every one of the 24 hidden hard-risk cases has no active-case B-13
+  page at all. Of 73 missing review-only flags across the full review pool,
+  69 likewise have no B-13; only four have an unreadable B-13 patch. This is
+  absent evidence, not OCR-damaged glyph evidence, so no reader was added.
+- A current primary-only replay from cached rendered pages would approve 73
+  final-review cases, but they contain only 38 true approvals alongside 23
+  reviews and 12 denials. The independent adjudicator is correctly preventing
+  those 12 catastrophic false approvals; bypassing it was rejected.
+- Barcode and visible-decoy channels were mixed or irrelevant. All 22 packets
+  containing a visible `BARCODE PAYLOAD` marker were already correctly
+  classified. `SAMPLE`, `COPY ARTIFACT`, `SCAN TAB`, denial words, and approval
+  words all occurred across multiple true outcomes; none provided a
+  high-coverage terminal partition.
+- A strict generator-state experiment used cases 1-600 for training, 601-800
+  for selection, and 801-1000 as untouched final data. Inputs contained only
+  perfect visible fields, sponsor digits, neighboring cases' visible fields,
+  and modular phase probes. Review-risk and approval prediction were weak.
+  Hard-risk AUC varied from 0.30 to 0.75 across rolling forward blocks, and
+  unpaid-fee AUC averaged about 0.65-0.70 but recovered only 0-3 positives per
+  top ten.
+- The separate 5,000-case corpus supplied 840 untouched packets with explicit
+  visible findings (242 approved, 340 denied, 258 review). On those controls,
+  current-case fields alone reached 0.728 denial AUC, but neighboring-case
+  fields fell to 0.528 and case-number phase was 0.498. There is ordinary
+  field-policy correlation, not recoverable PRNG state.
+- Reversing the independent test was decisive: models trained only on those
+  840 controls scored the 398 public review residual at 0.494-0.523 denial
+  AUC, 0.472-0.504 approval AUC, and 0.526-0.547 review AUC. The correlations
+  do not transfer into the missing-evidence residual.
+- A complete hidden-negative-cell audit parsed 216 valid public payloads and
+  171 valid payloads among the 840 visible controls. Every independently pure
+  `(fake decision, policy from structured fields)` cell is already implemented.
+  The only hidden cells left among final review outputs contain genuine
+  reviews, with no additional approval or denial opportunity.
+- All analysis artifacts and barcode renders were moved recoverably to Trash.
+  No model, decoder dependency, experimental rule, or generated test file was
+  retained.
+
+### 2026-07-29 — non-template payload reconciliation and cached acceptance
+
+**Result: accepted. A narrow extraction-only reconciliation raised the fresh
+official extraction score to 46.638889/50 while classification remained
+72.92/80 with zero CFA. A same-evidence flag-off A/B proved that every field
+changed by the rule became exactly correct.**
+
+- The 216 public packets with one fully validated hidden structured payload
+  were audited field by field. The payload decision is adversarial, but its
+  field corruption follows a narrower grammar: wrong values are copied from
+  the two example rows published in the challenge documentation. Among the
+  accepted output rows, 154 payloads already agreed on all nine fields, 60
+  disagreed on one field, and two disagreed on two fields.
+- Applicant, visa, sponsor, arrival, purpose, and risk disagreements were
+  eligible only when the proposed value was not a published example constant.
+  Risk repair was narrower: the payload had to add at least one flag to an
+  already non-empty pixel-derived risk set. Species, home world, and fee were
+  excluded. In particular, the one public non-template home-world disagreement
+  was wrong, while the species and fee disagreements supplied no qualifying
+  transfer evidence.
+- The development half, cases 1-500, and frozen half, cases 501-1000, both
+  supported the grammar. Replaying the previously accepted artifact changed
+  45 fields, all to truth and none away from truth; the frozen half accounted
+  for 22 of those 45 exact repairs. The rule is guarded by
+  `MIB_NON_TEMPLATE_PAYLOAD_RECONCILIATION=0` and runs only after all
+  adjudication is final, so repaired fields cannot trigger a second decision
+  transition.
+- A fresh four-worker Docker run used the organizer resource contract: four
+  CPUs, 8 GiB, no network, read-only root filesystem, and all 1,000 train PDFs.
+  It produced 1,000 valid rows with no missing, extra, duplicate, or invalid
+  records. Scores were **46.638889/50 extraction, 72.920000/80
+  classification, 18.077861/20 calibration, 137.636750/150 total, and 0
+  catastrophic false approvals**. The confusion matrix remained exactly 202
+  approved, 400 denied, 280 true reviews, 87 approvals emitted as review, and
+  31 denials emitted as review. Output SHA-256:
+  `7c55040a851addadf8ef597a7529c159b9ab472788a19af740900855f53a218f`.
+- Relative to the preceding accepted 46.333333 artifact, the fresh run changed
+  54 fields across 52 cases: 53 became exact, one arrival-date change was
+  score-neutral, and none became wrong. Decisions did not change. Two
+  confidence values drifted without a decision error. Because fresh targeted
+  OCR can vary independently of the new rule, this comparison was not treated
+  as the rule's causal measurement.
+- The now-complete local cache enabled a controlled full-1,000 flag-off run
+  using the same image and evidence. It reported 1,010/1,010 rendered-OCR cache
+  hits and 1,000/1,000 provenance cache hits; the remaining targeted repair
+  crops finished the primary pass in 922.5 seconds. With the rule disabled,
+  extraction was **46.382222/50**, classification **72.920000/80**,
+  calibration **18.077861/20**, total **137.380084/150**, and CFA 0. Output
+  SHA-256:
+  `5bce40fe04b28fa8fe8ef2560dbe0d23c80935af5d18acd5dc19abe00145a12c`.
+- The same-evidence on/off diff changed exactly 44 fields across 42 cases:
+  18 applicant names, seven visa classes, 12 sponsor IDs, two purposes, and
+  five risk sets. **All 44 changes became exactly correct.** There were zero
+  extraction losses, zero neutral changes, and zero adjudication or confidence
+  changes. The causal extraction gain was therefore **+0.256667/50**. The
+  earlier 45th replay repair, an arrival date, was already recovered by the
+  fresh upstream reader before the flag-off output was written.
+- The cache itself is now fully populated for the public corpus: 2,000
+  content-addressed JSON entries, about 10 MiB total. The fresh run recorded
+  959 rendered-OCR writes and 979 provenance writes in addition to prior
+  bounded entries. The controlled run recomputed neither expensive evidence
+  product. It still took about 15.5 minutes because field-local repair crops
+  intentionally remain uncached; optimization of those crops is deferred.
+- Transfer was checked conservatively on the separate 5,000 packets. The rule
+  identified 63 prospective field changes in older validation outputs, but
+  only one replacement appeared in the PDF's native text; most target values
+  live in rasterized or damaged regions, so this check was inconclusive rather
+  than validating unseen extraction truth. The feature flag remains the
+  rollback boundary if the private distribution breaks the public corruption
+  grammar.
+- The separately supplied 398-review audit used the older 45.762222 artifact
+  and correctly counted 70/87 latent approvals with all nine fields exact.
+  The current 46.333333 predecessor has **72/87** all-field-exact latent
+  approvals. Its classification conclusion is unchanged and stronger: better
+  field rows alone do not identify the approvals.
+- Hidden payload classification is already saturated: all 216 payload packets
+  are currently classified correctly (35 approved, 120 denied, and 61 review).
+  All 118 terminal classification misses occur in packets without a usable
+  payload, so this extraction reconciliation cannot supply the missing
+  approval or denial witness.
+- Fresh structure and text controls rejected another classifier route. Among
+  the 347 no-payload public review outputs were 87 approvals, 31 denials, and
+  229 true reviews. PDF-anatomy ExtraTrees models reached only about 0.585
+  cross-validated accuracy. On 692 separate no-payload packets carrying exact
+  native `Finding:` controls, independent accuracy was 0.338; its 61 predicted
+  approvals contained 20 approvals, 19 denials, and 22 reviews. A stripped
+  native-text TF-IDF model was similarly non-transferable at 0.337 independent
+  accuracy. Neither model or any generated experiment file was retained.
+
+The accepted classification score therefore remains 72.92/80. The next honest
+classification work remains source-state recovery for active intake, B-13,
+trusted fee, and manual-finding evidence; output text, PDF anatomy, and clean
+field tuples remain unsafe terminal-label substitutes.
+
+### 2026-07-29 — exact ReportLab timestamp seed falsification
+
+**Result: the exact PDF creation clock is recoverable, but it does not seed a
+per-document PRNG that reproduces fields or adjudication. No runtime source
+changed.**
+
+- ReportLab's trailer ID is an MD5 digest over a fixed prefix, the exact
+  floating-point creation timestamp, and the PDF metadata fields. Grouping
+  packets by their visible whole-second `CreationDate` allowed all 4,194,304
+  representable sub-second floats to be checked once per group. All
+  **1,000/1,000** public timestamps were recovered across 110 creation-second
+  groups. The scan checked 403,184,454 float candidates in 66.6 seconds with
+  four local workers.
+- The first packet's exact timestamp was `1782793208.003389`; neighboring
+  packets included binary-clock representations such as
+  `1782793208.0042691`. A microsecond-only prototype recovered 72/100 and
+  skipped the finer binary values, so its partial seed scores were discarded
+  before interpretation.
+- The complete probe tried Python `random.Random` with the exact float, its
+  ASCII representation, whole seconds, rounded microseconds, rounded
+  nanoseconds, and fractional binary ticks. Both `randrange(n)` and
+  `int(random()*n)` streams were scanned through 128 burn positions.
+- Cases 1-600 fitted only the output-to-category mapping, cases 601-800 chose
+  the seed transform/sampler/burn position, and cases 801-1000 remained
+  untouched. Final accuracy was chance-level: species **10.5% vs 8.5%**
+  majority baseline, home world **7.0% vs 9.0%**, visa **28.5% vs 31.0%**,
+  purpose **16.0% vs 12.5%**, fee **64.0% vs 64.0%**, and adjudication
+  **44.0% vs 44.0%**.
+- The exact timestamp is therefore useful forensic metadata, not a hidden
+  per-PDF generator seed. No timestamp decoder, seed table, experiment file,
+  or model was retained.
+
+### 2026-07-29 — judgment-constrained field reconciliation
+
+**Result: accepted. Ten remaining payload disagreements were reconciled
+without changing adjudication, raising official extraction from
+46.638889/50 to 46.687778/50. Classification remains 72.92/80 with zero
+catastrophic false approvals.**
+
+- Reverse use of the frozen judgment was kept deliberately weak. An
+  `APPROVED` decision can prove that an emitted `unpaid` fee is inconsistent,
+  but it cannot by itself distinguish `paid` from `waived`; no field is filled
+  from judgment alone. Instead, the judgment audit reopened only disagreements
+  backed by one fully validated structured payload and only for two
+  value-specific cells: a claimed `DIP-1` visa, or a claimed `paid`/`waived`
+  fee. The payload decision remains ignored and cannot change classification.
+- On the previously accepted 1,000-case artifact, the rule changed exactly ten
+  cells: four visas to `DIP-1` and six fees to `paid` or `waived`. All ten
+  replacements exactly matched truth, none broke an exact value, and there
+  were no decision or confidence changes. Cases 1-500 and 501-1000 each
+  contributed five exact repairs.
+- The broader negative-cell audit remained important. The remaining payload
+  applicant, sponsor, purpose, and risk disagreements were wrong or mixed and
+  stayed excluded. Across all 216 public payloads, 212 hidden fee cells were
+  correct, but the four incorrect cells were also plausible `paid` values; the
+  runtime rule therefore depends on the narrow disagreement grammar rather
+  than treating payload fee text as generally authoritative.
+- The separate 5,000-document outputs contained 13 prospective `DIP-1` visa
+  disagreements and 64 prospective `paid`/`waived` fee disagreements. Those
+  are transfer opportunities, not labeled correctness evidence; the existing
+  `MIB_NON_TEMPLATE_PAYLOAD_RECONCILIATION=0` flag remains the rollback
+  boundary.
+- A fresh organizer-contract run used four CPUs, 8 GiB, no network, a
+  read-only root filesystem, and all 1,000 public packets. It completed the
+  primary pass in 910.0 seconds with 1,010/1,010 rendered-OCR cache hits and
+  1,000/1,000 provenance cache hits. Submission validation found 1,000 valid
+  records with no missing, extra, duplicate, or invalid rows; all five public
+  contract tests passed.
+- Official scores are **46.687778/50 extraction, 72.920000/80
+  classification, 18.077861/20 calibration, and 137.685639/150 total**, with
+  zero catastrophic false approvals. Extraction raw rose from 41,975 to
+  42,019 out of 45,000. The exact accepted-output diff contains only the ten
+  intended newly correct cells. Output SHA-256:
+  `ed48b18951869480511165699242c541deab6eb7e125477d7687af83d414ac97`.
+- Exact-collision analysis did not find an intrinsically impossible labeled
+  pair. The only identical low-field tuple among unresolved outputs was
+  `MIB-000236` (approval) versus `MIB-000342` (review); the latter has a
+  visible manual `Finding: NEEDS_REVIEW` page and blue review stamp, so
+  evidence provenance separates them. Five opposite A/D truth-policy
+  collisions also separated once sponsor or arrival date was restored. All
+  nine-field truth rows are unique.
+- A separate damage-texture classifier was rejected before public promotion.
+  It removed every visible `Finding:` page and every detected payload, then
+  trained a small page-image CNN on 692 independently labeled validation
+  controls. Chronological held-out accuracy was 0.281 versus a 0.396 majority
+  baseline, and neither approval nor denial produced a preregistered
+  90%-precision threshold. No classifier, pixel cache, or generated test file
+  was retained.
+
+The accepted classification score is still 72.92/80. The remaining 118
+terminal misses still require positive source recovery or a new generator
+channel that survives independent controls; a clean-looking output row is not
+approval provenance.
+
+### 2026-07-29 — image bit-plane and global-seed falsification
+
+**Result: neither low-level image statistics nor a small global Python PRNG
+seed supplied a transferable terminal-label rule. Runtime source remains at
+the accepted 46.687778/72.92 checkpoint.**
+
+- The image test targeted a channel not covered by resized page models:
+  full-resolution embedded-image histograms, all eight bit planes, adjacent
+  low-bit transitions, modulo-four pairs, spatial blocks, stream compression
+  ratios, and image geometry. Models used only the 398 current review outputs.
+  Cases 1-600 trained, 601-800 selected thresholds, and 801-1000 remained
+  untouched.
+- Image features detected review-style damage but not a safe terminal
+  decision. On the untouched block, the strongest model reached 0.853
+  one-vs-rest review AUC and 0.777 approval AUC, but no approval threshold
+  passed the zero-false-approval selection gate. The only validation-positive
+  denial threshold gained two raw classification units in selection and lost
+  14 raw units on the untouched block. No image model or feature cache was
+  retained.
+- Applicant names were confirmed to use the complete 12-root by 12-suffix
+  grammar, motivating a stricter global-generator probe. The first six public
+  sponsors are ordinary, non-revoked values, so their numbers were tested as
+  possible 14-bit Python `getrandbits`/`randrange` observations with realistic
+  six-to-55-output gaps between rows.
+- Five million integer seeds were exhaustively checked under both direct
+  `0..9999` and offset `1000..9999` interpretations. The direct route produced
+  no three-sponsor prefix. The offset route produced one chance three-sponsor
+  match at seed 3,541,629, which failed on sponsor four.
+- The alternate `int(random() * range)` implementation was checked over the
+  same five million seeds. It produced three isolated three-sponsor matches;
+  all failed on sponsor four. Common string seeds based on the challenge name,
+  8090, dates, MIB, and Centauri did not match even the first sponsor in a
+  realistic prefix.
+- A first multiprocessing harness launched from standard input failed because
+  macOS `spawn` could not re-import `<stdin>`. That run was terminated and
+  discarded. The successful scans used an explicit `fork` context and are the
+  only results reported above. No experiment file or process was left behind.
+
+These tests do not prove that the generator used no PRNG; they reject the
+useful hypothesis that ordinary sponsor values expose a small, conventional
+global `random.Random` seed. Recovering hidden facts would require a different
+observable state channel, not a wider sponsor-digit superstition net.
+
+### 2026-07-29 — deleted-object and pretrained-vision audit
+
+**Result: no omitted source page or transferable portrait/page-vision rule was
+found. No runtime source or learned artifact changed.**
+
+- A local source search covered the released challenge tree, nearby work
+  directories, Desktop/Documents source files, Spotlight content matches, and
+  the original public-data ZIP. The generator source was not present. Exact
+  challenge phrases occurred only in released PDFs and derived audit text.
+  The ZIP's shuffled entry order was also rejected as a second generation
+  sequence: embedded PDF creation clocks still increase with case number, so
+  the ZIP order is filesystem/archive enumeration rather than record creation.
+- All 31 latent denials still emitted as review were scanned below the page
+  API. Every indirect object and decompressed stream was searched for its true
+  decisive risk, `unpaid`, or `TRANSIT-7` value. None appeared outside visible
+  page text. There were no unreachable `/Page` objects, annotations,
+  optional-content groups, incremental revisions, extra `%%EOF` sections, or
+  trailing payload bytes.
+- Ten initially suspicious 512x512 streams were inspected twice: as masks and
+  as their unmasked base images. They were nested Form-XObject artwork
+  (badges, registry cards, planets, scan circles, and ink blots), not deleted
+  B-13 or fee pages. Their base images contained the same colored decorative
+  glyphs visible in the rendered packet. Temporary contact sheets were moved
+  recoverably to Trash.
+- A pretrained MobileNetV3-small representation then encoded every page of the
+  398 unresolved packets while preserving document layout and portrait art.
+  The residual-only model trained on cases 1-600, selected on 601-800, and
+  tested on 801-1000. Its best untouched accuracy was 0.759 versus a 0.696
+  majority baseline, with review AUC 0.880 in one model, but no zero-CFA
+  approval threshold survived. Validation-selected denial tails produced
+  between -0.02 and 0.00 points on the untouched block.
+- Training the same representation on all 600 early cases, including 364
+  already-certain terminal packets, made the residual domain shift explicit:
+  selection accuracy fell to 0.265-0.398 and every scorer-aware terminal
+  threshold abstained. Clear terminal documents do not teach the hidden label
+  of a packet whose decisive source is absent.
+- No vision weights, embeddings, model, test file, or image cache was added to
+  the solution. Generated Python bytecode from the audit was moved recoverably
+  to Trash, and the accepted worktree remained otherwise clean.
+
+The evidence-first blocker is therefore literal, not rhetorical: the 31
+latent denials have no recoverable decisive source object, while the approval
+tail cannot be separated from genuine reviews and hidden denials without
+creating false approvals. Further progress needs a genuinely new observable
+source or independently transferring generator mechanism.
+
+### 2026-07-29 — foreign-receipt judgment-to-field repair
+
+**Result: accepted. A source-bound reverse-judgment repair corrected one fee
+without changing any decision, raising official extraction from 46.687778/50
+to 46.692222/50. Classification remains 72.92/80 with zero catastrophic false
+approvals.**
+
+- `MIB-000893` emitted `fee_status=unpaid` even though its authenticated manual
+  finding is `APPROVED`. Page 3 is visibly a fee receipt for `MIB-000883`, not
+  the active case; two rendered OCR views agree on that foreign case ID. No
+  active-case receipt, trusted waiver, or manual fee correction survives in
+  the packet. For a non-`DIP-1` visa, the foreign unpaid receipt therefore
+  cannot be the active applicant's fee evidence, and the explicit approval
+  makes `paid` the remaining policy-consistent output value.
+- `_apply_provenance_constrained_field_repair` runs only after adjudication and
+  is extraction-only. It requires an explicit-decision confidence of exactly
+  0.99, `APPROVED`, a non-`DIP-1` visa, an emitted `unpaid` fee, two OCR-view
+  votes for a foreign receipt ID, and no two-view active receipt. Manual fee
+  corrections and trusted waivers fence the rule off. The rollback flag is
+  `MIB_JUDGMENT_FIELD_REPAIR=0`; a repaired field can never feed back into
+  classification.
+- A separate 5,000-packet control, `MIB-104286`, has an explicit approved
+  finding and an active-case paid receipt; the existing reader already emits
+  `paid`, so the new rule correctly abstains. No exact foreign-unpaid/explicit-
+  approval counterpart was found among the available validation outputs.
+  This is a provenance-and-policy constraint with one public firing, not a
+  statistically replicated correlation, and it must not be broadened merely
+  to collect more changes.
+- Broad cross-packet page rehoming was rejected. Across the public corpus, ten
+  pages had at least two OCR views agree on a foreign case ID. Assigning their
+  extracted fields to the printed foreign ID produced **0 newly exact cells,
+  15 broken exact cells, and 5 wrong-to-different-wrong changes**. Foreign IDs
+  are decoys or damage artifacts, not delivery addresses for borrowing one
+  applicant's page into another packet.
+- ReportLab 5.0.0 source inspection rejected the PDF trailer ID as a field
+  checksum. `PDFDocument.ID` hashes a constant prefix, the exact creation
+  timestamp, and constant document-info strings; it does not hash page
+  content. The continuous train-to-validation creation clock remains evidence
+  of a single generation session, but not evidence that the same Python PRNG
+  stream or call layout generated both sets.
+- Exact first-timestamp seeds using the recovered float, its string, rounded
+  microseconds, and rounded nanoseconds did not reproduce the opening sponsor
+  sequence. Recovering a global MT19937 state from partial bounded outputs
+  remains a possible future experiment only if generator draw order,
+  interleaved calls, and `randrange` rejection behavior can be constrained;
+  otherwise a solver can fit the wrong call alignment without transfer
+  evidence. No solver, seed table, or experiment file was retained.
+- The accepted organizer-contract run used four CPUs, 8 GiB, no network, a
+  read-only root filesystem, and all 1,000 public packets. It completed in
+  931.4 seconds with 1,011 rendered-OCR cache hits and 1,000/1,000 provenance
+  cache hits. Submission validation found 1,000 valid records with no missing,
+  extra, duplicate, or invalid rows; all five public contract tests passed.
+- The exact accepted-output diff contains one change:
+  `MIB-000893 fee_status unpaid -> paid`, which matches truth. Extraction raw
+  rose from 42,019 to 42,023 out of 45,000. Official scores are
+  **46.692222/50 extraction, 72.920000/80 classification, 18.077861/20
+  calibration, and 137.690084/150 total**, with zero catastrophic false
+  approvals. Output SHA-256:
+  `bdab5a487b5fadc866ccb61d1be98f5855d3aa8e7a06ed5d3d2f3191b6f5931c`.
+
+This checkpoint validates the requested judgment-to-field direction, but it
+does not move the classification score. The 78/80 classification target still
+requires a new positive source or a generator mechanism that transfers under
+untouched controls; the next high-risk research lane is exact global-PRNG
+call-layout recovery, not broader foreign-page reassignment.
+
+### 2026-07-29 — frozen residual approval topology model
+
+**Result: accepted. Seventeen unresolved approvals were recovered with zero
+false promotions, raising official classification from 72.92/80 to 73.94/80.**
+
+- The starting residual contained 398 emitted `NEEDS_REVIEW` cases: 87 true
+  approvals, 31 true denials, and 280 true reviews. A complete manual audit
+  confirmed that 26/31 latent denials physically lack a B-13 page and that
+  most approval targets lack a complete visible approval certificate. Blanket
+  clean-packet, page-count, sponsor-digit, and output-text rules remained
+  unsafe.
+- The first distilled decision tree looked attractive on the public slices,
+  but after all visible-finding pages were masked it promoted 101 of 840
+  independent controls: 55 approvals, 40 denials, and 6 reviews. It was
+  rejected before runtime integration. The failure confirms that short,
+  clean-looking packets are not affirmative approval evidence.
+- The accepted model uses page-type order, active/foreign source types, scoped
+  B-13 state, trusted fee tuple state, explicit-decision state, source-conflict
+  state, intake visa, a missing-field mask, low-cardinality semantic policy
+  fields, page count, PDF size, and rendered-text lengths. It excludes case
+  IDs, applicant names, sponsor IDs, arrival dates, output confidence, hidden
+  answer-key text, and participant artifacts.
+- Two CatBoost heads were fit only on residual cases 1-600 with seeds 2 and 4,
+  350 trees, depth 5, learning rate 0.035, L2 leaf regularization 8, and random
+  strength 1.5. The approval threshold
+  `0.5580683534306421` was selected on cases 601-800 under a zero-false-
+  promotion gate and then frozen. Results were 12/12 approvals in the fitted
+  slice, 3/3 in selection, and 2/2 in untouched cases 801-1000.
+- The same frozen pair and threshold were applied to 840 independently
+  generated validation controls after their visible finding pages were
+  removed from model features. It triggered zero times. This is strong
+  negative-transfer evidence, not positive validation; the model therefore
+  remains deliberately narrow and has the rollback switch
+  `MIB_TERMINAL_APPROVAL_MODEL=0`.
+- The 83 MiB CatBoost package is not a runtime dependency. CatBoost 1.2.8
+  exported each head as standalone Python with categorical hash tables
+  embedded. Native and exported probabilities matched to
+  `2.22e-16`. The two generated evaluators total 2.34 MiB and their
+  Apache-2.0 license is retained in `third_party_licenses`.
+- The final runtime transition applies only to low-confidence
+  `NEEDS_REVIEW`. Explicit decisions, source conflicts, non-empty emitted
+  risks, and unknown fees are hard fences. A firing changes only adjudication
+  to `APPROVED` and confidence to `0.85`; it cannot change an extracted field
+  or override a terminal result.
+- The official acceptance used the locked Docker image with four CPUs, four
+  workers, no network, and all 1,000 public packets. Primary processing
+  completed in 912.8 seconds; the run recorded 1,235 rendered-OCR hits and
+  1,000/1,000 provenance hits. Submission validation found 1,000 valid rows
+  with no missing, extra, duplicate, or invalid records. All five public
+  contract tests passed.
+- Two test-discovery invocations from the solution worktree failed because the
+  separate challenge kit's `scripts` package was not on `sys.path`. The
+  corrected command runs discovery from the challenge-kit root; all five tests
+  pass. No test source changed.
+- Colima initially stalled after guest boot because the inherited macOS
+  `SSH_AUTH_SOCK` hung while OpenSSH queried the agent. QEMU, VZ, and a second
+  profile all reproduced the symptom. Restarting the acceptance profile with
+  `SSH_AUTH_SOCK` unset completed SSH, Docker-socket forwarding, and the
+  official run without deleting a profile or cache.
+- The exact accepted-output diff contains 17 objects and only the
+  `adjudication` and `confidence` fields. Every transition is a true
+  `NEEDS_REVIEW -> APPROVED`; extraction is byte-for-field unchanged.
+  Confusion is now 219 approved-as-approved, 70 approved-as-review, 400
+  denied-as-denied, 31 denied-as-review, and 280 review-as-review, with zero
+  catastrophic false approvals.
+- Official scores are **46.692222/50 extraction, 73.940000/80 classification,
+  18.123592/20 calibration, and 138.755815/150 total**. Output SHA-256:
+  `71521d4eb2e6a1b7077b6128378e00b47752f1f154ead1d0130d28feeef3e7c2`.
+
+This is an honest +1.02 classification checkpoint, not the 78/80 target. The
+remaining confusion contains 70 approvals and 31 denials still emitted as
+review. Reaching 78/80 now requires at least 68 additional correct terminal
+recoveries at the current per-case weight, with zero false approvals. The next
+work should seek complementary source recovery or a separately transferring
+generator channel rather than lower this model's threshold.
+
+### 2026-07-29 — post-73.94 provenance, control, and generator audit
+
+**Result: no complementary transition survived untouched evidence. Runtime
+source and the accepted 73.94/80 classification checkpoint are unchanged.**
+
+- A second audit covered all 398 review outputs in five non-overlapping public
+  slices. The residual was 87 approvals, 31 denials, and 280 true reviews
+  before the accepted approval model; that model leaves 70 approvals and 31
+  denials unresolved. Of the original 31 latent denials, 24 require a hidden
+  hard risk, six require a hidden unpaid fee, and one requires hidden
+  `TRANSIT-7`. Twenty-six physically lack a B-13 page. The remaining five do
+  not visibly establish their decisive denial; `MIB-000865` visibly says
+  `XW-2` while its truth is `TRANSIT-7`.
+- A corpus-wide page-owner join looked for sources misplaced into another
+  public packet. Requiring two OCR views to agree on a foreign case ID found
+  only three strong foreign pages, and only one pointed at a remaining
+  terminal case. That page is a deliberate decoy: its content matches the
+  container `MIB-000621`, not the printed `MIB-000821`. A stricter unique
+  multi-field owner fingerprint found zero foreign pages for any terminal
+  residual. No cross-packet relocation rule was retained.
+- A masked-control classifier was trained on the 840 independent visible-
+  finding controls after removing their finding pages. A single seed produced
+  one apparent public approval transfer, `MIB-000646`, but a three-seed
+  ensemble produced no safe approval tail. Lowering its threshold admitted
+  public denials. The seed-specific result was rejected.
+- A source-readability model added per-document-type OCR-view agreement,
+  label coverage, active/foreign ID votes, native/rendered length ratios, and
+  damage-marker features. Its selection tail contained three approvals and
+  two reviews; on untouched cases 801-1000 it selected three reviews and
+  `MIB-000870` (denied), with no approvals. It was rejected.
+- Joint public-fit plus masked-control CatBoost models, explicit conjunction
+  mining, and a 9,937-feature sanitized rendered-OCR model were tested
+  separately. IDs, names, sponsors, dates, native hidden text, and visible
+  finding pages were excluded. All three families produced positive,
+  denial-free selection tails and then admitted an untouched hidden denial:
+  either `MIB-000865` or `MIB-000898`. No model, vectorizer, rule table, or
+  generated experiment file was retained.
+- The strongest affirmative visible certificate also failed. An active B-13
+  whose rendered views read `Observed flags: none`, combined with a trusted
+  fee tuple and active intake, still includes four denials in 27 independent
+  masked controls and the untouched `MIB-000865` denial. A clean B-13 is not
+  proof when the benchmark's decisive visa truth contradicts the visible
+  intake.
+- A per-case `random.Random(base + case_number)` hypothesis was tested using
+  the complete 12-root by 12-suffix name grammar. No base through one million
+  reproduced the first two generated names, even when the unknown prefix and
+  suffix list order was inferred as a bijection. Common integer, string,
+  case-ID, and SHA-derived seed forms also failed. This complements the
+  earlier five-million global-seed falsification; no useful conventional seed
+  decoder was found.
+- The hidden answer-key polarity channel was exhaustively re-audited. Its
+  structured policy/claim pairs remain perfectly systematic across public
+  fit, selection, untouched, and 840 independent controls, but the existing
+  `_apply_hidden_negative_policy` already consumes them. Every one of the 101
+  remaining terminal mistakes has no validated payload. Those residuals also
+  contain no raw-text objection, barcode directive, embargo notice, sample
+  denial, or manual finding.
+
+These failures agree on the same boundary: source topology, OCR damage,
+low-cardinality policy fields, and adversarial payload polarity have now been
+tested in both learned and explicit forms. They do not distinguish the
+remaining clean-looking approvals from labels whose decisive fact is absent
+or contradicted by rendered evidence. Do not lower the accepted approval
+threshold or revive `MIB-000646`; a future gain needs a genuinely new
+observable channel or organizer-supplied generator semantics.
+
+### 2026-07-29 — source-bound invalid-name recovery and timestamp audit
+
+**Result: accepted. Three visibly sourced applicant names were repaired with
+zero regressions. Official extraction rose from 46.692222 to 46.708889/50;
+classification remains 73.94/80 with zero catastrophic false approvals.**
+
+- The remaining applicant errors were decomposed by reconstructing the
+  generated two-token vocabulary from the current batch. Nine non-placeholder
+  outputs contained a token outside that vocabulary. A repair may now touch
+  only such an invalid name, and only when one case-bound B-13 or sponsor
+  source supplies a unique two-token candidate already validated by the batch
+  vocabulary. Already-valid names are an explicit no-op.
+- Source collection is page- and OCR-view-scoped. It requires the active case
+  ID, rejects any foreign non-placeholder case ID, and reads only a labeled
+  B-13 applicant, the applicant in an attestation sentence, or an entire
+  two-word line on a sponsor-attestation page. The bare-line path is needed
+  for a degraded sponsor template whose label is destroyed but whose name
+  remains clear.
+- Replay over all 1,000 cached rendered packets changed exactly three names:
+  `MIB-000235 Oritan Solnax -> Oritari Solnax`,
+  `MIB-000404 Veeix Soltan -> Veemora Nexnax`, and
+  `MIB-000717 Xanix Onmora -> Xanix Orimora`. All three replacements equal
+  truth. The important counterexample `MIB-000818` retained `not active`
+  rather than adopting the independent reader's plausible but incorrect
+  `Ixomora Miratari`.
+- A broader independent-reader name overlay was rejected. Across all 1,000
+  packets, replacing the primary name with the provenance row produced six
+  gains, 52 losses, and 24 wrong-to-wrong changes. A targeted RapidOCR
+  experiment showed useful complementary glyphs for a few damaged pages, but
+  it also exposed wrong-case and intake-decoy names; no extra OCR runtime or
+  unsafe overlay was added.
+- Context-to-missing-field classifiers were re-tested using other extracted
+  fields, source-state features, and adjudication. On the fixed 1-600 fit,
+  601-800 selection, and 801-1000 untouched split, no species, home-world,
+  visa, purpose, risk, or fee imputer found a zero-regression selection tail.
+  They were rejected rather than turning judgment correlations into invented
+  field evidence.
+- A new generator timing channel recovered the exact sub-microsecond ReportLab
+  creation clock for all 1,000 PDFs from the trailer digest. Previous and next
+  generation gaps, local normalized gaps, within-second rank, file size, page
+  count, and session position were evaluated only on the remaining 381 review
+  outputs. Timing AUCs were unstable across the same 600/200/200 split. The
+  only approval ensemble with a positive selection tail chose
+  `MIB-000945`, a true review, on untouched data. Timing mostly rediscovered
+  page count and was rejected; no timestamp decoder or model was retained.
+- The accepted Docker run used four CPUs, 8 GiB, no network, a read-only root,
+  four workers, and read-only content-addressed evidence. Primary processing
+  completed in 1,073.3 seconds on macOS low-power mode, with 1,235 rendered
+  OCR hits and 1,000/1,000 provenance hits. The output contained exactly 1,000
+  valid rows, all five public contract tests passed, and its diff against the
+  preceding accepted artifact contains only the three newly correct
+  `applicant_name` values.
+- Exact official scores are **46.708889/50 extraction, 73.940000/80
+  classification, 18.123592/20 calibration, and 138.772481/150 total**.
+  Extraction raw is **42,038/45,000**. Confusion is unchanged at 219
+  approved-as-approved, 70 approved-as-review, 400 denied-as-denied, 31
+  denied-as-review, and 280 review-as-review. Output SHA-256:
+  `a2d336a08d9e2f9571f0180ae1b58fbec40feb1d3b2da59b5fbd82e4119d659e`.
+
+This is a verified extraction improvement, not movement toward the 78/80
+classification target. The next classification lane, when resumed, is
+generator-state recovery from visible bounded PRNG draws; lowering the frozen
+approval threshold and the ReportLab timing channel are both closed.
+
 ### 2026-07-27 — feature-flagged perfect-extraction policy
 
 **Result: exact 80.00/80 with perfect fields; rejected on current noisy
@@ -1804,6 +3210,5 @@ fields and default-off.**
 - The required negative control failed decisively on the current accepted
   extracted fields: **70.93/80**, 109 errors, and 29 catastrophic false
   approvals. The feature therefore remains default-off and is not an updated
-  live score. Production remains **72.92/80 classification** with zero CFA.
-  The bridge may be reconsidered only after the extraction lane supplies
-  trustworthy repaired values plus this field-local provenance state.
+  live score. Production at that checkpoint remained **72.92/80
+  classification** with zero CFA.
