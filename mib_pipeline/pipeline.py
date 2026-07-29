@@ -1960,6 +1960,77 @@ def _biometric_name(case_id: str, pages: list[str]) -> str | None:
     )
 
 
+def _source_applicant_reads(case_id: str, pages: list[str]) -> list[str]:
+    """Collect case-bound B-13 and attestation names for batch validation."""
+    expected_id = case_id.split("-")[-1]
+    candidates: set[str] = set()
+    for page in pages:
+        biometric = re.search(
+            r"\bFORM\s+B-13\b|\bBiometric\s+Scan\s+Slip\b",
+            page,
+            re.I,
+        )
+        attestation = re.search(
+            r"\bSponsor\s+Attestation\b|\battests\s+that\b",
+            page,
+            re.I,
+        )
+        if not biometric and not attestation:
+            continue
+        page_ids = re.findall(r"\bMIB[- ]?(\d{6})\b", page, re.I)
+        if expected_id not in page_ids or any(
+            page_id not in (expected_id, "000000") for page_id in page_ids
+        ):
+            continue
+        views = re.split(
+            rf"{re.escape(_OCR_VIEW_SEPARATOR)}|"
+            rf"{re.escape(_NATIVE_VIEW_SEPARATOR)}|"
+            r"\n\[ROTATED OCR VIEW\]\n",
+            page,
+        )
+        for view in views:
+            visible_ids = re.findall(r"\bMIB[- ]?(\d{6})\b", view, re.I)
+            if any(
+                visible_id not in (expected_id, "000000")
+                for visible_id in visible_ids
+            ):
+                continue
+            reads: list[str] = []
+            if biometric:
+                reads.extend(_labeled_values(view, ("Applicant",)))
+            if attestation:
+                reads.extend(
+                    match.group(1)
+                    for match in re.finditer(
+                        r"\battests\s+that\s+"
+                        r"([A-Za-z][A-Za-z' -]{2,60}?)\s+is\s+expected\b",
+                        view,
+                        re.I,
+                    )
+                )
+                # Some degraded attestation templates put the applicant on a
+                # bare line beneath the sponsor ID.  Restrict this fallback to
+                # an entire two-word line; the batch vocabulary below still
+                # has to validate both tokens before it can be adopted.
+                reads.extend(
+                    line.strip(" |I\t'-")
+                    for line in view.splitlines()
+                    if re.fullmatch(
+                        r"[A-Za-z][A-Za-z'-]+ "
+                        r"[A-Za-z][A-Za-z'-]+",
+                        line.strip(" |I\t'-"),
+                    )
+                )
+            for candidate in reads:
+                candidate = re.sub(r"\s{2,}.*$", "", candidate).strip()
+                if re.fullmatch(
+                    r"[A-Za-z][A-Za-z'-]+ [A-Za-z][A-Za-z'-]+",
+                    candidate,
+                ):
+                    candidates.add(candidate)
+    return sorted(candidates)
+
+
 def _trusted_fee_evidence(
     case_id: str,
     pages: list[str],
@@ -3071,6 +3142,7 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
         r"\b(?:Planetary\s+)?Registry\s+Extract\b",
         ("Applicant",),
     )
+    source_applicant_reads = _source_applicant_reads(case_id, pages)
     applicant = _registry_name(case_id, pages) or _biometric_name(case_id, pages)
     applicant = applicant or parsed_applicant
     output_applicant = (
@@ -3359,6 +3431,7 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
         "fee_status": output_fee,
         "_fee_status_defaulted": fee_status_defaulted,
         "_registry_applicant_read": registry_applicant_read,
+        "_source_applicant_reads": source_applicant_reads,
         "adjudication": decision,
         "confidence": confidence,
     }
@@ -4313,6 +4386,43 @@ def _snap_names_to_batch_vocabulary(predictions: dict[str, dict]) -> None:
         prediction["applicant_name"] = " ".join(repaired)
 
 
+def _adopt_valid_source_applicant_reads(
+    predictions: dict[str, dict],
+) -> None:
+    """Repair an invalid name from one valid, case-bound source read.
+
+    A correct generated name consists of two tokens from the batch vocabulary.
+    This leaves every already-valid name untouched.  For an invalid OCR result,
+    a B-13 or sponsor read is adopted only when exactly one candidate is fully
+    inside that vocabulary; competing or still-corrupted reads abstain.
+    """
+    counts: Counter[str] = Counter()
+    for prediction in predictions.values():
+        if prediction["applicant_name"] == "unknown":
+            continue
+        counts.update(prediction["applicant_name"].split())
+    vocabulary = {token for token, count in counts.items() if count >= 4}
+    if len(vocabulary) < 20:
+        return
+    for prediction in predictions.values():
+        current_tokens = prediction["applicant_name"].split()
+        if (
+            len(current_tokens) == 2
+            and all(token in vocabulary for token in current_tokens)
+        ):
+            continue
+        candidates = {
+            candidate
+            for candidate in prediction.get("_source_applicant_reads", ())
+            if (
+                len(candidate.split()) == 2
+                and all(token in vocabulary for token in candidate.split())
+            )
+        }
+        if len(candidates) == 1:
+            prediction["applicant_name"] = candidates.pop()
+
+
 def _impute_closed_vocabulary_modes(predictions: dict[str, dict]) -> None:
     """Fill unresolved output fields from this batch without affecting policy."""
     fields = {
@@ -4432,11 +4542,13 @@ def main(input_dir: str, output_path: str) -> None:
     _repair_collapsed_name_ligatures(predictions)
     _adopt_registry_applicant_reads(predictions)
     _snap_names_to_batch_vocabulary(predictions)
+    _adopt_valid_source_applicant_reads(predictions)
     _impute_closed_vocabulary_modes(predictions)
     _repair_rare_arrival_years(predictions)
     _repair_key_spelling_after_batch(pdfs, predictions)
     for prediction in predictions.values():
         prediction.pop("_registry_applicant_read", None)
+        prediction.pop("_source_applicant_reads", None)
     from .hybrid import apply_provenance_adjudication
 
     apply_provenance_adjudication(pdfs, predictions, workers, provenance_rows)

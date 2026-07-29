@@ -3116,3 +3116,67 @@ remaining clean-looking approvals from labels whose decisive fact is absent
 or contradicted by rendered evidence. Do not lower the accepted approval
 threshold or revive `MIB-000646`; a future gain needs a genuinely new
 observable channel or organizer-supplied generator semantics.
+
+### 2026-07-29 — source-bound invalid-name recovery and timestamp audit
+
+**Result: accepted. Three visibly sourced applicant names were repaired with
+zero regressions. Official extraction rose from 46.692222 to 46.708889/50;
+classification remains 73.94/80 with zero catastrophic false approvals.**
+
+- The remaining applicant errors were decomposed by reconstructing the
+  generated two-token vocabulary from the current batch. Nine non-placeholder
+  outputs contained a token outside that vocabulary. A repair may now touch
+  only such an invalid name, and only when one case-bound B-13 or sponsor
+  source supplies a unique two-token candidate already validated by the batch
+  vocabulary. Already-valid names are an explicit no-op.
+- Source collection is page- and OCR-view-scoped. It requires the active case
+  ID, rejects any foreign non-placeholder case ID, and reads only a labeled
+  B-13 applicant, the applicant in an attestation sentence, or an entire
+  two-word line on a sponsor-attestation page. The bare-line path is needed
+  for a degraded sponsor template whose label is destroyed but whose name
+  remains clear.
+- Replay over all 1,000 cached rendered packets changed exactly three names:
+  `MIB-000235 Oritan Solnax -> Oritari Solnax`,
+  `MIB-000404 Veeix Soltan -> Veemora Nexnax`, and
+  `MIB-000717 Xanix Onmora -> Xanix Orimora`. All three replacements equal
+  truth. The important counterexample `MIB-000818` retained `not active`
+  rather than adopting the independent reader's plausible but incorrect
+  `Ixomora Miratari`.
+- A broader independent-reader name overlay was rejected. Across all 1,000
+  packets, replacing the primary name with the provenance row produced six
+  gains, 52 losses, and 24 wrong-to-wrong changes. A targeted RapidOCR
+  experiment showed useful complementary glyphs for a few damaged pages, but
+  it also exposed wrong-case and intake-decoy names; no extra OCR runtime or
+  unsafe overlay was added.
+- Context-to-missing-field classifiers were re-tested using other extracted
+  fields, source-state features, and adjudication. On the fixed 1-600 fit,
+  601-800 selection, and 801-1000 untouched split, no species, home-world,
+  visa, purpose, risk, or fee imputer found a zero-regression selection tail.
+  They were rejected rather than turning judgment correlations into invented
+  field evidence.
+- A new generator timing channel recovered the exact sub-microsecond ReportLab
+  creation clock for all 1,000 PDFs from the trailer digest. Previous and next
+  generation gaps, local normalized gaps, within-second rank, file size, page
+  count, and session position were evaluated only on the remaining 381 review
+  outputs. Timing AUCs were unstable across the same 600/200/200 split. The
+  only approval ensemble with a positive selection tail chose
+  `MIB-000945`, a true review, on untouched data. Timing mostly rediscovered
+  page count and was rejected; no timestamp decoder or model was retained.
+- The accepted Docker run used four CPUs, 8 GiB, no network, a read-only root,
+  four workers, and read-only content-addressed evidence. Primary processing
+  completed in 1,073.3 seconds on macOS low-power mode, with 1,235 rendered
+  OCR hits and 1,000/1,000 provenance hits. The output contained exactly 1,000
+  valid rows, all five public contract tests passed, and its diff against the
+  preceding accepted artifact contains only the three newly correct
+  `applicant_name` values.
+- Exact official scores are **46.708889/50 extraction, 73.940000/80
+  classification, 18.123592/20 calibration, and 138.772481/150 total**.
+  Extraction raw is **42,038/45,000**. Confusion is unchanged at 219
+  approved-as-approved, 70 approved-as-review, 400 denied-as-denied, 31
+  denied-as-review, and 280 review-as-review. Output SHA-256:
+  `a2d336a08d9e2f9571f0180ae1b58fbec40feb1d3b2da59b5fbd82e4119d659e`.
+
+This is a verified extraction improvement, not movement toward the 78/80
+classification target. The next classification lane, when resumed, is
+generator-state recovery from visible bounded PRNG draws; lowering the frozen
+approval threshold and the ReportLab timing channel are both closed.
