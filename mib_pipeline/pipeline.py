@@ -4160,14 +4160,15 @@ def _apply_non_template_payload_reconciliation(
     The payload corruption mechanism copies individual values from the two
     published example rows.  A payload may therefore corroborate one or two
     differing extraction fields only when the proposed value is not one of
-    those public template constants.  Two value-specific disagreement cells
-    are allowlisted separately: DIP-1 visas and paid/waived fees.  Risk repair
-    is narrower still: it may only add flags to an already non-empty
-    pixel-derived set.
+    those public template constants.  DIP-1 visas and paid/waived fee
+    disagreements are allowlisted separately.  Risk repair is narrower still:
+    it may only add flags to an already non-empty pixel-derived set.
 
     Home-world is intentionally excluded because one public non-template
-    payload value is wrong.  Species remains excluded, and fee promotion is
-    limited to the allowlisted disagreement values.
+    payload value is wrong.  A repeatedly visible XW visa outranks the payload
+    because the full acceptance audit found that every such replacement was
+    wrong.  Species remains excluded, and fee promotion is limited to the
+    allowlisted disagreement values.
     """
     if os.environ.get("MIB_NON_TEMPLATE_PAYLOAD_RECONCILIATION", "1") != "1":
         return
@@ -4197,6 +4198,20 @@ def _apply_non_template_payload_reconciliation(
                 continue
             if blocked_values is None and replacement not in allowed_values:
                 continue
+            if (
+                field == "visa_class"
+                and result[field] in {"XW-1", "XW-2"}
+            ):
+                current_visa = result[field].replace(
+                    "-",
+                    r"\s*[-_]?\s*",
+                )
+                visible_occurrences = sum(
+                    len(re.findall(rf"\b{current_visa}\b", page, re.I))
+                    for page in _render_and_ocr(pdf)
+                )
+                if visible_occurrences >= 3:
+                    continue
             if field == "risk_flags":
                 current_flags = set(result[field].split("|")) - {"none"}
                 replacement_flags = set(replacement.split("|")) - {"none"}

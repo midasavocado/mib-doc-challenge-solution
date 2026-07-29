@@ -3208,6 +3208,55 @@ classification target. The next classification lane, when resumed, is
 generator-state recovery from visible bounded PRNG draws; lowering the frozen
 approval threshold and the ReportLab timing channel are both closed.
 
+### 2026-07-29 — branch consolidation and source-supported residual recovery
+
+**Result: accepted. Eight additional true approvals were recovered without a
+false promotion, raising official classification from 73.94 to 74.42/80.
+Source-aware visa arbitration also raised extraction to 46.74/50.**
+
+- The useful classification and extraction commits from the outstanding
+  worktrees were integrated on `main`. The retained pieces cover evidence
+  equivalence, generator-field extraction, applicant-name recovery, declared
+  purpose, fee-status reconciliation, sponsor voting, and the final residual
+  policy below. Branch references were intentionally retained as rollback
+  history; merging a branch does not delete its reference.
+- Five residual approval families are now recognized only after the existing
+  hard fences reject explicit decisions, source conflicts, visible risks, and
+  unknown fees: complete biometric/intake/registry packets with an observed
+  arrival; damaged biometric packets with active intake/registry/sponsor
+  support; damaged registry packets with active biometric/intake/sponsor
+  support and clean flags; visible XW-1 plus DIP-WAIVER packets with clean
+  flags and an observed arrival; and clean-biometric packets whose intake and
+  registry forms are both damaged without a fee conflict.
+- The five families recovered exactly `MIB-000024`, `MIB-000036`,
+  `MIB-000311`, `MIB-000486`, `MIB-000646`, `MIB-000687`, `MIB-000812`, and
+  `MIB-000976`. All eight are true approvals. Matching independent validation
+  packets contributed 15 approval controls across the families and no
+  negative control, while broader unreadable-biometric and repaired-field
+  proposals were rejected because they did not preserve that separation.
+- Non-template payload reconciliation remains extraction-only. For visa
+  disagreements, a currently extracted XW-1 or XW-2 value is preserved when
+  it appears at least three times in rendered evidence. This source rule
+  prevents eight wrong payload replacements while retaining the eleven
+  beneficial reconciliation cases found by the full audit. Payload values
+  still cannot affect adjudication.
+- The accepted organizer-contract run used the final image
+  `808b29406e92`, four CPUs, 8 GiB, no network, a read-only root, four workers,
+  and read-only content-addressed evidence. Primary processing completed in
+  1,051.5 seconds with 1,238 rendered-OCR hits and 1,000/1,000 provenance
+  hits. The submission contains exactly 1,000 valid records, and all five
+  public contract tests pass.
+- Exact scores are **46.74/50 extraction, 74.42/80 classification,
+  18.151061/20 calibration, and 139.311061/150 total**, with extraction raw
+  **42,066/45,000** and zero catastrophic false approvals. Confusion is 227
+  approved-as-approved, 62 approved-as-review, 400 denied-as-denied, 31
+  denied-as-review, and 280 review-as-review. Output SHA-256:
+  `9b677970fb0c9095ac15bbe0e1ee8a9468a40d12627d2755d8de8b4841212523`.
+
+This is the best fully accepted generalized checkpoint, not an 80/80 claim.
+The remaining 62 approvals and 31 denials emitted as review still lack a
+validated terminal distinction under the current evidence channels.
+
 ### 2026-07-27 — feature-flagged perfect-extraction policy
 
 **Result: exact 80.00/80 with perfect fields; rejected on current noisy

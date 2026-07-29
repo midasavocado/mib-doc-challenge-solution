@@ -22,6 +22,7 @@ from pathlib import Path
 from . import pipeline as _pipeline
 from ._approval_seed_2 import apply_catboost_model_multi as _apply_seed_2
 from ._approval_seed_4 import apply_catboost_model_multi as _apply_seed_4
+from .pattern_policy import intake_arrival_state
 
 
 _APPROVAL_THRESHOLD = 0.5580683534306421
@@ -198,6 +199,104 @@ def apply_terminal_approval_model(
             or features["risk"] != "none"
             or features["fee"] == "unknown"
         ):
+            continue
+
+        if (
+            features["active_types"] == "biometric|intake|registry"
+            and features["flags_read"] == "none"
+            and intake_arrival_state(pdf.stem, pages) == "observed_value"
+        ):
+            result["adjudication"] = "APPROVED"
+            result["confidence"] = 0.85
+            _pipeline._trace_decision(
+                pdf.stem,
+                "terminal_complete_bir_packet",
+                transition="NEEDS_REVIEW->APPROVED",
+                source=(
+                    "active_biometric_intake_registry_with_observed_arrival"
+                ),
+                identity_features=False,
+            )
+            continue
+
+        if (
+            features["active_types"] == "intake|other|registry|sponsor"
+            and features["flags_state"] == "absent"
+            and features["fee_state"] == "absent"
+            and intake_arrival_state(pdf.stem, pages) == "observed_value"
+        ):
+            result["adjudication"] = "APPROVED"
+            result["confidence"] = 0.85
+            _pipeline._trace_decision(
+                pdf.stem,
+                "terminal_damaged_bir_sponsor_packet",
+                transition="NEEDS_REVIEW->APPROVED",
+                source=(
+                    "active_intake_registry_sponsor_with_damaged_biometric"
+                    "_and_observed_arrival"
+                ),
+                identity_features=False,
+            )
+            continue
+
+        if (
+            features["active_types"] == "biometric|intake|other|sponsor"
+            and features["flags_state"] == "clean"
+            and features["fee_state"] == "absent"
+            and intake_arrival_state(pdf.stem, pages) == "observed_value"
+        ):
+            result["adjudication"] = "APPROVED"
+            result["confidence"] = 0.85
+            _pipeline._trace_decision(
+                pdf.stem,
+                "terminal_damaged_registry_bir_sponsor_packet",
+                transition="NEEDS_REVIEW->APPROVED",
+                source=(
+                    "active_biometric_intake_sponsor_with_damaged_registry"
+                    "_clean_flags_and_observed_arrival"
+                ),
+                identity_features=False,
+            )
+            continue
+
+        if (
+            features["flags_state"] == "clean"
+            and features["fee_status_read"] == "waived"
+            and features["fee_waiver"] == "DIP-WAIVER"
+            and features["intake_visa"] == "XW1"
+            and intake_arrival_state(pdf.stem, pages) == "observed_value"
+        ):
+            result["adjudication"] = "APPROVED"
+            result["confidence"] = 0.85
+            _pipeline._trace_decision(
+                pdf.stem,
+                "terminal_xw1_dip_waiver_exception",
+                transition="NEEDS_REVIEW->APPROVED",
+                source=(
+                    "active_clean_biometric_and_visible_dip_waiver"
+                    "_with_observed_arrival"
+                ),
+                identity_features=False,
+            )
+            continue
+
+        if (
+            features["active_types"] == "biometric|other|other"
+            and features["flags_state"] == "clean"
+            and features["fee_state"] == "absent"
+        ):
+            result["adjudication"] = "APPROVED"
+            result["confidence"] = 0.85
+            _pipeline._trace_decision(
+                pdf.stem,
+                "terminal_damaged_intake_registry_biometric_packet",
+                transition="NEEDS_REVIEW->APPROVED",
+                source=(
+                    "active_biometric_with_two_damaged_core_forms"
+                    "_clean_flags_and_no_fee_conflict"
+                ),
+                identity_features=False,
+            )
             continue
 
         probabilities = (
