@@ -11,6 +11,11 @@ MIT-licensed `strobl/mib-doc-solution`. Its license is retained as
 answer-key and label-selected purpose-signature channels and is used only as
 an independent visible-evidence adjudicator.
 
+The two frozen residual-approval evaluators in `mib_pipeline` were exported as
+standalone Python by CatBoost 1.2.8. CatBoost is Apache-2.0 licensed; its
+license is retained as `CatBoost-Apache-2.0.txt`. The Docker runtime does not
+install or import CatBoost.
+
 The hollow blue slash-square detector in `mib_pipeline/visible_denials.py` is
 adapted from 8090 Inc.'s public MIT-licensed `vibemarketer94/mib-doc-solution`
 at commit `499ba40798ab7d252b35e68627ee87c88ab7e4d0`. Its license is retained as

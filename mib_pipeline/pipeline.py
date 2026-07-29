@@ -4445,6 +4445,9 @@ def main(input_dir: str, output_path: str) -> None:
     # become evidence for a second adjudication transition.
     _apply_non_template_payload_reconciliation(pdfs, predictions)
     _apply_provenance_constrained_field_repair(pdfs, predictions)
+    from .terminal_approval import apply_terminal_approval_model
+
+    apply_terminal_approval_model(pdfs, predictions)
     stats = cache_stats()
     if stats:
         with _PRINT_LOCK:

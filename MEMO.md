@@ -2974,3 +2974,79 @@ does not move the classification score. The 78/80 classification target still
 requires a new positive source or a generator mechanism that transfers under
 untouched controls; the next high-risk research lane is exact global-PRNG
 call-layout recovery, not broader foreign-page reassignment.
+
+### 2026-07-29 — frozen residual approval topology model
+
+**Result: accepted. Seventeen unresolved approvals were recovered with zero
+false promotions, raising official classification from 72.92/80 to 73.94/80.**
+
+- The starting residual contained 398 emitted `NEEDS_REVIEW` cases: 87 true
+  approvals, 31 true denials, and 280 true reviews. A complete manual audit
+  confirmed that 26/31 latent denials physically lack a B-13 page and that
+  most approval targets lack a complete visible approval certificate. Blanket
+  clean-packet, page-count, sponsor-digit, and output-text rules remained
+  unsafe.
+- The first distilled decision tree looked attractive on the public slices,
+  but after all visible-finding pages were masked it promoted 101 of 840
+  independent controls: 55 approvals, 40 denials, and 6 reviews. It was
+  rejected before runtime integration. The failure confirms that short,
+  clean-looking packets are not affirmative approval evidence.
+- The accepted model uses page-type order, active/foreign source types, scoped
+  B-13 state, trusted fee tuple state, explicit-decision state, source-conflict
+  state, intake visa, a missing-field mask, low-cardinality semantic policy
+  fields, page count, PDF size, and rendered-text lengths. It excludes case
+  IDs, applicant names, sponsor IDs, arrival dates, output confidence, hidden
+  answer-key text, and participant artifacts.
+- Two CatBoost heads were fit only on residual cases 1-600 with seeds 2 and 4,
+  350 trees, depth 5, learning rate 0.035, L2 leaf regularization 8, and random
+  strength 1.5. The approval threshold
+  `0.5580683534306421` was selected on cases 601-800 under a zero-false-
+  promotion gate and then frozen. Results were 12/12 approvals in the fitted
+  slice, 3/3 in selection, and 2/2 in untouched cases 801-1000.
+- The same frozen pair and threshold were applied to 840 independently
+  generated validation controls after their visible finding pages were
+  removed from model features. It triggered zero times. This is strong
+  negative-transfer evidence, not positive validation; the model therefore
+  remains deliberately narrow and has the rollback switch
+  `MIB_TERMINAL_APPROVAL_MODEL=0`.
+- The 83 MiB CatBoost package is not a runtime dependency. CatBoost 1.2.8
+  exported each head as standalone Python with categorical hash tables
+  embedded. Native and exported probabilities matched to
+  `2.22e-16`. The two generated evaluators total 2.34 MiB and their
+  Apache-2.0 license is retained in `third_party_licenses`.
+- The final runtime transition applies only to low-confidence
+  `NEEDS_REVIEW`. Explicit decisions, source conflicts, non-empty emitted
+  risks, and unknown fees are hard fences. A firing changes only adjudication
+  to `APPROVED` and confidence to `0.85`; it cannot change an extracted field
+  or override a terminal result.
+- The official acceptance used the locked Docker image with four CPUs, four
+  workers, no network, and all 1,000 public packets. Primary processing
+  completed in 912.8 seconds; the run recorded 1,235 rendered-OCR hits and
+  1,000/1,000 provenance hits. Submission validation found 1,000 valid rows
+  with no missing, extra, duplicate, or invalid records. All five public
+  contract tests passed.
+- Two test-discovery invocations from the solution worktree failed because the
+  separate challenge kit's `scripts` package was not on `sys.path`. The
+  corrected command runs discovery from the challenge-kit root; all five tests
+  pass. No test source changed.
+- Colima initially stalled after guest boot because the inherited macOS
+  `SSH_AUTH_SOCK` hung while OpenSSH queried the agent. QEMU, VZ, and a second
+  profile all reproduced the symptom. Restarting the acceptance profile with
+  `SSH_AUTH_SOCK` unset completed SSH, Docker-socket forwarding, and the
+  official run without deleting a profile or cache.
+- The exact accepted-output diff contains 17 objects and only the
+  `adjudication` and `confidence` fields. Every transition is a true
+  `NEEDS_REVIEW -> APPROVED`; extraction is byte-for-field unchanged.
+  Confusion is now 219 approved-as-approved, 70 approved-as-review, 400
+  denied-as-denied, 31 denied-as-review, and 280 review-as-review, with zero
+  catastrophic false approvals.
+- Official scores are **46.692222/50 extraction, 73.940000/80 classification,
+  18.123592/20 calibration, and 138.755815/150 total**. Output SHA-256:
+  `71521d4eb2e6a1b7077b6128378e00b47752f1f154ead1d0130d28feeef3e7c2`.
+
+This is an honest +1.02 classification checkpoint, not the 78/80 target. The
+remaining confusion contains 70 approvals and 31 denials still emitted as
+review. Reaching 78/80 now requires at least 68 additional correct terminal
+recoveries at the current per-case weight, with zero false approvals. The next
+work should seek complementary source recovery or a separately transferring
+generator channel rather than lower this model's threshold.

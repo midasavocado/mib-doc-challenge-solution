@@ -33,9 +33,18 @@ runtime contains no public-full-fit adjudication model or calibrator. Those
 historical artifacts were deleted because they memorized the public labels and
 were not part of the production path.
 
-Experimental classification results, including the non-identity 74.31
-out-of-fold composite and the checks that prevented its promotion, are recorded
-in `MEMO.md`. They are not represented as live runtime scores.
+A frozen two-head residual approval model may promote only low-confidence
+reviews after explicit findings, source conflicts, visible risks, and unknown
+fees have been fenced out. It uses low-cardinality policy fields and
+active/foreign page-source topology, never case IDs, names, sponsor IDs,
+arrival dates, output confidence, or hidden payloads. The heads were trained
+on cases 1-600, the threshold was selected on 601-800, and the final 801-1000
+slice was not used to fit either. Set `MIB_TERMINAL_APPROVAL_MODEL=0` to
+disable this final one-way transition.
+
+The accepted four-worker Docker run scores 73.94/80 classification with zero
+catastrophic false approvals. Full experiment history, rejected shortcuts, and
+the exact acceptance evidence are recorded in `MEMO.md`.
 
 ## Run
 
@@ -67,6 +76,8 @@ solution.py                         challenge entrypoint
 mib_pipeline/
   pipeline.py                      OCR, extraction, and adjudication pipeline
   local_cache.py                   local content-addressed evidence cache
+  terminal_approval.py             frozen residual approval gates and features
+  _approval_seed_{2,4}.py          dependency-free exported model heads
 run.sh                             container entrypoint
 Dockerfile                         offline runtime image
 ```
