@@ -3644,6 +3644,10 @@ _PUBLISHED_EXAMPLE_VALUES = {
     "declared_purpose": {"research", "diplomatic"},
     "risk_flags": {"none", "identity_conflict|sponsor_mismatch"},
 }
+_PAYLOAD_DISAGREEMENT_ALLOWLIST = {
+    "visa_class": {"DIP-1"},
+    "fee_status": {"paid", "waived"},
+}
 
 
 @lru_cache(maxsize=8192)
@@ -3919,12 +3923,14 @@ def _apply_non_template_payload_reconciliation(
     The payload corruption mechanism copies individual values from the two
     published example rows.  A payload may therefore corroborate one or two
     differing extraction fields only when the proposed value is not one of
-    those public template constants.  Risk repair is narrower still: it may
-    only add flags to an already non-empty pixel-derived set.
+    those public template constants.  Two value-specific disagreement cells
+    are allowlisted separately: DIP-1 visas and paid/waived fees.  Risk repair
+    is narrower still: it may only add flags to an already non-empty
+    pixel-derived set.
 
     Home-world is intentionally excluded because one public non-template
-    payload value is wrong.  Species and fee have no qualifying public
-    disagreement, so they are not promoted without transfer evidence.
+    payload value is wrong.  Species remains excluded, and fee promotion is
+    limited to the allowlisted disagreement values.
     """
     if os.environ.get("MIB_NON_TEMPLATE_PAYLOAD_RECONCILIATION", "1") != "1":
         return
@@ -3942,10 +3948,17 @@ def _apply_non_template_payload_reconciliation(
         if not 1 <= len(disagreements) <= 2:
             continue
         for field in disagreements:
-            if field not in _PUBLISHED_EXAMPLE_VALUES:
+            blocked_values = _PUBLISHED_EXAMPLE_VALUES.get(field)
+            allowed_values = _PAYLOAD_DISAGREEMENT_ALLOWLIST.get(field, set())
+            if blocked_values is None and not allowed_values:
                 continue
             replacement = claimed[field]
-            if replacement in _PUBLISHED_EXAMPLE_VALUES[field]:
+            if (
+                replacement in (blocked_values or set())
+                and replacement not in allowed_values
+            ):
+                continue
+            if blocked_values is None and replacement not in allowed_values:
                 continue
             if field == "risk_flags":
                 current_flags = set(result[field].split("|")) - {"none"}

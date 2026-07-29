@@ -2757,3 +2757,65 @@ changed.**
 - The exact timestamp is therefore useful forensic metadata, not a hidden
   per-PDF generator seed. No timestamp decoder, seed table, experiment file,
   or model was retained.
+
+### 2026-07-29 — judgment-constrained field reconciliation
+
+**Result: accepted. Ten remaining payload disagreements were reconciled
+without changing adjudication, raising official extraction from
+46.638889/50 to 46.687778/50. Classification remains 72.92/80 with zero
+catastrophic false approvals.**
+
+- Reverse use of the frozen judgment was kept deliberately weak. An
+  `APPROVED` decision can prove that an emitted `unpaid` fee is inconsistent,
+  but it cannot by itself distinguish `paid` from `waived`; no field is filled
+  from judgment alone. Instead, the judgment audit reopened only disagreements
+  backed by one fully validated structured payload and only for two
+  value-specific cells: a claimed `DIP-1` visa, or a claimed `paid`/`waived`
+  fee. The payload decision remains ignored and cannot change classification.
+- On the previously accepted 1,000-case artifact, the rule changed exactly ten
+  cells: four visas to `DIP-1` and six fees to `paid` or `waived`. All ten
+  replacements exactly matched truth, none broke an exact value, and there
+  were no decision or confidence changes. Cases 1-500 and 501-1000 each
+  contributed five exact repairs.
+- The broader negative-cell audit remained important. The remaining payload
+  applicant, sponsor, purpose, and risk disagreements were wrong or mixed and
+  stayed excluded. Across all 216 public payloads, 212 hidden fee cells were
+  correct, but the four incorrect cells were also plausible `paid` values; the
+  runtime rule therefore depends on the narrow disagreement grammar rather
+  than treating payload fee text as generally authoritative.
+- The separate 5,000-document outputs contained 13 prospective `DIP-1` visa
+  disagreements and 64 prospective `paid`/`waived` fee disagreements. Those
+  are transfer opportunities, not labeled correctness evidence; the existing
+  `MIB_NON_TEMPLATE_PAYLOAD_RECONCILIATION=0` flag remains the rollback
+  boundary.
+- A fresh organizer-contract run used four CPUs, 8 GiB, no network, a
+  read-only root filesystem, and all 1,000 public packets. It completed the
+  primary pass in 910.0 seconds with 1,010/1,010 rendered-OCR cache hits and
+  1,000/1,000 provenance cache hits. Submission validation found 1,000 valid
+  records with no missing, extra, duplicate, or invalid rows; all five public
+  contract tests passed.
+- Official scores are **46.687778/50 extraction, 72.920000/80
+  classification, 18.077861/20 calibration, and 137.685639/150 total**, with
+  zero catastrophic false approvals. Extraction raw rose from 41,975 to
+  42,019 out of 45,000. The exact accepted-output diff contains only the ten
+  intended newly correct cells. Output SHA-256:
+  `ed48b18951869480511165699242c541deab6eb7e125477d7687af83d414ac97`.
+- Exact-collision analysis did not find an intrinsically impossible labeled
+  pair. The only identical low-field tuple among unresolved outputs was
+  `MIB-000236` (approval) versus `MIB-000342` (review); the latter has a
+  visible manual `Finding: NEEDS_REVIEW` page and blue review stamp, so
+  evidence provenance separates them. Five opposite A/D truth-policy
+  collisions also separated once sponsor or arrival date was restored. All
+  nine-field truth rows are unique.
+- A separate damage-texture classifier was rejected before public promotion.
+  It removed every visible `Finding:` page and every detected payload, then
+  trained a small page-image CNN on 692 independently labeled validation
+  controls. Chronological held-out accuracy was 0.281 versus a 0.396 majority
+  baseline, and neither approval nor denial produced a preregistered
+  90%-precision threshold. No classifier, pixel cache, or generated test file
+  was retained.
+
+The accepted classification score is still 72.92/80. The remaining 118
+terminal misses still require positive source recovery or a new generator
+channel that survives independent controls; a clean-looking output row is not
+approval provenance.
