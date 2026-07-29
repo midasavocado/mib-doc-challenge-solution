@@ -2458,3 +2458,70 @@ classification score with zero catastrophic false approvals.**
   forward phase rule. The existing perfect-field policy still scored only
   70.93/80 with 29 CFAs on noisy emitted fields. All three routes were
   rejected.
+
+### 2026-07-28 — cross-packet, reverse-field, and document-embedding audit
+
+**Result: no transferable classification change survived. Runtime source was
+returned exactly to the accepted 72.92/80 checkpoint.**
+
+- A full 1,000-case host run tested a provisional extraction-only
+  `primary paid + independent waived -> waived` reconciliation. Low Power Mode
+  made this an invalid acceptance run: four Tesseract page calls timed out and
+  the output drifted on many unrelated fields. It scored **46.46/50
+  extraction, 72.89/80 classification, 18.02/20 calibration, 137.37/150
+  total, and one catastrophic false approval**. The intended rule itself was
+  isolated by replaying the accepted artifact: six fee fields became exact,
+  none broke, extraction moved **46.333333 -> 46.36**, and decisions and
+  confidence were unchanged. All five cached full-5,000 engines emitted
+  identical fee values, however, so they provided no independent
+  primary-versus-alternate transfer opportunity. The truth-selected fee rule
+  was therefore reverted rather than promoted.
+- The hypothesis that another case's missing page was filed in the wrong PDF
+  was tested on every packet previously flagged with a foreign OCR case id.
+  Targeted OCR found 83 apparent foreign-id pages across 73 packets. Among the
+  72 pages whose apparent target existed in train, 47 matched the containing
+  case's fields more strongly, zero matched the apparent target more strongly,
+  and 25 tied. The sole page with two apparent-target field matches had three
+  containing-case matches. These are primarily damaged-id reads and deliberate
+  adjacent-applicant pages, not shuffled answer pages.
+- A context checksum then rebound only pages agreeing with the containing case
+  on at least two independent fields. Thirty-one cases qualified. Seven gained
+  scoped risk reads, but all seven were already correctly adjudicated by other
+  evidence. A deliberately broad replay over the 27 unresolved review cases
+  changed five; every one was truly `NEEDS_REVIEW`, and one would have become a
+  false approval. Cross-packet routing and broad scope correction were rejected.
+- The same context checksum repaired one missed applicant name and no
+  decision-critical field. Other reverse-field rules were rejected: MED-3/B-13
+  absence was mixed, decorative image/seal assets were mixed on both train and
+  the 5,000 controls, and judgment-to-field filling outside the six provisional
+  fee cases created contradictions or defaults rather than evidence.
+- A field imputer was frozen on the independently cached 5,000 outputs and
+  evaluated only afterward on the labeled 1,000. It excluded case ids and used
+  the other extracted fields, applicant-name morphology, sponsor digits, and
+  cheap PDF structure. On the accepted 398-review residual, hard-risk AUC was
+  **0.381**, unpaid-fee AUC **0.520**, stale-arrival AUC **0.531**, and visa
+  accuracy **42.2%**. Its top 20 hard-risk predictions contained zero hard-risk
+  cases. The missing generator fields behave independently enough that
+  contextual imputation does not recover them.
+- A compact MiniLM document embedding stripped case ids, exact sponsor ids,
+  dates, applicant names, and hidden-key language, then represented all cached
+  OCR pages by form type. Repeated five-fold ExtraTrees recovered only about
+  5-12 approval promotions at safe settings, worth roughly
+  **+0.15 to +0.62/80** depending on split. A stronger TabPFN stack over the
+  same embeddings plus structured provenance reached **+0.71/80** at its
+  aggressive setting but created 6-7 catastrophic false approvals; its safe
+  settings retained only **+0.15 to +0.22/80**. Neither model found residual
+  denials, and both were rejected.
+- Biometric confidence percentage was tested as a new visible risk proxy.
+  Across 303 readable slips, clean, hard-risk, and review-only cohorts all
+  occupied essentially the same 65-93% range. Of 95 accepted review outputs
+  with a readable percentage, the three latent denials were unpaid-fee cases
+  with no hard risk. The remaining hard-risk misses have no readable B-13 page,
+  so this channel cannot recover them.
+- The organizer's public `main` Git history contains only the initial challenge
+  release and two documentation edits; no deleted generator source, tags, or
+  unreachable objects were present. The original public data ZIP likewise
+  contains only train PDFs, validation PDFs, labels, and manifests.
+- All experiments were ephemeral. The provisional fee source change was
+  reversed, no model or generator artifact was added, and the working tree was
+  clean before this documentation entry.
