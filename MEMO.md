@@ -3050,3 +3050,69 @@ review. Reaching 78/80 now requires at least 68 additional correct terminal
 recoveries at the current per-case weight, with zero false approvals. The next
 work should seek complementary source recovery or a separately transferring
 generator channel rather than lower this model's threshold.
+
+### 2026-07-29 — post-73.94 provenance, control, and generator audit
+
+**Result: no complementary transition survived untouched evidence. Runtime
+source and the accepted 73.94/80 classification checkpoint are unchanged.**
+
+- A second audit covered all 398 review outputs in five non-overlapping public
+  slices. The residual was 87 approvals, 31 denials, and 280 true reviews
+  before the accepted approval model; that model leaves 70 approvals and 31
+  denials unresolved. Of the original 31 latent denials, 24 require a hidden
+  hard risk, six require a hidden unpaid fee, and one requires hidden
+  `TRANSIT-7`. Twenty-six physically lack a B-13 page. The remaining five do
+  not visibly establish their decisive denial; `MIB-000865` visibly says
+  `XW-2` while its truth is `TRANSIT-7`.
+- A corpus-wide page-owner join looked for sources misplaced into another
+  public packet. Requiring two OCR views to agree on a foreign case ID found
+  only three strong foreign pages, and only one pointed at a remaining
+  terminal case. That page is a deliberate decoy: its content matches the
+  container `MIB-000621`, not the printed `MIB-000821`. A stricter unique
+  multi-field owner fingerprint found zero foreign pages for any terminal
+  residual. No cross-packet relocation rule was retained.
+- A masked-control classifier was trained on the 840 independent visible-
+  finding controls after removing their finding pages. A single seed produced
+  one apparent public approval transfer, `MIB-000646`, but a three-seed
+  ensemble produced no safe approval tail. Lowering its threshold admitted
+  public denials. The seed-specific result was rejected.
+- A source-readability model added per-document-type OCR-view agreement,
+  label coverage, active/foreign ID votes, native/rendered length ratios, and
+  damage-marker features. Its selection tail contained three approvals and
+  two reviews; on untouched cases 801-1000 it selected three reviews and
+  `MIB-000870` (denied), with no approvals. It was rejected.
+- Joint public-fit plus masked-control CatBoost models, explicit conjunction
+  mining, and a 9,937-feature sanitized rendered-OCR model were tested
+  separately. IDs, names, sponsors, dates, native hidden text, and visible
+  finding pages were excluded. All three families produced positive,
+  denial-free selection tails and then admitted an untouched hidden denial:
+  either `MIB-000865` or `MIB-000898`. No model, vectorizer, rule table, or
+  generated experiment file was retained.
+- The strongest affirmative visible certificate also failed. An active B-13
+  whose rendered views read `Observed flags: none`, combined with a trusted
+  fee tuple and active intake, still includes four denials in 27 independent
+  masked controls and the untouched `MIB-000865` denial. A clean B-13 is not
+  proof when the benchmark's decisive visa truth contradicts the visible
+  intake.
+- A per-case `random.Random(base + case_number)` hypothesis was tested using
+  the complete 12-root by 12-suffix name grammar. No base through one million
+  reproduced the first two generated names, even when the unknown prefix and
+  suffix list order was inferred as a bijection. Common integer, string,
+  case-ID, and SHA-derived seed forms also failed. This complements the
+  earlier five-million global-seed falsification; no useful conventional seed
+  decoder was found.
+- The hidden answer-key polarity channel was exhaustively re-audited. Its
+  structured policy/claim pairs remain perfectly systematic across public
+  fit, selection, untouched, and 840 independent controls, but the existing
+  `_apply_hidden_negative_policy` already consumes them. Every one of the 101
+  remaining terminal mistakes has no validated payload. Those residuals also
+  contain no raw-text objection, barcode directive, embargo notice, sample
+  denial, or manual finding.
+
+These failures agree on the same boundary: source topology, OCR damage,
+low-cardinality policy fields, and adversarial payload polarity have now been
+tested in both learned and explicit forms. They do not distinguish the
+remaining clean-looking approvals from labels whose decisive fact is absent
+or contradicted by rendered evidence. Do not lower the accepted approval
+threshold or revive `MIB-000646`; a future gain needs a genuinely new
+observable channel or organizer-supplied generator semantics.
