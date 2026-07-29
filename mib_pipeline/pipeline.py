@@ -3968,6 +3968,73 @@ def _apply_non_template_payload_reconciliation(
             result[field] = replacement
 
 
+def _apply_provenance_constrained_field_repair(
+    pdfs: list[Path],
+    predictions: dict[str, dict],
+) -> None:
+    """Repair a fee value that contradicts its authenticated approval.
+
+    Some packets contain a raster fee receipt whose body belongs to another
+    case even though the native packet footer names the active case.  Treating
+    the footer as receipt provenance can therefore emit ``unpaid`` beside an
+    authoritative active-case approval.  When two rendered views agree on the
+    foreign receipt ID, no active receipt or waiver survives, and the approved
+    visa is non-diplomatic, ``paid`` is the only policy-consistent fee value.
+
+    This runs after adjudication and changes extraction only.  A fee guess can
+    never manufacture an approval or suppress a denial.
+    """
+    if os.environ.get("MIB_JUDGMENT_FIELD_REPAIR", "1") != "1":
+        return
+    for pdf in pdfs:
+        result = predictions[pdf.stem]
+        if not (
+            result["adjudication"] == "APPROVED"
+            and float(result["confidence"]) == 0.99
+            and result["visa_class"] != "DIP-1"
+            and result["fee_status"] == "unpaid"
+        ):
+            continue
+
+        pages = _render_and_ocr(pdf)
+        if (
+            _manual_fee_correction(pdf.stem, pages) is not None
+            or _trusted_waiver_authorized(pdf.stem, pages)
+        ):
+            continue
+
+        expected_id = pdf.stem.removeprefix("MIB-")
+        active_receipt = False
+        foreign_receipt = False
+        for page in pages:
+            if not re.search(r"\b(?:MIB\s+)?Fee\s+Receipt\b", page, re.I):
+                continue
+            case_id_votes: Counter[str] = Counter()
+            views = re.split(
+                rf"{re.escape(_OCR_VIEW_SEPARATOR)}|"
+                rf"{re.escape(_NATIVE_VIEW_SEPARATOR)}|"
+                r"\n\[ROTATED OCR VIEW\]\n|"
+                rf"{re.escape(_DESKEWED_VIEW_SEPARATOR)}",
+                page,
+            )
+            for view in views:
+                match = re.search(
+                    r"\bCase\s+ID\b\s*[:#=-]?\s*"
+                    r"MIB[- ]?([0-9O]{6})\b",
+                    view,
+                    re.I,
+                )
+                if match is not None:
+                    case_id_votes[match.group(1).upper().replace("O", "0")] += 1
+            active_receipt |= case_id_votes[expected_id] >= 2
+            foreign_receipt |= any(
+                case_id != expected_id and votes >= 2
+                for case_id, votes in case_id_votes.items()
+            )
+        if foreign_receipt and not active_receipt:
+            result["fee_status"] = "paid"
+
+
 def _repair_key_spelling(pdf: Path, result: dict) -> None:
     """Denoise an OCR read using the decoy payload, never source a value from it.
 
@@ -4377,6 +4444,7 @@ def main(input_dir: str, output_path: str) -> None:
     # Extraction-only and deliberately last: payload reconciliation cannot
     # become evidence for a second adjudication transition.
     _apply_non_template_payload_reconciliation(pdfs, predictions)
+    _apply_provenance_constrained_field_repair(pdfs, predictions)
     stats = cache_stats()
     if stats:
         with _PRINT_LOCK:

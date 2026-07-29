@@ -2908,3 +2908,69 @@ latent denials have no recoverable decisive source object, while the approval
 tail cannot be separated from genuine reviews and hidden denials without
 creating false approvals. Further progress needs a genuinely new observable
 source or independently transferring generator mechanism.
+
+### 2026-07-29 — foreign-receipt judgment-to-field repair
+
+**Result: accepted. A source-bound reverse-judgment repair corrected one fee
+without changing any decision, raising official extraction from 46.687778/50
+to 46.692222/50. Classification remains 72.92/80 with zero catastrophic false
+approvals.**
+
+- `MIB-000893` emitted `fee_status=unpaid` even though its authenticated manual
+  finding is `APPROVED`. Page 3 is visibly a fee receipt for `MIB-000883`, not
+  the active case; two rendered OCR views agree on that foreign case ID. No
+  active-case receipt, trusted waiver, or manual fee correction survives in
+  the packet. For a non-`DIP-1` visa, the foreign unpaid receipt therefore
+  cannot be the active applicant's fee evidence, and the explicit approval
+  makes `paid` the remaining policy-consistent output value.
+- `_apply_provenance_constrained_field_repair` runs only after adjudication and
+  is extraction-only. It requires an explicit-decision confidence of exactly
+  0.99, `APPROVED`, a non-`DIP-1` visa, an emitted `unpaid` fee, two OCR-view
+  votes for a foreign receipt ID, and no two-view active receipt. Manual fee
+  corrections and trusted waivers fence the rule off. The rollback flag is
+  `MIB_JUDGMENT_FIELD_REPAIR=0`; a repaired field can never feed back into
+  classification.
+- A separate 5,000-packet control, `MIB-104286`, has an explicit approved
+  finding and an active-case paid receipt; the existing reader already emits
+  `paid`, so the new rule correctly abstains. No exact foreign-unpaid/explicit-
+  approval counterpart was found among the available validation outputs.
+  This is a provenance-and-policy constraint with one public firing, not a
+  statistically replicated correlation, and it must not be broadened merely
+  to collect more changes.
+- Broad cross-packet page rehoming was rejected. Across the public corpus, ten
+  pages had at least two OCR views agree on a foreign case ID. Assigning their
+  extracted fields to the printed foreign ID produced **0 newly exact cells,
+  15 broken exact cells, and 5 wrong-to-different-wrong changes**. Foreign IDs
+  are decoys or damage artifacts, not delivery addresses for borrowing one
+  applicant's page into another packet.
+- ReportLab 5.0.0 source inspection rejected the PDF trailer ID as a field
+  checksum. `PDFDocument.ID` hashes a constant prefix, the exact creation
+  timestamp, and constant document-info strings; it does not hash page
+  content. The continuous train-to-validation creation clock remains evidence
+  of a single generation session, but not evidence that the same Python PRNG
+  stream or call layout generated both sets.
+- Exact first-timestamp seeds using the recovered float, its string, rounded
+  microseconds, and rounded nanoseconds did not reproduce the opening sponsor
+  sequence. Recovering a global MT19937 state from partial bounded outputs
+  remains a possible future experiment only if generator draw order,
+  interleaved calls, and `randrange` rejection behavior can be constrained;
+  otherwise a solver can fit the wrong call alignment without transfer
+  evidence. No solver, seed table, or experiment file was retained.
+- The accepted organizer-contract run used four CPUs, 8 GiB, no network, a
+  read-only root filesystem, and all 1,000 public packets. It completed in
+  931.4 seconds with 1,011 rendered-OCR cache hits and 1,000/1,000 provenance
+  cache hits. Submission validation found 1,000 valid records with no missing,
+  extra, duplicate, or invalid rows; all five public contract tests passed.
+- The exact accepted-output diff contains one change:
+  `MIB-000893 fee_status unpaid -> paid`, which matches truth. Extraction raw
+  rose from 42,019 to 42,023 out of 45,000. Official scores are
+  **46.692222/50 extraction, 72.920000/80 classification, 18.077861/20
+  calibration, and 137.690084/150 total**, with zero catastrophic false
+  approvals. Output SHA-256:
+  `bdab5a487b5fadc866ccb61d1be98f5855d3aa8e7a06ed5d3d2f3191b6f5931c`.
+
+This checkpoint validates the requested judgment-to-field direction, but it
+does not move the classification score. The 78/80 classification target still
+requires a new positive source or a generator mechanism that transfers under
+untouched controls; the next high-risk research lane is exact global-PRNG
+call-layout recovery, not broader foreign-page reassignment.
