@@ -4571,9 +4571,15 @@ def _adopt_valid_source_applicant_reads(
     """Repair an invalid name from one valid, case-bound source read.
 
     A correct generated name consists of two tokens from the batch vocabulary.
-    This leaves every already-valid name untouched.  For an invalid OCR result,
-    a B-13 or sponsor read is adopted only when exactly one candidate is fully
-    inside that vocabulary; competing or still-corrupted reads abstain.
+    For an invalid OCR result, a B-13 or sponsor read is adopted only when
+    exactly one candidate is fully inside that vocabulary; competing or
+    still-corrupted reads abstain.
+
+    An already-valid name remains untouched except when a direct terminal note
+    makes one unique case-bound source decisive: a signed approval paired with
+    its attestation, or an identity-conflict review whose attestation identifies
+    the active applicant.  This is extraction-only; the repair runs after the
+    packet has made its primary decision and never changes adjudication.
     """
     counts: Counter[str] = Counter()
     for prediction in predictions.values():
@@ -4585,11 +4591,6 @@ def _adopt_valid_source_applicant_reads(
         return
     for prediction in predictions.values():
         current_tokens = prediction["applicant_name"].split()
-        if (
-            len(current_tokens) == 2
-            and all(token in vocabulary for token in current_tokens)
-        ):
-            continue
         candidates = {
             candidate
             for candidate in prediction.get("_source_applicant_reads", ())
@@ -4598,6 +4599,24 @@ def _adopt_valid_source_applicant_reads(
                 and all(token in vocabulary for token in candidate.split())
             )
         }
+        if (
+            len(current_tokens) == 2
+            and all(token in vocabulary for token in current_tokens)
+        ):
+            trusted_terminal_source = (
+                float(prediction["confidence"]) == 0.99
+                and (
+                    prediction["adjudication"] == "APPROVED"
+                    or (
+                        prediction["adjudication"] == "NEEDS_REVIEW"
+                        and "identity_conflict"
+                        in str(prediction["risk_flags"]).split("|")
+                    )
+                )
+            )
+            if trusted_terminal_source and len(candidates) == 1:
+                prediction["applicant_name"] = candidates.pop()
+            continue
         if len(candidates) == 1:
             prediction["applicant_name"] = candidates.pop()
 
@@ -4755,6 +4774,9 @@ def main(input_dir: str, output_path: str) -> None:
     _repair_rare_name_tokens(predictions)
     _repair_collapsed_name_ligatures(predictions)
     _adopt_registry_applicant_reads(predictions)
+    # Give an unambiguous case-bound source first refusal before a damaged
+    # token is snapped onto a different, merely plausible vocabulary entry.
+    _adopt_valid_source_applicant_reads(predictions)
     _snap_names_to_batch_vocabulary(predictions)
     _adopt_valid_source_applicant_reads(predictions)
     _replace_unsupported_name(predictions)

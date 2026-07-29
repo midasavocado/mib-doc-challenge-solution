@@ -3309,6 +3309,50 @@ review have no validated terminal distinction in the visible evidence; the
 tested higher-scoring shortcuts inferred absent facts or reused one source as
 two.
 
+### 2026-07-29 — source-first applicant-name arbitration
+
+**Result: accepted. Three additional applicant names were repaired from
+case-bound visible sources with zero regressions. Extraction rose from
+46.74 to 46.756667/50; classification remains 75.08/80 with zero catastrophic
+false approvals.**
+
+- Batch arbitration now gives one unambiguous, vocabulary-valid B-13 or
+  attestation read first refusal before snapping a damaged token onto a merely
+  plausible batch-vocabulary entry. This recovers `MIB-000093`
+  (`Xandane Tekrix -> Aridane Tekrix`).
+- An already-valid name remains fenced except when a confidence-0.99 direct
+  terminal note and one unique active-case source settle the identity. This
+  recovers `MIB-000657` (`Solmora Qorix -> Veerix Xanvoss`) from its
+  identity-conflict packet and `MIB-000984`
+  (`Miraquell Miraix -> Xanmora Aririx`) from its signed approval packet.
+  The rule is extraction-only and runs after the primary decision; it cannot
+  change adjudication.
+- The completed output diff against the accepted 75.08 artifact contains
+  exactly those three `applicant_name` cells. All three replacements equal
+  truth, no exact cell regressed, and every adjudication and confidence value
+  is byte-for-byte unchanged.
+- A final independent-control denial model was also rejected. Its threshold
+  was frozen after a positive chronological control holdout, then lost
+  0.96 classification points on the public residual domain by routing
+  14 reviews and five approvals to denial while recovering only two denials.
+  No model, threshold, or generated test artifact was retained.
+- The accepted organizer-contract run used image `3551893be418`, four CPUs,
+  8 GiB, no network, a read-only root, four workers, and read-only
+  content-addressed evidence. Primary processing completed in 1,087.7 seconds
+  with 1,238 rendered-OCR hits and 1,000/1,000 provenance hits. The output
+  contains exactly 1,000 valid records, and all five public contract tests
+  pass.
+- Exact scores are **46.756667/50 extraction, 75.08/80 classification,
+  18.228477/20 calibration, and 140.065143/150 total**, with extraction raw
+  **42,081/45,000**, zero catastrophic false approvals, and unchanged
+  confusion: 238 approved-as-approved, 51 approved-as-review,
+  400 denied-as-denied, 31 denied-as-review, and 280 review-as-review.
+  Output SHA-256:
+  `37452b6fb6c802966163bab5f396caeb09acd5153e6d415c1ce8d5a37fec28cd`.
+
+This checkpoint improves extraction only. The exhaustive terminal audit still
+does not justify changing any of the remaining 82 conservative review routes.
+
 ### 2026-07-27 — feature-flagged perfect-extraction policy
 
 **Result: exact 80.00/80 with perfect fields; rejected on current noisy
