@@ -3257,6 +3257,58 @@ This is the best fully accepted generalized checkpoint, not an 80/80 claim.
 The remaining 62 approvals and 31 denials emitted as review still lack a
 validated terminal distinction under the current evidence channels.
 
+### 2026-07-29 — accepted source-corroborated residual approvals
+
+**Result: accepted. Eleven additional true approvals were recovered without
+changing an extraction field or creating a catastrophic false approval,
+raising official classification from 74.42 to 75.08/80.**
+
+- The added terminal families require active-case rendered support after the
+  existing hard fences reject explicit decisions, source conflicts, visible
+  risks, unknown fees, and confidence at or above 0.80. They cover complete
+  labeled core fields in a damaged intake/sponsor packet; a four-page MED-3
+  packet with sponsor ID labeled in two sources; XW-2 visa and sponsor
+  agreement across intake and sponsor pages; a visible waiver in a
+  fee/intake/sponsor packet; and a clean five-page
+  biometric/intake/registry/sponsor packet with two labeled arrival sources
+  and intake/sponsor visa agreement.
+- The exact rescued cases are `MIB-000053`, `MIB-000055`, `MIB-000057`,
+  `MIB-000165`, `MIB-000182`, `MIB-000314`, `MIB-000454`, `MIB-000513`,
+  `MIB-000729`, `MIB-000786`, and `MIB-000821`. All eleven are true
+  approvals. The output diff against the preceding accepted artifact changes
+  only `adjudication` and `confidence` on those rows.
+- Eleven independent rendered controls matched the five families:
+  `MIB-100022`, `MIB-100198`, `MIB-100465`, `MIB-100639`, `MIB-100850`,
+  `MIB-101921`, `MIB-101956`, `MIB-103761`, `MIB-102107`, `MIB-102759`, and
+  `MIB-104077`. All eleven are approvals; no denial or review control matched.
+- A deeper one- through eight-condition residual scan did not justify another
+  rule. Apparent approval separation based on two OCR copies of
+  `Observed flags: none` was rejected because both copies read the same
+  source, not independent evidence. `MIB-000865` was also rejected as a
+  denial shortcut: its visible intake says `XW-2`, while the truth-only
+  `TRANSIT-7` value is not recoverable from the packet. Other denial
+  conjunctions predicted hidden fee or risk facts from damage topology and
+  were rejected as generator memorization.
+- The accepted organizer-contract run used image
+  `9156a7111f300cb0728d3dc44cd46d77c10fbf6c6925b9526d3b1df2f48cc1a8`,
+  four CPUs, 8 GiB, no network, a read-only root, four workers, and read-only
+  content-addressed evidence. Primary processing completed in 1,139.0 seconds
+  with 1,238 rendered-OCR hits and 1,000/1,000 provenance hits. The submission
+  contains exactly 1,000 valid records, all five public contract tests pass,
+  and the accepted output exactly matches the frozen terminal replay.
+- Exact scores are **46.74/50 extraction, 75.08/80 classification,
+  18.228477/20 calibration, and 140.048477/150 total**, with extraction raw
+  **42,066/45,000** and zero catastrophic false approvals. Confusion is 238
+  approved-as-approved, 51 approved-as-review, 400 denied-as-denied, 31
+  denied-as-review, and 280 review-as-review. Output SHA-256:
+  `6d2d747ac34bb5a4405f51c1c99a05aa2cdad0978098292f62e4eeda8e1af2eb`.
+
+This is the accepted evidence-backed ceiling found in the full residual audit,
+not an 80/80 claim. The remaining 51 approvals and 31 denials emitted as
+review have no validated terminal distinction in the visible evidence; the
+tested higher-scoring shortcuts inferred absent facts or reused one source as
+two.
+
 ### 2026-07-27 — feature-flagged perfect-extraction policy
 
 **Result: exact 80.00/80 with perfect fields; rejected on current noisy

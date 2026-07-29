@@ -37,6 +37,19 @@ _FIELD_SENTINELS = {
     "risk_flags": "none",
     "fee_status": "unknown",
 }
+_CORE_SOURCE_LABELS = (
+    ("applicant_name", "unknown", ("APPLICANT",)),
+    ("species_code", "unknown", ("SPECIESCODE",)),
+    ("home_world", "unknown", ("HOMEWORLD",)),
+    ("visa_class", "unknown", ("VISACLASS",)),
+    ("sponsor_id", "SPN-0000", ("SPONSORID",)),
+    ("arrival_date", "1900-01-01", ("ARRIVALDATE",)),
+    (
+        "declared_purpose",
+        "unknown",
+        ("DECLAREDPURPOSE", "PURPOSE"),
+    ),
+)
 _PAGE_TYPES = (
     ("fee", re.compile(r"Fee\s+Receipt", re.I)),
     (
@@ -65,6 +78,82 @@ def _page_type(page: str) -> str:
         if pattern.search(page):
             return name
     return "other"
+
+
+def _compact_source_text(value: object) -> str:
+    return re.sub(r"[^A-Z0-9]+", "", str(value).upper())
+
+
+def _active_source_support(
+    case_id: str,
+    result: dict,
+    pages: list[str],
+) -> dict[str, object]:
+    """Summarize where emitted values remain visible on active-case pages."""
+
+    active_pages = [
+        (_page_type(page), _compact_source_text(page))
+        for page in pages
+        if _pipeline._page_bound_to_active_case(case_id, page)
+    ]
+    labeled_core: list[str] = []
+    visible_types: dict[str, set[str]] = {}
+    labeled_pages: dict[str, int] = {}
+    visible_pages: dict[str, int] = {}
+
+    for field, sentinel, labels in _CORE_SOURCE_LABELS:
+        value = result[field]
+        value_key = _compact_source_text(value)
+        supported_types: set[str] = set()
+        supported_pages = 0
+        field_labeled_pages = 0
+        if value != sentinel and len(value_key) >= 3:
+            for page_type, page_key in active_pages:
+                if value_key not in page_key:
+                    continue
+                supported_types.add(page_type)
+                supported_pages += 1
+                field_is_labeled = False
+                for label in labels:
+                    label_position = page_key.find(label)
+                    while label_position >= 0:
+                        value_window = page_key[
+                            label_position + len(label):
+                            label_position + len(label) + 180
+                        ]
+                        if value_key in value_window:
+                            field_is_labeled = True
+                            break
+                        label_position = page_key.find(
+                            label,
+                            label_position + 1,
+                        )
+                    if field_is_labeled:
+                        break
+                if field_is_labeled:
+                    field_labeled_pages += 1
+        visible_types[field] = supported_types
+        visible_pages[field] = supported_pages
+        labeled_pages[field] = field_labeled_pages
+        labeled_core.append("1" if field_labeled_pages else "0")
+
+    fee_value = result["fee_status"]
+    fee_key = _compact_source_text(fee_value)
+    visible_types["fee_status"] = {
+        page_type
+        for page_type, page_key in active_pages
+        if fee_value != "unknown"
+        and len(fee_key) >= 3
+        and fee_key in page_key
+    }
+
+    return {
+        "active_page_count": len(active_pages),
+        "labeled_core_mask": "".join(labeled_core),
+        "visible_types": visible_types,
+        "visible_pages": visible_pages,
+        "labeled_pages": labeled_pages,
+    }
 
 
 def _feature_values(
@@ -199,6 +288,113 @@ def apply_terminal_approval_model(
             or features["risk"] != "none"
             or features["fee"] == "unknown"
         ):
+            continue
+
+        source_support = _active_source_support(
+            pdf.stem,
+            result,
+            pages,
+        )
+
+        if (
+            features["types"] == "intake|other|sponsor"
+            and source_support["labeled_core_mask"] == "1111111"
+            and source_support["visible_pages"]["species_code"] == 2
+        ):
+            result["adjudication"] = "APPROVED"
+            result["confidence"] = 0.85
+            _pipeline._trace_decision(
+                pdf.stem,
+                "terminal_complete_corroborated_damaged_packet",
+                transition="NEEDS_REVIEW->APPROVED",
+                source=(
+                    "seven_labeled_core_fields_and_two_source_species"
+                ),
+                identity_features=False,
+            )
+            continue
+
+        if (
+            source_support["active_page_count"] == 4
+            and features["intake_visa"] == "MED3"
+            and source_support["labeled_pages"]["sponsor_id"] == 2
+        ):
+            result["adjudication"] = "APPROVED"
+            result["confidence"] = 0.85
+            _pipeline._trace_decision(
+                pdf.stem,
+                "terminal_med3_sponsor_corroboration",
+                transition="NEEDS_REVIEW->APPROVED",
+                source="med3_intake_and_two_labeled_sponsor_sources",
+                identity_features=False,
+            )
+            continue
+
+        if (
+            result["visa_class"] == "XW-2"
+            and source_support["visible_types"]["visa_class"]
+            == {"intake", "sponsor"}
+            and source_support["visible_types"]["sponsor_id"]
+            == {"intake", "sponsor"}
+            and source_support["visible_types"]["declared_purpose"]
+            == {"sponsor"}
+        ):
+            result["adjudication"] = "APPROVED"
+            result["confidence"] = 0.85
+            _pipeline._trace_decision(
+                pdf.stem,
+                "terminal_xw2_intake_sponsor_corroboration",
+                transition="NEEDS_REVIEW->APPROVED",
+                source="intake_and_sponsor_agree_on_xw2_and_sponsor",
+                identity_features=False,
+            )
+            continue
+
+        if (
+            features["types"] == "fee|intake|sponsor"
+            and result["fee_status"] == "waived"
+            and source_support["visible_types"].get("fee_status", set())
+            == {"fee"}
+        ):
+            result["adjudication"] = "APPROVED"
+            result["confidence"] = 0.85
+            _pipeline._trace_decision(
+                pdf.stem,
+                "terminal_three_source_visible_waiver",
+                transition="NEEDS_REVIEW->APPROVED",
+                source="fee_intake_sponsor_packet_with_visible_waiver",
+                identity_features=False,
+            )
+            continue
+
+        active_type_set = set(str(features["active_types"]).split("|"))
+        if (
+            source_support["active_page_count"] == 5
+            and features["foreign_types"] == "none"
+            and features["flags_state"] == "clean"
+            and {
+                "biometric",
+                "intake",
+                "registry",
+                "sponsor",
+            }.issubset(active_type_set)
+            and source_support["labeled_pages"]["arrival_date"] == 2
+            and source_support["labeled_pages"]["visa_class"] == 2
+            and source_support["visible_types"]["visa_class"]
+            == {"intake", "sponsor"}
+        ):
+            result["adjudication"] = "APPROVED"
+            result["confidence"] = 0.85
+            _pipeline._trace_decision(
+                pdf.stem,
+                "terminal_clean_registry_sponsor_corroboration",
+                transition="NEEDS_REVIEW->APPROVED",
+                source=(
+                    "clean_biometric_two_arrival_sources_and"
+                    "_intake_sponsor_visa"
+                ),
+                identity_features=False,
+            )
             continue
 
         if (

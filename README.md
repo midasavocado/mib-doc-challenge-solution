@@ -42,7 +42,7 @@ on cases 1-600, the threshold was selected on 601-800, and the final 801-1000
 slice was not used to fit either. Set `MIB_TERMINAL_APPROVAL_MODEL=0` to
 disable this final one-way transition.
 
-The accepted four-worker Docker run scores 74.42/80 classification with zero
+The accepted four-worker Docker run scores 75.08/80 classification with zero
 catastrophic false approvals. Full experiment history, rejected shortcuts, and
 the exact acceptance evidence are recorded in `MEMO.md`.
 
