@@ -28,6 +28,8 @@ import numpy as np
 from datetime import date
 from pathlib import Path
 
+from .local_cache import cache_stats, load_json, store_json
+
 
 SPECIES = (
     "ALPHA_DRACONIAN", "ANDROMEDAN", "AQUARIAN_MANTIS", "ARCTURIAN",
@@ -77,6 +79,10 @@ _PDFIUM_TEXT_LOCK = threading.Lock()
 _OCR_VIEW_SEPARATOR = "\n[OCR VIEW 6]\n"
 _DESKEWED_VIEW_SEPARATOR = "\n[DESKEWED OCR VIEW]\n"
 _NATIVE_VIEW_SEPARATOR = "\n[PIXEL-VERIFIED NATIVE TEXT]\n"
+_RENDERED_OCR_CACHE_SCHEMA = (
+    "rendered-ocr-v1:gray180:psm11+6:pixel-native-v1:"
+    "rotated12:deskew-repair-v1"
+)
 
 
 def _trace_decision(case_id: str, event: str, **details: object) -> None:
@@ -647,6 +653,18 @@ def _pixel_verified_native_pages(
 
 
 def _render_and_ocr(pdf: Path) -> list[str]:
+    cached = load_json(
+        pdf,
+        "rendered-ocr",
+        _RENDERED_OCR_CACHE_SCHEMA,
+    )
+    if (
+        isinstance(cached, list)
+        and cached
+        and all(isinstance(page, str) for page in cached)
+    ):
+        return cached
+
     with tempfile.TemporaryDirectory(prefix="mib-") as temp:
         temp_dir = Path(temp)
         prefix = temp_dir / "page"
@@ -798,6 +816,12 @@ def _render_and_ocr(pdf: Path) -> list[str]:
             if any(page_id != expected_id for page_id in deskewed_ids):
                 continue
             pages[index] += _DESKEWED_VIEW_SEPARATOR + deskewed
+        store_json(
+            pdf,
+            "rendered-ocr",
+            _RENDERED_OCR_CACHE_SCHEMA,
+            pages,
+        )
         return pages
 
 
@@ -4283,6 +4307,13 @@ def main(input_dir: str, output_path: str) -> None:
 
     apply_provenance_adjudication(pdfs, predictions, workers, provenance_rows)
     _apply_hidden_negative_policy(pdfs, predictions)
+    stats = cache_stats()
+    if stats:
+        with _PRINT_LOCK:
+            summary = " ".join(
+                f"{key}={value}" for key, value in sorted(stats.items())
+            )
+            print(f"[local-cache] {summary}", file=sys.stderr, flush=True)
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w", encoding="utf-8") as handle:

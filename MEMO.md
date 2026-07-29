@@ -2525,3 +2525,51 @@ returned exactly to the accepted 72.92/80 checkpoint.**
 - All experiments were ephemeral. The provisional fee source change was
   reversed, no model or generator artifact was added, and the working tree was
   clean before this documentation entry.
+
+### 2026-07-28 — rejected sponsor-visa bridge and local evidence-cache candidate
+
+**Result: the visa recovery did not reproduce under a fresh official run and
+was reverted. A local content-addressed cache passed a bounded byte-equivalence
+test with a 3.53x warm-run speedup; it remains pending full-1,000 acceptance.**
+
+- A replay using an older independent-provenance artifact suggested eight
+  `visa_class` repairs when a sponsor attestation agreed with the alternate
+  reader. The proposed bridge reopened only reader disagreements, required an
+  active-case sponsor attestation to name the alternate visa, and rejected a
+  conflicting manual correction.
+- The organizer-contract acceptance run used 4 CPUs, 8 GiB, no network or DNS,
+  a read-only container, and all 1,000 train PDFs. All 1,000 primary reads and
+  all 1,000 fresh provenance reads completed without a case failure. The run
+  took about 84 minutes: 2,617.0 seconds for primary extraction and 2,358.7
+  seconds for provenance, plus the bounded reconciliation/output tail.
+- Fresh evidence produced **zero output changes** relative to the accepted
+  artifact. The score remained exactly **46.333333/50 extraction,
+  72.92/80 classification, 18.071825/20 calibration, 137.325158/150 total,
+  and 0 CFA**. The predictions SHA-256 remained
+  `10a00cffb7148949b855008b1ad8e079f599a6ba82cd711c9fdd18bca806c2b7`.
+  The sponsor-visa bridge was therefore removed rather than promoted.
+- The apparent replay gain was stale-reader dependence, not transferable
+  extraction. Against nine freshly recomputed cases, the older 1,000-case OCR
+  artifact matched only 7/9 rendered-page payloads and the older provenance
+  artifact matched only 6/9 final rows. Neither old artifact was imported or
+  used as current evidence.
+- A separate local-cache candidate now stores two expensive reusable products:
+  rendered/native OCR page strings before parsing, and independent provenance
+  rows before hybrid adjudication. Entries are keyed by PDF SHA-256 plus an
+  explicit extractor/settings schema, live outside Git by default at
+  `~/Library/Caches/mib-doc-challenge`, use atomic JSON writes, treat
+  corruption or an unwritable directory as a miss, and can be disabled with
+  `MIB_LOCAL_CACHE=0` or relocated with `MIB_LOCAL_CACHE_DIR`.
+- A bounded cold/warm test used nine varied disagreement and control packets.
+  The cold run took **87.69 seconds** and wrote 9 rendered-OCR plus 9 provenance
+  entries. The warm run took **24.81 seconds**, reported 9/9 hits in both
+  namespaces, skipped provenance-engine construction, and produced a
+  byte-identical JSONL output. Both outputs had SHA-256
+  `a219910a6fdb77a525e997a1227de1474b424f0d77f6cae108ca4edec6ef5a5b`.
+- The 63-second reduction from caching only nine packets confirms
+  the useful seam; targeted dynamic repair crops still run and explain the
+  warm run's remaining time. The nine verified entries were retained locally
+  (18 files, 100 KiB), while the benchmark directory was moved recoverably to
+  Trash. This checkpoint includes the cache as local performance
+  infrastructure, not as a score change or full-corpus cache acceptance; it
+  must ride the next official full-1,000 score candidate run.

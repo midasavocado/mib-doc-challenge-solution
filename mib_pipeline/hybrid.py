@@ -25,6 +25,7 @@ from provenance_engine import (
     VisibleEvidenceExtractor,
 )
 
+from .local_cache import load_json, store_json
 from .visible_denials import apply_visible_slash_denials
 
 
@@ -42,6 +43,10 @@ _REVIEW_ONLY_FLAGS = {
     "rescinded_denial",
     "sponsor_mismatch",
 }
+_PROVENANCE_CACHE_SCHEMA = (
+    "visible-provenance-v1:packet-page-markers:"
+    "pinned-calibrator:pinned-exceptions:pinned-recalibrator"
+)
 
 
 def _normalized_letters(value: str) -> str:
@@ -260,16 +265,41 @@ def compute_provenance_rows(
     Split out so the caller can use the extraction before the batch repairs run
     and the adjudication after them, without paying for the engine twice.
     """
-    processor = _processor()
     started = time.monotonic()
     rows: dict[str, dict] = {}
+    uncached: list[Path] = []
+    for pdf in pdfs:
+        cached = load_json(
+            pdf,
+            "visible-provenance",
+            _PROVENANCE_CACHE_SCHEMA,
+        )
+        if (
+            isinstance(cached, dict)
+            and cached.get("case_id") == pdf.stem
+        ):
+            rows[pdf.stem] = cached
+        else:
+            uncached.append(pdf)
+
+    if rows:
+        with _PRINT_LOCK:
+            print(
+                f"[provenance cache] {len(rows)}/{len(pdfs)} hits",
+                file=sys.stderr,
+                flush=True,
+            )
+    if not uncached:
+        return rows
+
+    processor = _processor()
     with concurrent.futures.ThreadPoolExecutor(
         max_workers=workers,
         thread_name_prefix="mib-provenance",
     ) as executor:
         futures = {
             executor.submit(processor.process_case, pdf): pdf
-            for pdf in pdfs
+            for pdf in uncached
         }
         for completed, future in enumerate(
             concurrent.futures.as_completed(futures),
@@ -277,7 +307,14 @@ def compute_provenance_rows(
         ):
             pdf = futures[future]
             try:
-                rows[pdf.stem] = future.result().to_dict()
+                row = future.result().to_dict()
+                rows[pdf.stem] = row
+                store_json(
+                    pdf,
+                    "visible-provenance",
+                    _PROVENANCE_CACHE_SCHEMA,
+                    row,
+                )
             except Exception as error:
                 with _PRINT_LOCK:
                     print(
@@ -288,7 +325,7 @@ def compute_provenance_rows(
             with _PRINT_LOCK:
                 elapsed = time.monotonic() - started
                 print(
-                    f"[provenance {completed}/{len(pdfs)}] {pdf.stem} "
+                    f"[provenance {completed}/{len(uncached)}] {pdf.stem} "
                     f"elapsed={elapsed:.1f}s "
                     f"rate={completed / max(elapsed, 0.01):.2f}/s",
                     file=sys.stderr,

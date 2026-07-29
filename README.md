@@ -53,12 +53,20 @@ The image uses CPU-only Poppler and Tesseract. The entrypoint accepts exactly:
 <input_pdf_dir> <output_predictions_path>
 ```
 
+Host runs reuse expensive rendered-page OCR and independent provenance rows
+from `~/Library/Caches/mib-doc-challenge`. Cache entries are keyed by the PDF
+content and extractor schema; unreadable, stale, or unavailable entries fall
+back to normal processing. Set `MIB_LOCAL_CACHE=0` to disable the cache or
+`MIB_LOCAL_CACHE_DIR=/path/to/cache` to relocate it. A read-only challenge
+container simply runs uncached.
+
 ## Structure
 
 ```text
 solution.py                         challenge entrypoint
 mib_pipeline/
   pipeline.py                      OCR, extraction, and adjudication pipeline
+  local_cache.py                   local content-addressed evidence cache
 run.sh                             container entrypoint
 Dockerfile                         offline runtime image
 ```
