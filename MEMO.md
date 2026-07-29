@@ -2862,3 +2862,49 @@ These tests do not prove that the generator used no PRNG; they reject the
 useful hypothesis that ordinary sponsor values expose a small, conventional
 global `random.Random` seed. Recovering hidden facts would require a different
 observable state channel, not a wider sponsor-digit superstition net.
+
+### 2026-07-29 — deleted-object and pretrained-vision audit
+
+**Result: no omitted source page or transferable portrait/page-vision rule was
+found. No runtime source or learned artifact changed.**
+
+- A local source search covered the released challenge tree, nearby work
+  directories, Desktop/Documents source files, Spotlight content matches, and
+  the original public-data ZIP. The generator source was not present. Exact
+  challenge phrases occurred only in released PDFs and derived audit text.
+  The ZIP's shuffled entry order was also rejected as a second generation
+  sequence: embedded PDF creation clocks still increase with case number, so
+  the ZIP order is filesystem/archive enumeration rather than record creation.
+- All 31 latent denials still emitted as review were scanned below the page
+  API. Every indirect object and decompressed stream was searched for its true
+  decisive risk, `unpaid`, or `TRANSIT-7` value. None appeared outside visible
+  page text. There were no unreachable `/Page` objects, annotations,
+  optional-content groups, incremental revisions, extra `%%EOF` sections, or
+  trailing payload bytes.
+- Ten initially suspicious 512x512 streams were inspected twice: as masks and
+  as their unmasked base images. They were nested Form-XObject artwork
+  (badges, registry cards, planets, scan circles, and ink blots), not deleted
+  B-13 or fee pages. Their base images contained the same colored decorative
+  glyphs visible in the rendered packet. Temporary contact sheets were moved
+  recoverably to Trash.
+- A pretrained MobileNetV3-small representation then encoded every page of the
+  398 unresolved packets while preserving document layout and portrait art.
+  The residual-only model trained on cases 1-600, selected on 601-800, and
+  tested on 801-1000. Its best untouched accuracy was 0.759 versus a 0.696
+  majority baseline, with review AUC 0.880 in one model, but no zero-CFA
+  approval threshold survived. Validation-selected denial tails produced
+  between -0.02 and 0.00 points on the untouched block.
+- Training the same representation on all 600 early cases, including 364
+  already-certain terminal packets, made the residual domain shift explicit:
+  selection accuracy fell to 0.265-0.398 and every scorer-aware terminal
+  threshold abstained. Clear terminal documents do not teach the hidden label
+  of a packet whose decisive source is absent.
+- No vision weights, embeddings, model, test file, or image cache was added to
+  the solution. Generated Python bytecode from the audit was moved recoverably
+  to Trash, and the accepted worktree remained otherwise clean.
+
+The evidence-first blocker is therefore literal, not rhetorical: the 31
+latent denials have no recoverable decisive source object, while the approval
+tail cannot be separated from genuine reviews and hidden denials without
+creating false approvals. Further progress needs a genuinely new observable
+source or independently transferring generator mechanism.
