@@ -3142,6 +3142,39 @@ def _explicit_decision(case_id: str, pages: list[str]) -> str | None:
     return None
 
 
+_FEE_STATUS_LABEL = re.compile(r"fee\s*status\s*[:.\-]?\s*([A-Za-z]{3,12})", re.I)
+_FEE_VOCABULARY = ("paid", "unpaid", "waived", "unknown")
+
+
+def _fuzzy_fee_status(pages: list[str]) -> str | None:
+    """Read a glyph-damaged `Fee Status:` value against the closed vocabulary.
+
+    Every other closed-vocabulary field already tolerates OCR damage through
+    `_fuzzy_closed_value`.  The fee reader alone demanded an exact word, so
+    "waved", "warved" and "walved" fell through to the historical "paid"
+    output prior (MIB-000034, MIB-000184, MIB-000257).  Only a labelled value
+    on the first fee-bearing page is considered, and only when that page
+    carries no exact vocabulary word at all.
+
+    Extraction-only by construction: the caller keeps this out of the policy
+    fee variable, so a damaged status can never approve or deny a packet.
+    """
+    for page in pages:
+        if not re.search(r"fee|receipt|payment", page, re.I):
+            continue
+        if re.search(r"\b(paid|unpaid|waived|unknown)\b", page, re.I):
+            return None
+        best_ratio, best_value = 0.0, None
+        for match in _FEE_STATUS_LABEL.finditer(page):
+            token = match.group(1).casefold()
+            for value in _FEE_VOCABULARY:
+                ratio = difflib.SequenceMatcher(None, token, value).ratio()
+                if ratio > best_ratio:
+                    best_ratio, best_value = ratio, value
+        return best_value if best_ratio >= 0.8 else None
+    return None
+
+
 def _parse_packet(case_id: str, pages: list[str]) -> dict:
     text = "\n\n".join(pages)
 
@@ -3321,11 +3354,13 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
     fee_evidence = _trusted_fee_evidence(case_id, pages)
     trusted_fee = fee_evidence["status"]
     policy_fee = manual_fee or trusted_fee
-    output_fee = manual_fee or trusted_fee or fee or "paid"
+    fuzzy_fee = _fuzzy_fee_status(pages) if fee is None else None
+    output_fee = manual_fee or trusted_fee or fee or fuzzy_fee or "paid"
     fee_status_defaulted = (
         manual_fee is None
         and trusted_fee is None
         and fee is None
+        and fuzzy_fee is None
     )
     waiver_authorized = _trusted_waiver_authorized(case_id, pages)
     if output_fee == "paid" and policy_fee is None and re.search(
