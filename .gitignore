@@ -4,3 +4,4 @@ __pycache__/
 predictions.jsonl
 evaluation.json
 case-scores.jsonl
+work/classification-candidate/
