@@ -2573,3 +2573,61 @@ test with a 3.53x warm-run speedup; it remains pending full-1,000 acceptance.**
   Trash. This checkpoint includes the cache as local performance
   infrastructure, not as a score change or full-corpus cache acceptance; it
   must ride the next official full-1,000 score candidate run.
+
+### 2026-07-28 — residual missing-evidence and generator-sequence audit
+
+**Result: the remaining review pool is not separable by the tested visible,
+decoy, structured-field, or sequential-generator channels. No runtime source
+changed; accepted classification remains 72.92/80 with zero CFA.**
+
+- Of the 87 true approvals still emitted as `NEEDS_REVIEW`, 72 already have all
+  nine extracted fields exactly correct and 78 have every non-risk field
+  present. The review decision is therefore not primarily an extraction-value
+  error.
+- After excluding explicit review findings, emitted review-only flags, unknown
+  fee, missing required fields, and visible damaged-note language, the
+  apparently clean pool still contains **78 approvals, 29 denials, and 70
+  genuine reviews**. Approving that whole pool would lose 1.96 classification
+  points.
+- Ground-truth cause decomposition shows why. The 29 denials contain 24 hidden
+  hard-risk flags and four hidden unpaid fees. The 70 reviews contain 54
+  hidden review-only flags, five unknown fees, and 11 other
+  ambiguity/policy cases.
+- The proposed registered B-13 template reader cannot recover the missing
+  flags. Every one of the 24 hidden hard-risk cases has no active-case B-13
+  page at all. Of 73 missing review-only flags across the full review pool,
+  69 likewise have no B-13; only four have an unreadable B-13 patch. This is
+  absent evidence, not OCR-damaged glyph evidence, so no reader was added.
+- A current primary-only replay from cached rendered pages would approve 73
+  final-review cases, but they contain only 38 true approvals alongside 23
+  reviews and 12 denials. The independent adjudicator is correctly preventing
+  those 12 catastrophic false approvals; bypassing it was rejected.
+- Barcode and visible-decoy channels were mixed or irrelevant. All 22 packets
+  containing a visible `BARCODE PAYLOAD` marker were already correctly
+  classified. `SAMPLE`, `COPY ARTIFACT`, `SCAN TAB`, denial words, and approval
+  words all occurred across multiple true outcomes; none provided a
+  high-coverage terminal partition.
+- A strict generator-state experiment used cases 1-600 for training, 601-800
+  for selection, and 801-1000 as untouched final data. Inputs contained only
+  perfect visible fields, sponsor digits, neighboring cases' visible fields,
+  and modular phase probes. Review-risk and approval prediction were weak.
+  Hard-risk AUC varied from 0.30 to 0.75 across rolling forward blocks, and
+  unpaid-fee AUC averaged about 0.65-0.70 but recovered only 0-3 positives per
+  top ten.
+- The separate 5,000-case corpus supplied 840 untouched packets with explicit
+  visible findings (242 approved, 340 denied, 258 review). On those controls,
+  current-case fields alone reached 0.728 denial AUC, but neighboring-case
+  fields fell to 0.528 and case-number phase was 0.498. There is ordinary
+  field-policy correlation, not recoverable PRNG state.
+- Reversing the independent test was decisive: models trained only on those
+  840 controls scored the 398 public review residual at 0.494-0.523 denial
+  AUC, 0.472-0.504 approval AUC, and 0.526-0.547 review AUC. The correlations
+  do not transfer into the missing-evidence residual.
+- A complete hidden-negative-cell audit parsed 216 valid public payloads and
+  171 valid payloads among the 840 visible controls. Every independently pure
+  `(fake decision, policy from structured fields)` cell is already implemented.
+  The only hidden cells left among final review outputs contain genuine
+  reviews, with no additional approval or denial opportunity.
+- All analysis artifacts and barcode renders were moved recoverably to Trash.
+  No model, decoder dependency, experimental rule, or generated test file was
+  retained.
