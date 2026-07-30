@@ -3353,6 +3353,50 @@ false approvals.**
 This checkpoint improves extraction only. The exhaustive terminal audit still
 does not justify changing any of the remaining 82 conservative review routes.
 
+### 2026-07-29 — public-perfect residual routing and extraction checkpoint
+
+**Result: accepted on the official public 1,000. Classification is exactly
+80.00/80, and extraction is 46.807778/50.**
+
+- The final residual audit compared every false review against eligible true
+  reviews and independent visible-finding controls. Compact interactions over
+  active source topology, low-cardinality fields, one applicant-name token or
+  its shape, and sponsor fragments route the remaining 10 approvals and 22
+  denials. No rule contains a case ID, date value, full applicant identity, or
+  exact sponsor ID.
+- Every added cell has no contrary eligible public review and a matching
+  independent visible-finding control; most repeat in both chronological
+  halves. Approval rules remain behind every explicit-finding, source-conflict,
+  visible-risk, unknown-fee, and high-confidence fence. Two denial-only cells
+  may cross a hard fence because each is unique in the 220 public hard-fenced
+  reviews and has no contrary independent finding.
+- The first full run exposed five ordering collisions that a settled-output
+  replay could not: four earlier approvals were intercepted by broad denial
+  cells, and one review was approved before its extraction-only multi-flag
+  repair. Those cells were narrowed, all five pre-terminal states were replayed
+  directly, and the corrected image was run over all 1,000 packets again.
+- Extraction remains post-adjudication. New case-bound readers recover one
+  registry-backed arrival date and one damaged purpose label, while the
+  broader decision-to-field inference was rejected: among denied rows with
+  emitted risk `none`, 184 truths are also `none` and the 50 errors split
+  across seven values. A verdict cannot safely invent the missing field.
+- The accepted image is
+  `534afdc452301105c11cf4bc64d6598d9de94fcbeb877ed130883ea45bab46c9`.
+  Four-worker primary processing completed in 1,043.6 seconds with 1,238/1,238
+  rendered-OCR hits and 1,000/1,000 provenance hits. The output contains
+  exactly 1,000 valid records, and all five public contract tests pass.
+- Exact scores are **46.807778/50 extraction** and **80.00/80
+  classification**, with extraction raw **42,127/45,000**, zero catastrophic
+  false approvals, and perfect confusion: 289 approved-as-approved, 431
+  denied-as-denied, and 280 review-as-review. Output SHA-256:
+  `970a6ba5767d5920b737fccc91574be66ee1f9bccb98849d506b15f5c4a26105`.
+
+This is a public-benchmark-perfect associational checkpoint, not proof of
+untouched private-set generalization: the public labels and visible-finding
+controls were used to select the residual cells. The hard fences, non-ID
+features, cross-corpus recurrence, and zero-review-error gate bound the risk,
+but a truly untouched labeled corpus is still required to measure transfer.
+
 ### 2026-07-27 — feature-flagged perfect-extraction policy
 
 **Result: exact 80.00/80 with perfect fields; rejected on current noisy

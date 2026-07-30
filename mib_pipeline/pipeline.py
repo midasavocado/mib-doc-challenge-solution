@@ -1920,6 +1920,154 @@ def _sponsor_attested_visa(
     return winners[0] if len(winners) == 1 else None
 
 
+def _case_bound_visible_visa_values(
+    case_id: str,
+    pages: list[str],
+) -> frozenset[str]:
+    """Collect literal active-case Visa Class lines from rendered views."""
+    expected_id = case_id.removeprefix("MIB-")
+    found: set[str] = set()
+    for page in pages:
+        page_ids = re.findall(r"\bMIB[- ]?(\d{6})\b", page, re.I)
+        if expected_id not in page_ids or any(
+            page_id not in (expected_id, "000000") for page_id in page_ids
+        ):
+            continue
+        views = re.split(
+            rf"{re.escape(_OCR_VIEW_SEPARATOR)}|"
+            rf"{re.escape(_NATIVE_VIEW_SEPARATOR)}|"
+            r"\n\[ROTATED OCR VIEW\]\n|"
+            rf"{re.escape(_DESKEWED_VIEW_SEPARATOR)}",
+            page,
+        )
+        for view in views:
+            for line in view.splitlines():
+                if _UNTRUSTED_LINE.search(line):
+                    continue
+                if not re.search(r"\bvisa\s+class\b", line, re.I):
+                    continue
+                value = _vocabulary_value(line, VISAS)
+                if value is not None:
+                    found.add(value)
+    return frozenset(found)
+
+
+def _case_bound_arrival_sources(
+    case_id: str,
+    pages: list[str],
+) -> tuple[frozenset[str], frozenset[str]]:
+    """Collect active-case intake and registry arrival dates separately."""
+    expected_id = case_id.removeprefix("MIB-")
+    intake_values: set[str] = set()
+    registry_values: set[str] = set()
+    view_separator = (
+        rf"{re.escape(_OCR_VIEW_SEPARATOR)}|"
+        rf"{re.escape(_NATIVE_VIEW_SEPARATOR)}|"
+        r"\n\[ROTATED OCR VIEW\]\n|"
+        rf"{re.escape(_DESKEWED_VIEW_SEPARATOR)}"
+    )
+    for page in pages:
+        page_ids = set(re.findall(r"\bMIB[- ]?(\d{6})\b", page, re.I))
+        if expected_id not in page_ids or any(
+            page_id not in {expected_id, "000000"}
+            for page_id in page_ids
+        ):
+            continue
+        is_intake = bool(
+            re.search(
+                r"FORM\s+I-?8090|Work\s+Authorization\s+Intake|"
+                r"Primary\s+intake",
+                page,
+                re.I,
+            )
+        )
+        is_registry = bool(
+            re.search(
+                r"(?:Planetary\s+)?Registry\s+Extract",
+                page,
+                re.I,
+            )
+        )
+        for view in re.split(view_separator, page):
+            if is_intake:
+                value = (
+                    _extract_date(view, "Arrival Date")
+                    or _fuzzy_labeled_date(view)
+                )
+                if value is not None:
+                    intake_values.add(value)
+            if not is_registry:
+                continue
+            for match in _ISO_DATE.finditer(view):
+                value = "-".join(match.groups())
+                try:
+                    parsed = date.fromisoformat(value)
+                except ValueError:
+                    continue
+                if parsed <= PACKET_SNAPSHOT_DATE:
+                    registry_values.add(value)
+    return frozenset(intake_values), frozenset(registry_values)
+
+
+def _case_bound_visible_purpose_values(
+    case_id: str,
+    pages: list[str],
+) -> frozenset[str]:
+    """Recover purpose values behind damaged labels on active-case pages."""
+    expected_id = case_id.removeprefix("MIB-")
+    found: set[str] = set()
+    view_separator = (
+        rf"{re.escape(_OCR_VIEW_SEPARATOR)}|"
+        rf"{re.escape(_NATIVE_VIEW_SEPARATOR)}|"
+        r"\n\[ROTATED OCR VIEW\]\n|"
+        rf"{re.escape(_DESKEWED_VIEW_SEPARATOR)}"
+    )
+    for page in pages:
+        page_ids = set(re.findall(r"\bMIB[- ]?(\d{6})\b", page, re.I))
+        if expected_id not in page_ids or any(
+            page_id not in {expected_id, "000000"}
+            for page_id in page_ids
+        ):
+            continue
+        for view in re.split(view_separator, page):
+            for line in view.splitlines():
+                if _UNTRUSTED_LINE.search(line):
+                    continue
+                match = re.match(
+                    r"^\s*([^:]{3,30})\s*[:.]\s*(.+?)\s*$",
+                    line,
+                )
+                if match is None:
+                    continue
+                label = re.sub(r"[^a-z]", "", match.group(1).lower())
+                if max(
+                    difflib.SequenceMatcher(
+                        None,
+                        label,
+                        expected,
+                    ).ratio()
+                    for expected in ("purpose", "declaredpurpose")
+                ) < 0.60:
+                    continue
+                candidate_key = _compact(match.group(2))
+                ranked = sorted(
+                    (
+                        difflib.SequenceMatcher(
+                            None,
+                            candidate_key,
+                            _compact(value),
+                        ).ratio(),
+                        value,
+                    )
+                    for value in PURPOSES
+                )
+                best_score, best = ranked[-1]
+                runner_up = ranked[-2][0]
+                if best_score >= 0.72 and best_score - runner_up >= 0.08:
+                    found.add(best)
+    return frozenset(found)
+
+
 def _case_bound_labelled_name(
     case_id: str,
     pages: list[str],
@@ -2361,7 +2509,7 @@ def _extract_scoped_flags(case_id: str, pages: list[str]) -> tuple[list[str], st
 def _risk_crop_view_candidate(
     text: str,
     expected_id: str | None = None,
-) -> str | None:
+) -> tuple[str, ...] | None:
     if not re.search(r"\bB-?13\b|Biometric\s+Scan\s+Slip", text, re.I):
         return None
     visible_ids = set(
@@ -2390,7 +2538,7 @@ def _risk_crop_view_candidate(
             if fragment in compact
         }
         if len(fragment_matches) == 1:
-            return fragment_matches.pop()
+            return (fragment_matches.pop(),)
     if not re.search(
         r"\bSpecies\s+Match\b|\bSpecies\b.{0,12}\bMatch\b",
         text,
@@ -2418,7 +2566,7 @@ def _risk_crop_view_candidate(
         second_score = ranked[-2][0]
         if best_score >= 0.66 and best_score - second_score >= 0.20:
             candidates.add(best_flag)
-    return candidates.pop() if len(candidates) == 1 else None
+    return tuple(sorted(candidates)) if candidates else None
 
 
 def _high_resolution_risk_flags(
@@ -2447,7 +2595,7 @@ def _high_resolution_risk_flags(
         ):
             candidate_pages.add(index)
 
-    found: set[str] = set()
+    page_findings: set[tuple[str, ...]] = set()
     with tempfile.TemporaryDirectory(prefix="mib-risk-crop-") as temp:
         temp_dir = Path(temp)
         for page_number in sorted(candidate_pages):
@@ -2466,7 +2614,7 @@ def _high_resolution_risk_flags(
                 check=True,
             )
             image = prefix.with_suffix(".pgm")
-            votes: Counter[str] = Counter()
+            votes: Counter[tuple[str, ...]] = Counter()
             for psm in (11, 12):
                 candidate = _risk_crop_view_candidate(
                     _ocr_page(image, psm),
@@ -2475,13 +2623,15 @@ def _high_resolution_risk_flags(
                 if candidate:
                     votes[candidate] += 1
             winners = [
-                flag
-                for flag, vote_count in votes.items()
+                flags
+                for flags, vote_count in votes.items()
                 if vote_count == 2
             ]
             if len(winners) == 1:
-                found.add(winners[0])
-    return sorted(found) if len(found) == 1 else []
+                page_findings.add(winners[0])
+    if len(page_findings) != 1:
+        return []
+    return list(next(iter(page_findings)))
 
 
 def _apply_late_disqualifying_witness(
@@ -3395,6 +3545,36 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
         prefer_labelled=True,
     )
     flags, flags_state = _extract_scoped_flags(case_id, pages)
+    unresolved_biometric_pages: tuple[int, ...] = ()
+    if flags_state == "unknown":
+        expected_id = case_id.removeprefix("MIB-")
+        unresolved_biometric_pages = tuple(
+            index
+            for index, page in enumerate(pages)
+            if (
+                (
+                    re.search(
+                        r"FORM\s+B-13|Biometric\s+Scan\s+Slip",
+                        page,
+                        re.I,
+                    )
+                    or (
+                        re.search(r"species\s+match", page, re.I)
+                        and re.search(r"observed\s+flags?", page, re.I)
+                    )
+                )
+                and expected_id
+                in re.findall(r"\bMIB[- ]?(\d{6})\b", page, re.I)
+                and not any(
+                    visible_id != expected_id
+                    for visible_id in re.findall(
+                        r"\bMIB[- ]?(\d{6})\b",
+                        page,
+                        re.I,
+                    )
+                )
+            )
+        )
     visible_flags = _extract_visible_flags(text)
     output_flags = (
         flags
@@ -3590,6 +3770,16 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
         "_supporting_applicant_names": frozenset(
             _supporting_applicant_names(case_id, pages)
         ),
+        "_unresolved_biometric_pages": unresolved_biometric_pages,
+        "_arrival_source_values": _case_bound_arrival_sources(
+            case_id,
+            pages,
+        ),
+        "_visible_purpose_values": _case_bound_visible_purpose_values(
+            case_id,
+            pages,
+        ),
+        "_visible_visa_values": _case_bound_visible_visa_values(case_id, pages),
         "_packet_words": frozenset(
             word.casefold() for word in re.findall(r"[A-Za-z]{4,}", text)
         ),
@@ -3620,6 +3810,26 @@ def _process(pdf: Path) -> dict:
             base_pages = [_upright(page) for page in pages]
             base = _parse_packet(pdf.stem, base_pages)
             enriched = _parse_packet(pdf.stem, pages)
+            base["_visible_visa_values"] = frozenset(
+                set(base.get("_visible_visa_values") or ())
+                | set(enriched.get("_visible_visa_values") or ())
+            )
+            base_intake, base_registry = base.get(
+                "_arrival_source_values",
+                (frozenset(), frozenset()),
+            )
+            enriched_intake, enriched_registry = enriched.get(
+                "_arrival_source_values",
+                (frozenset(), frozenset()),
+            )
+            base["_arrival_source_values"] = (
+                frozenset(set(base_intake) | set(enriched_intake)),
+                frozenset(set(base_registry) | set(enriched_registry)),
+            )
+            base["_visible_purpose_values"] = frozenset(
+                set(base.get("_visible_purpose_values") or ())
+                | set(enriched.get("_visible_purpose_values") or ())
+            )
             sentinels = {
                 "applicant_name": "unknown",
                 "species_code": "unknown",
@@ -3685,7 +3895,19 @@ def _process(pdf: Path) -> dict:
         if result["risk_flags"] == "none":
             high_resolution_flags = _high_resolution_risk_flags(pdf, pages)
             if high_resolution_flags:
-                result["risk_flags"] = "|".join(high_resolution_flags)
+                if (
+                    len(high_resolution_flags) > 1
+                    and set(high_resolution_flags) <= REVIEW_ONLY
+                ):
+                    # A multi-flag row is useful extraction evidence, but this
+                    # new reader has not yet earned the right to participate in
+                    # policy.  Carry it to the final post-adjudication repair
+                    # instead, where it cannot change a verdict.
+                    result["_post_adjudication_review_flags"] = "|".join(
+                        high_resolution_flags
+                    )
+                else:
+                    result["risk_flags"] = "|".join(high_resolution_flags)
         # Trusted enrichment and the scoped high-resolution crop can both add
         # flags after _parse_packet made its decision.  Consume that evidence
         # exactly once, here, before region/output-only and untrusted fallback
@@ -4656,6 +4878,396 @@ def _replace_unsupported_name(predictions: dict[str, dict]) -> None:
             prediction["applicant_name"] = supported.pop()
 
 
+def _repair_supporting_name_consensus(
+    predictions: dict[str, dict],
+) -> None:
+    """Adopt two damaged supporting-document reads that normalize together.
+
+    One damaged source spelling is not enough: earlier experiments showed that
+    snapping it to the batch vocabulary can choose the wrong generated name.
+    Two distinct case-bound reads are stronger.  Each token must either already
+    be in the reconstructed vocabulary, have the common printed ``l``/``i``
+    confusion resolve to exactly one vocabulary token, or have one clearly
+    closest fuzzy match.  Every raw read must then normalize to the same name.
+    """
+    counts: Counter[str] = Counter()
+    for prediction in predictions.values():
+        if prediction["applicant_name"] != "unknown":
+            counts.update(prediction["applicant_name"].split())
+    vocabulary = sorted(token for token, count in counts.items() if count >= 4)
+    vocabulary_set = set(vocabulary)
+    if len(vocabulary) < 20:
+        return
+
+    def normalize_token(token: str) -> str:
+        if token in vocabulary_set:
+            return token
+        il_candidates = {
+            token[:index] + "i" + token[index + 1:]
+            for index, character in enumerate(token)
+            if character == "l"
+            and token[:index] + "i" + token[index + 1:] in vocabulary_set
+        }
+        if len(il_candidates) == 1:
+            return il_candidates.pop()
+        ranked = sorted(
+            (
+                difflib.SequenceMatcher(
+                    None,
+                    token.casefold(),
+                    candidate.casefold(),
+                ).ratio(),
+                candidate,
+            )
+            for candidate in vocabulary
+        )
+        best_score, best = ranked[-1]
+        runner_up = ranked[-2][0]
+        if best_score >= 0.72 and best_score - runner_up >= 0.06:
+            return best
+        return token
+
+    for prediction in predictions.values():
+        raw_reads = set(prediction.get("_supporting_applicant_names") or ())
+        if (
+            len(raw_reads) == 1
+            and float(prediction["confidence"]) == 0.99
+            and prediction["adjudication"] == "NEEDS_REVIEW"
+            and "identity_conflict"
+            in str(prediction["risk_flags"]).split("|")
+        ):
+            candidate = next(iter(raw_reads))
+            if (
+                candidate != prediction["applicant_name"]
+                and all(
+                    token in vocabulary_set for token in candidate.split()
+                )
+            ):
+                prediction["applicant_name"] = candidate
+            continue
+        if len(raw_reads) < 2:
+            continue
+        normalized = {
+            " ".join(normalize_token(token) for token in read.split())
+            for read in raw_reads
+        }
+        if len(normalized) != 1:
+            continue
+        candidate = normalized.pop()
+        if (
+            candidate != prediction["applicant_name"]
+            and all(token in vocabulary_set for token in candidate.split())
+        ):
+            prediction["applicant_name"] = candidate
+
+
+def _repair_registry_attestation_name_conflict(
+    predictions: dict[str, dict],
+    provenance_rows: dict[str, dict],
+) -> None:
+    """Prefer an independent intact-source read over one lone attestation.
+
+    This is deliberately narrower than general provenance arbitration.  It
+    handles a low-confidence review packet whose primary applicant came from a
+    B-13/attestation source, whose packet visibly contains a registry page the
+    primary reader could not resolve, and whose independent row differs only
+    on the applicant.  The independent candidate must be a valid batch name.
+    """
+    counts: Counter[str] = Counter()
+    for prediction in predictions.values():
+        if prediction["applicant_name"] != "unknown":
+            counts.update(prediction["applicant_name"].split())
+    vocabulary = {token for token, count in counts.items() if count >= 4}
+    if len(vocabulary) < 20:
+        return
+
+    compared_fields = (
+        "species_code",
+        "home_world",
+        "visa_class",
+        "sponsor_id",
+        "arrival_date",
+        "declared_purpose",
+        "risk_flags",
+        "fee_status",
+    )
+    for case_id, prediction in predictions.items():
+        alternate = provenance_rows.get(case_id)
+        if alternate is None:
+            continue
+        candidate = alternate.get("applicant_name")
+        if (
+            not candidate
+            or candidate == prediction["applicant_name"]
+            or prediction["adjudication"] != "NEEDS_REVIEW"
+            or float(prediction["confidence"]) >= 0.8
+            or prediction["risk_flags"] != "none"
+            or prediction.get("_registry_applicant_read")
+            or "registry" not in (prediction.get("_packet_words") or ())
+            or prediction["applicant_name"]
+            not in set(prediction.get("_source_applicant_reads") or ())
+            or any(
+                prediction[field] != alternate.get(field)
+                for field in compared_fields
+            )
+            or not all(token in vocabulary for token in candidate.split())
+        ):
+            continue
+        prediction["applicant_name"] = candidate
+
+
+def _high_resolution_case_bound_fields(
+    pdf: Path,
+    wanted: frozenset[str],
+) -> dict[str, str]:
+    """Read disputed sponsor/visa lines from repeated high-resolution views."""
+    if not wanted:
+        return {}
+    expected_id = pdf.stem.removeprefix("MIB-")
+    page_candidates: dict[str, set[str]] = {
+        field: set() for field in wanted
+    }
+    try:
+        with tempfile.TemporaryDirectory(prefix="mib-core-arbitration-") as temp:
+            temp_dir = Path(temp)
+            prefix = temp_dir / "page"
+            subprocess.run(
+                ["pdftoppm", "-gray", "-r", "400", str(pdf), str(prefix)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=60,
+                check=True,
+            )
+            images = sorted(temp_dir.glob("page-*.pgm"))
+            for index, image in enumerate(images):
+                variants = [image]
+                if "visa_class" in wanted:
+                    for clockwise in (False, True):
+                        rotated = temp_dir / (
+                            f"rotated-{index}-{int(clockwise)}.pgm"
+                        )
+                        _rotate_pgm(image, rotated, clockwise)
+                        variants.append(rotated)
+                    array = _pgm_array(image)
+                    angle = _estimate_skew(array)
+                    if abs(angle) >= 0.5:
+                        deskewed = temp_dir / f"deskewed-{index}.pgm"
+                        _write_pgm_array(_deskew_array(array, angle), deskewed)
+                        variants.append(deskewed)
+
+                votes: dict[str, Counter[str]] = {
+                    field: Counter() for field in wanted
+                }
+                near_case_sponsor_reads: dict[str, set[str]] = defaultdict(set)
+                for variant in variants:
+                    for psm in (3, 4, 6, 11):
+                        view = _ocr_page(variant, psm)
+                        visible_numbers = _visible_case_numbers(view)
+                        if visible_numbers != {expected_id}:
+                            sponsor = (
+                                _sponsor_from_labeled_line(view)
+                                if "sponsor_id" in wanted
+                                else None
+                            )
+                            near_numbers = visible_numbers - {expected_id}
+                            if (
+                                sponsor is not None
+                                and expected_id in visible_numbers
+                                and near_numbers
+                                and all(
+                                    sum(
+                                        left != right
+                                        for left, right in zip(
+                                            expected_id,
+                                            near_number,
+                                        )
+                                    )
+                                    == 1
+                                    for near_number in near_numbers
+                                )
+                            ):
+                                near_case_sponsor_reads[sponsor].update(
+                                    near_numbers
+                                )
+                            continue
+                        if "sponsor_id" in wanted:
+                            sponsor = _sponsor_from_labeled_line(view)
+                            if sponsor is not None:
+                                votes["sponsor_id"][sponsor] += 1
+                        if "visa_class" in wanted:
+                            values = {
+                                value
+                                for line in view.splitlines()
+                                if re.search(r"\bvisa\s+class\b", line, re.I)
+                                and (
+                                    value := _vocabulary_value(line, VISAS)
+                                ) is not None
+                            }
+                            if len(values) == 1:
+                                votes["visa_class"].update(values)
+
+                for sponsor, near_numbers in near_case_sponsor_reads.items():
+                    if len(near_numbers) >= 2:
+                        votes["sponsor_id"][sponsor] += 2
+                for field, counter in votes.items():
+                    winners = [
+                        value
+                        for value, count in counter.items()
+                        if count >= 2
+                    ]
+                    if len(winners) == 1:
+                        page_candidates[field].add(winners[0])
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return {}
+
+    return {
+        field: next(iter(candidates))
+        for field, candidates in page_candidates.items()
+        if len(candidates) == 1
+    }
+
+
+def _repair_provenance_core_disagreements(
+    pdfs: list[Path],
+    predictions: dict[str, dict],
+    provenance_rows: dict[str, dict],
+) -> None:
+    """Arbitrate a few narrow cross-engine disagreements from pixels.
+
+    Only one-glyph sponsor disagreements and XW-1/XW-2 disagreements are worth
+    the extra render.  The high-resolution reader must agree with the
+    independent row before a value moves.  Species uses an even cheaper gate:
+    a non-default independent species must leave a distinguishing visible word
+    in the primary packet while the current species leaves none.
+    """
+    for pdf in pdfs:
+        prediction = predictions[pdf.stem]
+        alternate = provenance_rows.get(pdf.stem)
+        if alternate is None:
+            continue
+
+        wanted: set[str] = set()
+        current_sponsor = str(prediction["sponsor_id"])
+        alternate_sponsor = str(alternate.get("sponsor_id", ""))
+        if (
+            float(prediction["confidence"]) != 0.99
+            and re.fullmatch(r"SPN-\d{4}", current_sponsor)
+            and re.fullmatch(r"SPN-\d{4}", alternate_sponsor)
+            and "SPN-0000" not in {current_sponsor, alternate_sponsor}
+            and sum(
+                left != right
+                for left, right in zip(current_sponsor, alternate_sponsor)
+            ) == 1
+        ):
+            wanted.add("sponsor_id")
+
+        current_visa = str(prediction["visa_class"])
+        alternate_visa = str(alternate.get("visa_class", ""))
+        if (
+            current_visa != alternate_visa
+            and {current_visa, alternate_visa} == {"XW-1", "XW-2"}
+            and current_visa
+            not in (prediction.get("_visible_visa_values") or frozenset())
+        ):
+            wanted.add("visa_class")
+
+        observed = _high_resolution_case_bound_fields(
+            pdf,
+            frozenset(wanted),
+        )
+        for field in wanted:
+            if observed.get(field) == alternate.get(field):
+                prediction[field] = alternate[field]
+
+        current_species = str(prediction["species_code"])
+        alternate_species = str(alternate.get("species_code", ""))
+        packet_words = prediction.get("_packet_words") or frozenset()
+        alternate_terms = {
+            term.casefold()
+            for term in alternate_species.split("_")
+            if len(term) >= 5
+        }
+        current_terms = {
+            term.casefold()
+            for term in current_species.split("_")
+            if len(term) >= 5
+        }
+        if (
+            alternate_species not in {"", "unknown", "TRIANGULAN"}
+            and current_species != alternate_species
+            and alternate_terms & packet_words
+            and not current_terms & packet_words
+        ):
+            prediction["species_code"] = alternate_species
+
+
+def _apply_post_adjudication_extraction_repairs(
+    predictions: dict[str, dict],
+) -> None:
+    """Publish source-local repairs without feeding them into policy."""
+    for prediction in predictions.values():
+        flags = prediction.pop("_post_adjudication_review_flags", None)
+        if flags and prediction["risk_flags"] == "none":
+            prediction["risk_flags"] = flags
+
+        intake_dates, registry_dates = prediction.get(
+            "_arrival_source_values",
+            (frozenset(), frozenset()),
+        )
+        if not intake_dates and len(registry_dates) == 1:
+            prediction["arrival_date"] = next(iter(registry_dates))
+
+        purposes = prediction.get("_visible_purpose_values") or frozenset()
+        if (
+            len(purposes) == 1
+            and prediction["declared_purpose"] not in purposes
+        ):
+            prediction["declared_purpose"] = next(iter(purposes))
+
+
+def _repair_rapid_review_flag_rows(
+    pdfs: list[Path],
+    predictions: dict[str, dict],
+) -> None:
+    """Recover multi-flag B-13 rows with the already-vendored second OCR.
+
+    The primary reader first has to bind the physical B-13 page to the active
+    packet.  RapidOCR then gets one chance to read only that page.  This repair
+    accepts two or more review-only flags and runs after adjudication, so even a
+    bad secondary read cannot create a denial or suppress an approval.
+    """
+    candidates = [
+        pdf
+        for pdf in pdfs
+        if predictions[pdf.stem]["risk_flags"] == "none"
+        and predictions[pdf.stem].get("_unresolved_biometric_pages")
+    ]
+    if not candidates:
+        return
+    try:
+        from provenance_engine import DocumentRenderer, RapidOcrEngine
+
+        renderer = DocumentRenderer()
+        engine = RapidOcrEngine()
+        for pdf in candidates:
+            prediction = predictions[pdf.stem]
+            wanted_pages = set(prediction["_unresolved_biometric_pages"])
+            rendered = renderer.render(pdf)
+            readings: set[tuple[str, ...]] = set()
+            for page in rendered.pages:
+                if page.index not in wanted_pages:
+                    continue
+                tokens = engine.read_page(page)
+                text = "\n".join(token.text for token in tokens)
+                flags = tuple(sorted(set(_extract_visible_flags(text))))
+                if len(flags) >= 2 and set(flags) <= REVIEW_ONLY:
+                    readings.add(flags)
+            if len(readings) == 1:
+                prediction["risk_flags"] = "|".join(readings.pop())
+    except (ImportError, OSError, RuntimeError, ValueError):
+        return
+
+
 def _impute_closed_vocabulary_modes(predictions: dict[str, dict]) -> None:
     """Fill unresolved output fields from this batch without affecting policy."""
     fields = {
@@ -4783,11 +5395,6 @@ def main(input_dir: str, output_path: str) -> None:
     _impute_closed_vocabulary_modes(predictions)
     _repair_rare_arrival_years(predictions)
     _repair_key_spelling_after_batch(pdfs, predictions)
-    for prediction in predictions.values():
-        prediction.pop("_registry_applicant_read", None)
-        prediction.pop("_source_applicant_reads", None)
-        prediction.pop("_packet_words", None)
-        prediction.pop("_supporting_applicant_names", None)
     from .hybrid import apply_provenance_adjudication
 
     apply_provenance_adjudication(pdfs, predictions, workers, provenance_rows)
@@ -4799,6 +5406,27 @@ def main(input_dir: str, output_path: str) -> None:
     from .terminal_approval import apply_terminal_approval_model
 
     apply_terminal_approval_model(pdfs, predictions)
+    # These repairs are intentionally after every adjudication stage.  They can
+    # improve emitted extraction fields, but they cannot create a new policy
+    # premise or change a verdict during this battery-friendly experiment.
+    _repair_supporting_name_consensus(predictions)
+    _repair_registry_attestation_name_conflict(predictions, provenance_rows)
+    _repair_provenance_core_disagreements(
+        pdfs,
+        predictions,
+        provenance_rows,
+    )
+    _apply_post_adjudication_extraction_repairs(predictions)
+    _repair_rapid_review_flag_rows(pdfs, predictions)
+    for prediction in predictions.values():
+        prediction.pop("_registry_applicant_read", None)
+        prediction.pop("_source_applicant_reads", None)
+        prediction.pop("_packet_words", None)
+        prediction.pop("_supporting_applicant_names", None)
+        prediction.pop("_unresolved_biometric_pages", None)
+        prediction.pop("_arrival_source_values", None)
+        prediction.pop("_visible_purpose_values", None)
+        prediction.pop("_visible_visa_values", None)
     stats = cache_stats()
     if stats:
         with _PRINT_LOCK:

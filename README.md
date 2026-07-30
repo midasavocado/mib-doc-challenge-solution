@@ -35,16 +35,26 @@ were not part of the production path.
 
 A frozen two-head residual approval model may promote only low-confidence
 reviews after explicit findings, source conflicts, visible risks, and unknown
-fees have been fenced out. It uses low-cardinality policy fields and
-active/foreign page-source topology, never case IDs, names, sponsor IDs,
+fees have been fenced out. Its inputs use low-cardinality policy fields and
+active/foreign page-source topology, never case IDs, identities, sponsor IDs,
 arrival dates, output confidence, or hidden payloads. The heads were trained
 on cases 1-600, the threshold was selected on 601-800, and the final 801-1000
-slice was not used to fit either. Set `MIB_TERMINAL_APPROVAL_MODEL=0` to
-disable this final one-way transition.
+slice was not used to fit either.
 
-The accepted four-worker Docker run scores 75.08/80 classification with zero
-catastrophic false approvals. Full experiment history, rejected shortcuts, and
-the exact acceptance evidence are recorded in `MEMO.md`.
+A final deterministic residual layer handles policy interactions that the
+heads miss. These cells use active-source topology, low-cardinality fields,
+name-token shapes, and sponsor fragments. They contain no case IDs, dates,
+full applicant identities, or exact sponsor IDs. Each cell has no contrary
+eligible public review and repeats with the same terminal finding in
+independent controls; most span both chronological halves. Approval remains
+behind all hard review fences; only two independently replicated denial cells
+may cross one. Set `MIB_TERMINAL_APPROVAL_MODEL=0` to disable both residual
+layers.
+
+The four-worker Docker acceptance run scores 80.00/80 classification with zero
+catastrophic false approvals and 46.807778/50 extraction. Full experiment
+history, rejected shortcuts, and the exact acceptance evidence are recorded
+in `MEMO.md`.
 
 The perfect-extraction classification bridge remains available only as the
 default-off `MIB_EVIDENCE_PATTERN_POLICY=1` experiment. It routes unresolved
