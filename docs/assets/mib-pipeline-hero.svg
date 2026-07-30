@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="480" viewBox="0 0 1600 480" role="img" aria-labelledby="title desc">
+  <title id="title">MIB Document Pipeline</title>
+  <desc id="desc">A dark technical illustration showing damaged documents flowing through visible evidence extraction into auditable decisions.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07111f"/>
+      <stop offset="0.55" stop-color="#0d2033"/>
+      <stop offset="1" stop-color="#102a36"/>
+    </linearGradient>
+    <linearGradient id="beam" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#5eead4" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#5eead4" stop-opacity=".7"/>
+      <stop offset="1" stop-color="#60a5fa" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="1600" height="480" rx="28" fill="url(#bg)"/>
+  <g opacity=".12" stroke="#bfdbfe">
+    <path d="M0 80h1600M0 160h1600M0 240h1600M0 320h1600M0 400h1600"/>
+    <path d="M120 0v480M280 0v480M440 0v480M600 0v480M760 0v480M920 0v480M1080 0v480M1240 0v480M1400 0v480"/>
+  </g>
+  <path d="M330 240H1280" stroke="url(#beam)" stroke-width="5" filter="url(#glow)"/>
+
+  <g transform="translate(88 92)">
+    <rect x="38" y="20" width="220" height="286" rx="16" fill="#e2e8f0" opacity=".25" transform="rotate(7 148 163)"/>
+    <rect width="220" height="286" rx="16" fill="#f8fafc"/>
+    <path d="M160 0h60v60z" fill="#cbd5e1"/>
+    <rect x="28" y="38" width="98" height="12" rx="6" fill="#0f766e"/>
+    <rect x="28" y="76" width="154" height="8" rx="4" fill="#64748b"/>
+    <rect x="28" y="100" width="132" height="8" rx="4" fill="#94a3b8"/>
+    <rect x="28" y="124" width="164" height="8" rx="4" fill="#64748b"/>
+    <rect x="28" y="148" width="118" height="8" rx="4" fill="#94a3b8"/>
+    <path d="M18 178l58-22 24 32 44-14 40 45-54 36-112-20z" fill="#f59e0b" opacity=".22"/>
+    <path d="M24 214l176-48M8 246l186-52" stroke="#ef4444" stroke-width="8" opacity=".22"/>
+  </g>
+
+  <g transform="translate(468 116)">
+    <circle cx="120" cy="120" r="116" fill="#0f172a" stroke="#5eead4" stroke-width="3"/>
+    <circle cx="120" cy="120" r="86" fill="none" stroke="#60a5fa" stroke-width="3" stroke-dasharray="10 9"/>
+    <path d="M62 120h116M120 62v116" stroke="#5eead4" stroke-width="4" opacity=".75"/>
+    <rect x="74" y="80" width="92" height="80" rx="10" fill="#12283d" stroke="#bfdbfe" stroke-width="2"/>
+    <path d="M88 101h64M88 120h48M88 139h58" stroke="#bfdbfe" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="120" cy="120" r="8" fill="#5eead4" filter="url(#glow)"/>
+  </g>
+
+  <g transform="translate(804 86)">
+    <rect width="284" height="308" rx="24" fill="#0b1728" stroke="#334155" stroke-width="2"/>
+    <text x="30" y="48" fill="#94a3b8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18">VISIBLE EVIDENCE</text>
+    <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20">
+      <circle cx="40" cy="90" r="7" fill="#5eead4"/><text x="62" y="97" fill="#e2e8f0">case-bound OCR</text>
+      <circle cx="40" cy="132" r="7" fill="#5eead4"/><text x="62" y="139" fill="#e2e8f0">source precedence</text>
+      <circle cx="40" cy="174" r="7" fill="#5eead4"/><text x="62" y="181" fill="#e2e8f0">conflict detection</text>
+      <circle cx="40" cy="216" r="7" fill="#5eead4"/><text x="62" y="223" fill="#e2e8f0">policy witnesses</text>
+    </g>
+    <rect x="28" y="256" width="228" height="28" rx="14" fill="#0f766e" opacity=".38"/>
+    <text x="142" y="276" text-anchor="middle" fill="#99f6e4" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15">OFFLINE · AUDITABLE</text>
+  </g>
+
+  <g transform="translate(1190 118)" font-family="ui-sans-serif, system-ui, sans-serif">
+    <rect width="316" height="72" rx="18" fill="#052e2b" stroke="#2dd4bf" stroke-width="2"/>
+    <circle cx="38" cy="36" r="13" fill="#2dd4bf"/><path d="M31 36l5 5 10-12" fill="none" stroke="#052e2b" stroke-width="4" stroke-linecap="round"/>
+    <text x="68" y="44" fill="#ccfbf1" font-size="24" font-weight="700">APPROVED</text>
+    <rect y="90" width="316" height="72" rx="18" fill="#3f1718" stroke="#fb7185" stroke-width="2"/>
+    <circle cx="38" cy="126" r="13" fill="#fb7185"/><path d="M32 120l12 12m0-12l-12 12" stroke="#3f1718" stroke-width="4" stroke-linecap="round"/>
+    <text x="68" y="134" fill="#ffe4e6" font-size="24" font-weight="700">DENIED</text>
+    <rect y="180" width="316" height="72" rx="18" fill="#3a2a0d" stroke="#fbbf24" stroke-width="2"/>
+    <circle cx="38" cy="216" r="13" fill="#fbbf24"/><text x="38" y="223" text-anchor="middle" fill="#3a2a0d" font-size="20" font-weight="900">?</text>
+    <text x="68" y="224" fill="#fef3c7" font-size="24" font-weight="700">NEEDS REVIEW</text>
+  </g>
+
+  <text x="88" y="55" fill="#f8fafc" font-family="ui-sans-serif, system-ui, sans-serif" font-size="30" font-weight="800" letter-spacing="4">MIB DOCUMENT PIPELINE</text>
+  <text x="1510" y="442" text-anchor="end" fill="#64748b" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16">RENDER → EXTRACT → RESOLVE → DECIDE</text>
+</svg>

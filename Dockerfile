@@ -3,6 +3,7 @@ FROM python:3.12-slim
 ENV BLIS_NUM_THREADS=4 \
     MIB_MAX_WORKERS=4 \
     MKL_NUM_THREADS=4 \
+    MIB_LOCAL_CACHE_DIR=/tmp/mib-doc-challenge \
     NUMEXPR_NUM_THREADS=4 \
     OMP_NUM_THREADS=4 \
     OMP_THREAD_LIMIT=1 \

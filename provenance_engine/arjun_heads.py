@@ -4,8 +4,6 @@ Design rules
 ------------
 - No case-ID unlocks.
 - Field repairs must not create approvals by themselves.
-- Layout consensus: DIP-1 + XW-2 with visible ``$809`` + registry==applicant,
-  plus transfer-safe trap filters (RIF / O-pages / visa×purpose cells).
 - Demotion heads may only move APPROVED → REVIEW/DENIED.
 """
 
@@ -26,7 +24,6 @@ from .extraction import KNOWN_RISK_FLAGS, CandidateEvidence, EvidenceType
 from .models import PredictionRow
 
 CLEAN_PACKET_APPROVAL_CONFIDENCE = 0.61
-LAYOUT_CONSENSUS_APPROVAL_CONFIDENCE = 0.85
 DEMOTION_REVIEW_CONFIDENCE = 0.55
 DEMOTION_DENIAL_CONFIDENCE = 0.92
 SPONSOR_NAME_REPAIR_CONFIDENCE = 0.85
@@ -44,22 +41,7 @@ _KNOWN_PURPOSES = (
     "transit",
 )
 
-# Transfer-safe LC visas. XW-1 / MED-3 excluded: silent-stamp CFA on train.
-_LAYOUT_CONSENSUS_VISAS = frozenset({"DIP-1", "XW-2"})
 _POLICY = PolicyRuleSet()
-_LC_TRAP_VISA_PURPOSE: frozenset[tuple[str, str]] = frozenset(
-    {
-        ("DIP-1", "xenobotany"),
-        ("XW-2", "archive audit"),
-    }
-)
-_LC_TRAP_VISA_PURPOSE_SIG: frozenset[tuple[str, str, str]] = frozenset(
-    {
-        ("DIP-1", "reactor maintenance", "FRI"),
-        ("DIP-1", "archive audit", "FIR"),
-        ("XW-2", "diplomatic", "IFR"),
-    }
-)
 
 def _pdf_layout_text(pdf_path: Path) -> str:
     """Prefer ``pdftotext -layout``; fall back to pypdfium2 page text."""
@@ -305,94 +287,6 @@ def apply_visible_field_repairs(
     return PredictionRow.from_mapping(payload, fallback_case_id=row.case_id)
 
 
-def _layout_fee_paid_proven(text: str) -> bool:
-    """Require the canonical paid receipt amount (not a waiver / Fee-Status guess)."""
-
-    return bool(re.search(r"Amount\s*\$?\s*809", text, re.I))
-
-
-def _layout_page_signature(text: str) -> str:
-    """Compact page-type signature (F/R/I/B/M/O) in document order."""
-
-    kinds: list[str] = []
-    for block in text.split("\x0c"):
-        if re.search(r"Fee Receipt", block, re.I):
-            kinds.append("F")
-        elif re.search(r"Registry", block, re.I):
-            kinds.append("R")
-        elif re.search(r"I-8090|Work Authorization", block, re.I):
-            kinds.append("I")
-        elif re.search(r"B-?13|Biometric", block, re.I):
-            kinds.append("B")
-        elif re.search(r"MED-|Medical", block, re.I):
-            kinds.append("M")
-        elif block.strip():
-            kinds.append("O")
-    return "".join(kinds)
-
-
-def _layout_consensus_trap_cell(
-    visa_class: str,
-    declared_purpose: str,
-    signature: str,
-) -> bool:
-    """True when LC would mint a measured one-way false APPROVED cell."""
-
-    if (visa_class, declared_purpose) in _LC_TRAP_VISA_PURPOSE:
-        return True
-    if (visa_class, declared_purpose, signature) in _LC_TRAP_VISA_PURPOSE_SIG:
-        return True
-    if signature == "FRI" and declared_purpose == "transit":
-        return True
-    return False
-
-
-def _approval_incomplete_filler_assembly(row: PredictionRow, text: str) -> bool:
-    """True when an APPROVED row sits on a filler-heavy incomplete packet."""
-
-    if not text:
-        return False
-    signature = _layout_page_signature(text)
-    confidence = float(row.confidence)
-    attestation_first = bool(re.match(r"\s*Sponsor Attestation Letter", text, re.I))
-    synthetic_first = bool(
-        re.match(r"\s*Packet\s+\S+\s*/\s*page\s+\d+\s+Synthetic hiring", text, re.I)
-    )
-    fee_proven = bool(re.search(r"Amount\s*\$?\s*809", text, re.I))
-
-    if (
-        abs(confidence - 0.80) < 1e-6
-        and attestation_first
-        and not fee_proven
-        and signature.count("O") >= 3
-    ):
-        return True
-    if (
-        row.visa_class == "XW-1"
-        and confidence < 0.95
-        and synthetic_first
-        and signature.startswith("OO")
-    ):
-        return True
-    return False
-
-
-def _layout_registry_matches_applicant(text: str) -> bool:
-    # Use [ \\t] between name tokens — ``\\s`` would span newlines into field labels.
-    name_token = r"[A-Z][a-z]+(?:[ \t]+[A-Z][a-z]+)+"
-    registries = {
-        cleaned
-        for raw in re.findall(rf"Registry\s+Name\s+({name_token})", text)
-        if (cleaned := _clean_person_name(raw))
-    }
-    applicants = {
-        cleaned
-        for raw in re.findall(rf"Applicant\s*:?\s+({name_token})", text)
-        if (cleaned := _clean_person_name(raw))
-    }
-    return len(registries) == 1 and registries == applicants
-
-
 def _layout_risk_flags(text: str) -> frozenset[str]:
     found: set[str] = set()
     normalized = re.sub(r"[^a-z0-9]+", "_", text.casefold()).strip("_")
@@ -414,64 +308,6 @@ def _candidate_risk_flags(
         found.update(_parse_flag_set(str(candidate.value or "")))
     return frozenset(found)
 
-
-def apply_layout_consensus_approval(
-    row: PredictionRow,
-    pdf_path: Path,
-) -> PredictionRow:
-    """Approve DIP-1 / XW-2 packets with visible ``$809`` + name consensus.
-
-    Transfer-safe gates (no purpose / page-signature allowlists). Fail-closed
-    on RIF (except field-repair), non-core ``O`` pages, and trap cells.
-    """
-
-    if row.adjudication != "NEEDS_REVIEW":
-        return row
-    if row.visa_class not in _LAYOUT_CONSENSUS_VISAS:
-        return row
-    if row.fee_status != "paid":
-        return row
-    if _norm_flags(row.risk_flags) != "none":
-        return row
-    if row.home_world in _POLICY.embargoed_worlds:
-        return row
-    if (
-        row.home_world in _POLICY.non_diplomatic_embargoed_worlds
-        and row.visa_class != "DIP-1"
-    ):
-        return row
-    if row.arrival_date in {"1900-01-01", "unknown", ""}:
-        return row
-    if row.declared_purpose == "medical consult":
-        return row
-    # DIP-1 does not require a sponsor. Revoked/missing sponsors block XW.
-    if row.visa_class != "DIP-1" and row.sponsor_id in {
-        "SPN-0000",
-        "unknown",
-        "",
-        *_POLICY.barred_sponsors,
-    }:
-        return row
-
-    text = _pdf_layout_text(pdf_path)
-    if not text or not _layout_fee_paid_proven(text):
-        return row
-    if not _layout_registry_matches_applicant(text):
-        return row
-    if _layout_risk_flags(_strip_answer_key_lines(text)):
-        return row
-    signature = _layout_page_signature(text)
-    if signature == "RIF" and row.declared_purpose != "field repair":
-        return row
-    if "O" in signature:
-        return row
-    if _layout_consensus_trap_cell(row.visa_class, row.declared_purpose, signature):
-        return row
-
-    payload = row.to_dict()
-    payload["adjudication"] = "APPROVED"
-    payload["confidence"] = LAYOUT_CONSENSUS_APPROVAL_CONFIDENCE
-    return PredictionRow.from_mapping(payload, fallback_case_id=row.case_id)
 
 def apply_visible_finding_decision(
     row: PredictionRow,
@@ -573,30 +409,6 @@ def apply_approval_safety_demotion(
         return PredictionRow.from_mapping(payload, fallback_case_id=row.case_id)
 
     text = _pdf_layout_text(pdf_path)
-    if _approval_incomplete_filler_assembly(row, text or ""):
-        payload["adjudication"] = "NEEDS_REVIEW"
-        payload["confidence"] = DEMOTION_REVIEW_CONFIDENCE
-        return PredictionRow.from_mapping(payload, fallback_case_id=row.case_id)
-
-    confidence = float(row.confidence)
-    if abs(confidence - LAYOUT_CONSENSUS_APPROVAL_CONFIDENCE) < 1e-6 and text:
-        signature = _layout_page_signature(text)
-        if signature == "RIF" and row.declared_purpose != "field repair":
-            payload["adjudication"] = "NEEDS_REVIEW"
-            payload["confidence"] = DEMOTION_REVIEW_CONFIDENCE
-            return PredictionRow.from_mapping(payload, fallback_case_id=row.case_id)
-        if "O" in signature:
-            payload["adjudication"] = "NEEDS_REVIEW"
-            payload["confidence"] = DEMOTION_REVIEW_CONFIDENCE
-            return PredictionRow.from_mapping(payload, fallback_case_id=row.case_id)
-        if _layout_consensus_trap_cell(
-            row.visa_class, row.declared_purpose, signature
-        ):
-            payload["adjudication"] = "NEEDS_REVIEW"
-            payload["confidence"] = DEMOTION_REVIEW_CONFIDENCE
-            return PredictionRow.from_mapping(
-                payload, fallback_case_id=row.case_id
-            )
 
     strong: set[str] = set(_layout_risk_flags(text or ""))
     for candidate in candidates:

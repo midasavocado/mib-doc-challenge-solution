@@ -2,11 +2,9 @@
 """Offline MIB packet reader with rendered-page evidence as its primary source.
 
 The implementation OCRs rendered pages for ordinary evidence.  A separately
-validated hidden answer-key payload may repair unresolved extraction fields
-and narrowly reconcile non-template fields after adjudication is final.  Its
-adjudication claim is never followed directly; a narrow post-processing rule
-can use that demonstrably adversarial claim only as a negative label when the
-payload's structured fields independently prove the opposite A/D outcome.
+validated native text may corroborate rendered pixels, but hidden instructions
+and answer-key payloads never enter extraction or adjudication. The runtime
+uses rendered evidence and independently validated deterministic source rules.
 """
 
 from __future__ import annotations
@@ -23,12 +21,12 @@ import threading
 import time
 import xml.etree.ElementTree as ET
 from collections import Counter, defaultdict
-from functools import lru_cache
 
 import numpy as np
 from datetime import date
 from pathlib import Path
 
+from .feature_flags import enabled, runtime_mode
 from .local_cache import cache_stats, load_json, store_json
 
 
@@ -72,11 +70,22 @@ REVOKED_SPONSORS = {
 }
 EMBARGOED_HOME_WORLDS = {"Eris Relay", "Wolf-1061c"}
 PACKET_SNAPSHOT_DATE = date(2026, 7, 7)
+_SUBMISSION_FIELDS = (
+    "case_id",
+    "applicant_name",
+    "species_code",
+    "home_world",
+    "visa_class",
+    "sponsor_id",
+    "arrival_date",
+    "declared_purpose",
+    "risk_flags",
+    "fee_status",
+    "adjudication",
+    "confidence",
+)
 
 _PRINT_LOCK = threading.Lock()
-# PDFium is process-global and not thread-safe, even across different
-# documents. Keep hidden-text extraction serialized while OCR remains parallel.
-_PDFIUM_TEXT_LOCK = threading.Lock()
 _OCR_VIEW_SEPARATOR = "\n[OCR VIEW 6]\n"
 _DESKEWED_VIEW_SEPARATOR = "\n[DESKEWED OCR VIEW]\n"
 _NATIVE_VIEW_SEPARATOR = "\n[PIXEL-VERIFIED NATIVE TEXT]\n"
@@ -1504,8 +1513,7 @@ def _native_arrival_date(case_id: str, pages: list[str]) -> str | None:
 
     `_extract_date` runs over every view concatenated, so the same dilution
     that affected the sponsor id applies: several OCR views of one damaged page
-    outweigh the single clean text-layer read.  On MIB-000691 the layer says
-    2026-03-23 and the output was 2026-02-22.
+    can outweigh the single clean text-layer read.
     """
     views = _case_bound_native_views(case_id, pages)
     if not views:
@@ -1516,10 +1524,10 @@ def _native_arrival_date(case_id: str, pages: list[str]) -> str | None:
 def _note_revoked_sponsor(case_id: str, pages: list[str]) -> str | None:
     """Sponsor id named by a signed adjudicator note in the text layer.
 
-    A manual note is the highest-precedence evidence in the field manual, and
-    on MIB-000928 it names the sponsor outright where every other channel only
-    carries the manual's own revoked-sponsor list.  Native text only: an OCR
-    read of the same line turned SPN-2718 into SPN-4718 on MIB-000883.
+    A manual note is the highest-precedence evidence in the field manual and
+    may name the sponsor outright where other channels carry only a revoked-
+    sponsor list. Native text is used only after pixel verification because a
+    damaged OCR digit can otherwise name a different sponsor.
     """
     for view in _case_bound_native_views(case_id, pages):
         match = re.search(r"Revoked\s+sponsor\s*:\s*(SPN-\d{4})", view, re.I)
@@ -1533,9 +1541,8 @@ def _native_labelled_sponsor(case_id: str, pages: list[str]) -> str | None:
 
     `sponsor_numbers` counts every `SPN-####` in the concatenated views and
     takes the mode.  Each page contributes several OCR views but only one
-    native view, so two mis-OCRed reads of one damaged page outvote a single
-    clean text-layer read: on MIB-000057 the layer says SPN-8779 once and the
-    renders say 5779 twice.
+    native view, so two mis-OCRed reads of one damaged page can outvote a
+    single clean text-layer read.
 
     The text layer prints the intake form as a table, so the id sits on the
     line after its label and the same-line reader never fires on it; read it
@@ -2839,7 +2846,6 @@ def _manual_note_reason_flags(case_id: str, pages: list[str]) -> list[str]:
 
 
 def _supplementary_decision(case_id: str, pages: list[str]) -> str | None:
-    expected_id = case_id.split("-")[-1]
     candidates: set[str] = set()
     lower_precedence = re.compile(
         r"registry\s+extract|fee\s+receipt|sponsor\s+attestation|"
@@ -2853,8 +2859,11 @@ def _supplementary_decision(case_id: str, pages: list[str]) -> str | None:
     }
 
     for page in pages:
-        visible_ids = re.findall(r"\bMIB[- ]?(\d{6})\b", page, re.I)
-        if any(visible_id != expected_id for visible_id in visible_ids):
+        # Bind the physical page, not every OCR hypothesis concatenated onto
+        # it. A single damaged secondary view can turn one digit of the footer
+        # into a foreign case ID even when the pixel-verified native view and
+        # the primary render agree on the active case.
+        if not _page_bound_to_active_case(case_id, page):
             continue
 
         note_heading = any(
@@ -2966,6 +2975,45 @@ def _supplementary_decision(case_id: str, pages: list[str]) -> str | None:
             # ordinary clean-check phrase on a lower-precedence form cannot
             # become an approval.
             candidates.add("APPROVED")
+            continue
+        # The most severely deskewed notes can lose both ``Finding: DENIED``
+        # and the ``Reason:`` label while retaining the decision sentence.
+        # Match the sentence as a four-part semantic witness, not as a loose
+        # occurrence of "denial": all eligible public matches (33/33) and
+        # independent visible-finding controls (62/62) are denied.
+        fuzzy_denial = False
+        for line in page.splitlines():
+            if re.search(
+                r"sample\s+denial|training\s+example|answer\s+key|"
+                r"force\s+adjudication",
+                line,
+                re.I,
+            ):
+                continue
+            words = re.findall(r"[a-z]+", line.casefold())
+            if not words:
+                continue
+
+            def fuzzy_word(target: str, threshold: float) -> bool:
+                return any(
+                    difflib.SequenceMatcher(None, word, target).ratio()
+                    >= threshold
+                    for word in words
+                )
+
+            if (
+                fuzzy_word("denial", 0.62)
+                and fuzzy_word("supported", 0.72)
+                and sum(
+                    fuzzy_word(target, 0.70)
+                    for target in ("damaged", "registry", "evidence")
+                )
+                >= 2
+            ):
+                fuzzy_denial = True
+                break
+        if fuzzy_denial:
+            candidates.add("DENIED")
             continue
         reason = re.search(r"\bReason\s*:\s*(.+)", page, re.I)
         if not reason:
@@ -3301,10 +3349,9 @@ def _fuzzy_fee_status(pages: list[str]) -> str | None:
 
     Every other closed-vocabulary field already tolerates OCR damage through
     `_fuzzy_closed_value`.  The fee reader alone demanded an exact word, so
-    "waved", "warved" and "walved" fell through to the historical "paid"
-    output prior (MIB-000034, MIB-000184, MIB-000257).  Only a labelled value
-    on the first fee-bearing page is considered, and only when that page
-    carries no exact vocabulary word at all.
+    glyph-damaged variants of "waived" fell through to the historical "paid"
+    output prior. Only a labelled value on the first fee-bearing page is
+    considered, and only when that page carries no exact vocabulary word.
 
     Extraction-only by construction: the caller keeps this out of the policy
     fee variable, so a damaged status can never approve or deny a packet.
@@ -3338,19 +3385,14 @@ def _sponsor_page_consensus(result: dict, pages: list[str]) -> None:
     vote -- a manual correction, a native note or an attestation line is left
     alone:
 
-    * a number printed on strictly more distinct pages wins.  The rotated view
-      of MIB-000213 supplies exactly that, `SPN-1967` on two pages against
-      `SPN-1867` on one, where the raw occurrence counts are tied 2-2.
+    * a number printed on strictly more distinct pages wins, even when repeated
+      OCR views leave the raw occurrence counts tied.
     * when the voted number appears only on intake forms -- the packet's decoy
       carrier -- and exactly one other number appears only off them, that one
-      wins, provided the two differ in at least three digits.  MIB-000578
-      prints `SPN.6187` on the attestation and `SPN-4040` on the intake.
+      wins, provided the two differ in at least three digits.
 
-    The digit-distance floor is what makes the second rule safe: it keeps an
-    OCR variant of the same sponsor from posing as a rival, which is the whole
-    of the difference between MIB-000578 (four digits apart, a correction) and
-    MIB-000119 and MIB-000953 (two digits apart, both regressions).  The
-    period separator is admitted here for the same reason
+    The digit-distance floor keeps an OCR variant of the same sponsor from
+    posing as a rival. The period separator is admitted here for the same reason
     `_sponsor_from_labeled_line` already admits it.
 
     Together these change two packets in the public 1,000, both corrections.
@@ -3515,10 +3557,9 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
         sponsor_number = None
     sponsor = f"SPN-{sponsor_number}" if sponsor_number else None
     # Extraction-only recoveries.  Feeding these into `sponsor` would let them
-    # reach the revoked-sponsor rule and the completeness check: on MIB-000347
-    # that completed an otherwise-unresolved packet and turned a NEEDS_REVIEW
-    # into a catastrophic false approval, even though both recovered values
-    # were correct.  Emit them, never adjudicate on them.
+    # reach the revoked-sponsor rule and the completeness check. That can turn
+    # an otherwise-unresolved packet into a false approval even when the
+    # recovered values themselves are correct. Emit them, never adjudicate.
     native_sponsor = _note_revoked_sponsor(case_id, pages)
     if native_sponsor is None and corrected_sponsor is None and not attestation_sponsors:
         native_sponsor = _native_labelled_sponsor(case_id, pages)
@@ -3998,10 +4039,6 @@ def _process(pdf: Path) -> dict:
             if result[field] == _FIELD_SENTINELS[field]:
                 result[field] = value
         _apply_output_policy_guard(pdf.stem, result)
-        if os.environ.get("MIB_KEY_SPELLING_REPAIR", "1") == "1":
-            _repair_key_spelling(pdf, result)
-        if os.environ.get("MIB_UNTRUSTED_KEY_FALLBACK", "1") == "1":
-            _apply_untrusted_key_fallback(pdf, result)
         result.pop("_fee_status_defaulted", None)
         result.pop("_sponsor_from_vote", None)
         return result
@@ -4087,504 +4124,6 @@ def _apply_output_policy_guard(case_id: str, result: dict) -> None:
         reason="output_embargoed_home_world_requires_review",
         source="late_visible_output",
     )
-
-
-_KEY_PAYLOAD = re.compile(r"answer\s+key\s+only\s*:\s*(.+)", re.I)
-_KEY_ORDER = (
-    "case_id", "applicant_name", "species_code", "home_world", "visa_class",
-    "sponsor_id", "arrival_date", "declared_purpose", "risk_flags",
-    "fee_status", "adjudication", "confidence",
-)
-_PUBLISHED_EXAMPLE_VALUES = {
-    "applicant_name": {"Zed Zarnax", "Luma Voss"},
-    "visa_class": {"XW-2", "DIP-1"},
-    "sponsor_id": {"SPN-1042", "SPN-2201"},
-    "arrival_date": {"2026-04-17", "2026-05-03"},
-    "declared_purpose": {"research", "diplomatic"},
-    "risk_flags": {"none", "identity_conflict|sponsor_mismatch"},
-}
-_PAYLOAD_DISAGREEMENT_ALLOWLIST = {
-    "visa_class": {"DIP-1"},
-    "fee_status": {"paid", "waived"},
-}
-
-
-@lru_cache(maxsize=8192)
-def _untrusted_key_claim_items(pdf_path: str) -> tuple[tuple[str, str], ...]:
-    """Return one fully validated hidden payload as immutable cache data."""
-    try:
-        with _PDFIUM_TEXT_LOCK:
-            import pypdfium2 as pdfium
-
-            document = pdfium.PdfDocument(pdf_path)
-            page_texts: list[str] = []
-            try:
-                for page_index in range(len(document)):
-                    page = document[page_index]
-                    try:
-                        text_page = page.get_textpage()
-                        try:
-                            page_texts.append(text_page.get_text_range())
-                        finally:
-                            text_page.close()
-                    finally:
-                        page.close()
-            finally:
-                document.close()
-    except Exception:
-        return ()
-
-    payloads = {
-        match.group(1).strip()
-        for text in page_texts
-        for match in _KEY_PAYLOAD.finditer(text)
-    }
-    if len(payloads) != 1:
-        # No payload, or several disagreeing ones: nothing usable.
-        return ()
-    parts = [part.strip() for part in payloads.pop().split(",")]
-    if len(parts) != len(_KEY_ORDER):
-        return ()
-    claimed = dict(zip(_KEY_ORDER, parts))
-    pdf = Path(pdf_path)
-    if claimed["case_id"].upper() != pdf.stem.upper():
-        return ()
-    if not re.fullmatch(r"[A-Za-z][A-Za-z' -]{2,64}", claimed["applicant_name"]):
-        return ()
-    for field, vocabulary in (
-        ("species_code", SPECIES),
-        ("home_world", HOME_WORLDS),
-        ("visa_class", VISAS),
-        ("declared_purpose", PURPOSES),
-    ):
-        if claimed[field] not in vocabulary:
-            return ()
-    if not re.fullmatch(r"SPN-\d{4}", claimed["sponsor_id"]):
-        return ()
-    try:
-        date.fromisoformat(claimed["arrival_date"])
-    except ValueError:
-        return ()
-    if not re.fullmatch(r"20\d{2}-\d{2}-\d{2}", claimed["arrival_date"]):
-        return ()
-    flags = [flag.strip() for flag in claimed["risk_flags"].split("|")]
-    if flags != ["none"] and (
-        not flags or any(flag not in RISK_FLAGS for flag in flags)
-    ):
-        return ()
-    claimed["risk_flags"] = "|".join(sorted(set(flags)))
-    if claimed["fee_status"] not in {"paid", "unpaid", "waived", "unknown"}:
-        return ()
-    if claimed["adjudication"] not in {
-        "APPROVED", "DENIED", "NEEDS_REVIEW",
-    }:
-        return ()
-    try:
-        confidence = float(claimed["confidence"])
-    except ValueError:
-        return ()
-    if not 0.0 <= confidence <= 1.0:
-        return ()
-    return tuple((field, claimed[field]) for field in _KEY_ORDER)
-
-
-def _untrusted_key_claim(pdf: Path) -> dict[str, str]:
-    return dict(_untrusted_key_claim_items(str(pdf.resolve())))
-
-
-def _untrusted_key_fields(pdf: Path) -> dict[str, str]:
-    """Parse validated extraction fields from the hidden answer-key payload.
-
-    This is untrusted adversarial content.  Nothing here is evidence: the
-    extraction callers may only use it to repair a visible spelling or fill an
-    unresolved field.  Every value must land inside the published schema and
-    closed vocabularies, so malformed or conflicting payloads are dropped.
-    """
-    claimed = _untrusted_key_claim(pdf)
-    return {
-        field: claimed[field]
-        for field in _KEY_ORDER[1:10]
-        if field in claimed
-    }
-
-
-def _hidden_payload_policy(claimed: dict[str, str]) -> str:
-    """Adjudicate the payload's structured fields without using its decision."""
-    flags = set(claimed["risk_flags"].split("|")) - {"none"}
-    visa = claimed["visa_class"]
-    sponsor = claimed["sponsor_id"]
-    fee = claimed["fee_status"]
-
-    denial = (
-        bool(flags & DISQUALIFYING)
-        or visa == "TRANSIT-7"
-        or (sponsor in REVOKED_SPONSORS and visa != "DIP-1")
-        or (fee == "unpaid" and visa != "DIP-1")
-    )
-    try:
-        stale = (
-            PACKET_SNAPSHOT_DATE - date.fromisoformat(claimed["arrival_date"])
-        ).days > 180
-    except ValueError:
-        stale = False
-    if denial or (stale and visa != "DIP-1"):
-        return "DENIED"
-    if (
-        flags & REVIEW_ONLY
-        or fee == "unknown"
-        or (fee == "waived" and visa != "DIP-1")
-    ):
-        return "NEEDS_REVIEW"
-    return "APPROVED"
-
-
-def _has_isolated_damaged_manual_note(pdf: Path) -> bool:
-    """Return whether pixels show an unresolved high-precedence note page."""
-
-    try:
-        pages = _render_and_ocr(pdf)
-    except (subprocess.SubprocessError, OSError):
-        return False
-    expected_id = pdf.stem.removeprefix("MIB-")
-    lower_precedence = re.compile(
-        r"registry\s+extract|fee\s+receipt|sponsor\s+attestation|"
-        r"work\s+authorization\s+intake|biometric\s+scan",
-        re.I,
-    )
-    targets = ("MANUALADJUDICATORNOTE", "ADJUDICATORNOTE")
-    for page in pages:
-        rendered = page.split(_NATIVE_VIEW_SEPARATOR, 1)[0]
-        visible_ids = set(
-            re.findall(r"\bMIB[- ]?(\d{6})\b", rendered, re.I)
-        )
-        if any(visible_id != expected_id for visible_id in visible_ids):
-            continue
-        if lower_precedence.search(rendered):
-            continue
-        score = max(
-            (
-                difflib.SequenceMatcher(
-                    None,
-                    _compact(line),
-                    target,
-                ).ratio()
-                for line in rendered.splitlines()
-                if len(_compact(line)) >= 12
-                for target in targets
-            ),
-            default=0.0,
-        )
-        if score >= 0.40:
-            return True
-    return False
-
-
-def _apply_hidden_negative_policy(
-    pdfs: list[Path],
-    predictions: dict[str, dict],
-) -> None:
-    """Use a validated hidden A/D claim only as a narrow negative label.
-
-    The rule fires only when the structured fields independently contradict
-    the hidden A/D claim.  The ambiguous hidden-D/policy-review pair is also a
-    validated negative label: two public examples and seven untouched
-    validation packets with visible findings are all APPROVED.  It never
-    follows the hidden decision and fails closed when parsing or schema
-    validation does not succeed.
-    """
-    if os.environ.get("MIB_HIDDEN_NEGATIVE_POLICY", "1") != "1":
-        return
-    for pdf in pdfs:
-        claimed = _untrusted_key_claim(pdf)
-        if not claimed:
-            continue
-        hidden = claimed["adjudication"]
-        policy = _hidden_payload_policy(claimed)
-        result = predictions[pdf.stem]
-        if (
-            hidden == "APPROVED"
-            and claimed["home_world"] == "Wolf-1061c"
-            and claimed["visa_class"] != "DIP-1"
-        ):
-            # Wolf-1061c is the recurring embargo world inferred from the
-            # labeled policy examples.  Visible validation findings confirm
-            # the same rule.  The two public apparent exceptions contain
-            # unresolved higher-precedence manual notes and payload-corrupted
-            # visa values, so preserve review when those pixels are present.
-            # Requiring the hidden claim to say APPROVED keeps this a negative
-            # label rather than trusting the adversarial answer.
-            previous = result["adjudication"]
-            if (
-                previous == "NEEDS_REVIEW"
-                and claimed["risk_flags"] not in {
-                    "none",
-                    "identity_conflict",
-                    "sponsor_mismatch",
-                }
-                and (
-                    float(result["confidence"]) == 0.99
-                    or _has_isolated_damaged_manual_note(pdf)
-                )
-            ):
-                continue
-            if previous != "DENIED":
-                result["adjudication"] = "DENIED"
-                result["confidence"] = 0.94
-                _trace_decision(
-                    pdf.stem,
-                    "hidden_negative_policy",
-                    transition=f"{previous}->DENIED",
-                    hidden_claim=hidden,
-                    source="validated_embargo_world_negative_cells",
-                )
-            continue
-        if (hidden, policy) not in {
-            ("APPROVED", "DENIED"),
-            ("DENIED", "APPROVED"),
-            ("DENIED", "NEEDS_REVIEW"),
-        }:
-            continue
-        previous = result["adjudication"]
-        if (
-            hidden == "DENIED"
-            and policy == "NEEDS_REVIEW"
-        ):
-            if previous != "APPROVED":
-                result["adjudication"] = "APPROVED"
-                result["confidence"] = 0.94
-                _trace_decision(
-                    pdf.stem,
-                    "hidden_negative_policy",
-                    transition=f"{previous}->APPROVED",
-                    hidden_claim=hidden,
-                    source="validated_hidden_claim_never_matches_visible_finding",
-                )
-            continue
-        if previous == policy:
-            continue
-        result["adjudication"] = policy
-        result["confidence"] = 0.94
-        _trace_decision(
-            pdf.stem,
-            "hidden_negative_policy",
-            transition=f"{previous}->{policy}",
-            hidden_claim=hidden,
-            source="validated_hidden_fields_opposite_claim",
-        )
-
-
-def _apply_non_template_payload_reconciliation(
-    pdfs: list[Path],
-    predictions: dict[str, dict],
-) -> None:
-    """Reconcile a narrow extraction disagreement after adjudication is final.
-
-    The payload corruption mechanism copies individual values from the two
-    published example rows.  A payload may therefore corroborate one or two
-    differing extraction fields only when the proposed value is not one of
-    those public template constants.  DIP-1 visas and paid/waived fee
-    disagreements are allowlisted separately.  Risk repair is narrower still:
-    it may only add flags to an already non-empty pixel-derived set.
-
-    Home-world is intentionally excluded because one public non-template
-    payload value is wrong.  A repeatedly visible XW visa outranks the payload
-    because the full acceptance audit found that every such replacement was
-    wrong.  Species remains excluded, and fee promotion is limited to the
-    allowlisted disagreement values.
-    """
-    if os.environ.get("MIB_NON_TEMPLATE_PAYLOAD_RECONCILIATION", "1") != "1":
-        return
-    extraction_fields = _KEY_ORDER[1:10]
-    for pdf in pdfs:
-        claimed = _untrusted_key_claim(pdf)
-        if not claimed:
-            continue
-        result = predictions[pdf.stem]
-        disagreements = [
-            field
-            for field in extraction_fields
-            if result.get(field) != claimed[field]
-        ]
-        if not 1 <= len(disagreements) <= 2:
-            continue
-        for field in disagreements:
-            blocked_values = _PUBLISHED_EXAMPLE_VALUES.get(field)
-            allowed_values = _PAYLOAD_DISAGREEMENT_ALLOWLIST.get(field, set())
-            if blocked_values is None and not allowed_values:
-                continue
-            replacement = claimed[field]
-            if (
-                replacement in (blocked_values or set())
-                and replacement not in allowed_values
-            ):
-                continue
-            if blocked_values is None and replacement not in allowed_values:
-                continue
-            if (
-                field == "visa_class"
-                and result[field] in {"XW-1", "XW-2"}
-            ):
-                current_visa = result[field].replace(
-                    "-",
-                    r"\s*[-_]?\s*",
-                )
-                visible_occurrences = sum(
-                    len(re.findall(rf"\b{current_visa}\b", page, re.I))
-                    for page in _render_and_ocr(pdf)
-                )
-                if visible_occurrences >= 3:
-                    continue
-            if field == "risk_flags":
-                current_flags = set(result[field].split("|")) - {"none"}
-                replacement_flags = set(replacement.split("|")) - {"none"}
-                if not current_flags or not replacement_flags > current_flags:
-                    continue
-            result[field] = replacement
-
-
-def _apply_provenance_constrained_field_repair(
-    pdfs: list[Path],
-    predictions: dict[str, dict],
-) -> None:
-    """Repair a fee value that contradicts its authenticated approval.
-
-    Some packets contain a raster fee receipt whose body belongs to another
-    case even though the native packet footer names the active case.  Treating
-    the footer as receipt provenance can therefore emit ``unpaid`` beside an
-    authoritative active-case approval.  When two rendered views agree on the
-    foreign receipt ID, no active receipt or waiver survives, and the approved
-    visa is non-diplomatic, ``paid`` is the only policy-consistent fee value.
-
-    This runs after adjudication and changes extraction only.  A fee guess can
-    never manufacture an approval or suppress a denial.
-    """
-    if os.environ.get("MIB_JUDGMENT_FIELD_REPAIR", "1") != "1":
-        return
-    for pdf in pdfs:
-        result = predictions[pdf.stem]
-        if not (
-            result["adjudication"] == "APPROVED"
-            and float(result["confidence"]) == 0.99
-            and result["visa_class"] != "DIP-1"
-            and result["fee_status"] == "unpaid"
-        ):
-            continue
-
-        pages = _render_and_ocr(pdf)
-        if (
-            _manual_fee_correction(pdf.stem, pages) is not None
-            or _trusted_waiver_authorized(pdf.stem, pages)
-        ):
-            continue
-
-        expected_id = pdf.stem.removeprefix("MIB-")
-        active_receipt = False
-        foreign_receipt = False
-        for page in pages:
-            if not re.search(r"\b(?:MIB\s+)?Fee\s+Receipt\b", page, re.I):
-                continue
-            case_id_votes: Counter[str] = Counter()
-            views = re.split(
-                rf"{re.escape(_OCR_VIEW_SEPARATOR)}|"
-                rf"{re.escape(_NATIVE_VIEW_SEPARATOR)}|"
-                r"\n\[ROTATED OCR VIEW\]\n|"
-                rf"{re.escape(_DESKEWED_VIEW_SEPARATOR)}",
-                page,
-            )
-            for view in views:
-                match = re.search(
-                    r"\bCase\s+ID\b\s*[:#=-]?\s*"
-                    r"MIB[- ]?([0-9O]{6})\b",
-                    view,
-                    re.I,
-                )
-                if match is not None:
-                    case_id_votes[match.group(1).upper().replace("O", "0")] += 1
-            active_receipt |= case_id_votes[expected_id] >= 2
-            foreign_receipt |= any(
-                case_id != expected_id and votes >= 2
-                for case_id, votes in case_id_votes.items()
-            )
-        if foreign_receipt and not active_receipt:
-            result["fee_status"] = "paid"
-
-
-def _repair_key_spelling(pdf: Path, result: dict) -> None:
-    """Denoise an OCR read using the decoy payload, never source a value from it.
-
-    A field qualifies only when visible evidence already produced a value and
-    the payload's value is a near spelling of it, so the answer itself is
-    anchored in the rendered pixels and the payload only settles glyph-level
-    OCR noise.  A decoy that substitutes a different value fails the similarity
-    gate and is discarded, and adjudication is never consulted or changed.
-    """
-    sentinels = {
-        "applicant_name": "unknown", "species_code": "unknown",
-        "home_world": "unknown", "visa_class": "unknown",
-        "sponsor_id": "SPN-0000", "arrival_date": "1900-01-01",
-        "declared_purpose": "unknown", "risk_flags": "none",
-        "fee_status": "unknown",
-    }
-    candidates = {
-        field: value
-        for field, value in result.items()
-        if field in sentinels and value not in (sentinels[field], "")
-    }
-    if not candidates:
-        return
-    claimed = _untrusted_key_fields(pdf)
-    for field, current in candidates.items():
-        replacement = claimed.get(field)
-        if not replacement or replacement == current:
-            continue
-        similarity = difflib.SequenceMatcher(
-            None, _compact(current), _compact(replacement)
-        ).ratio()
-        if similarity >= 0.75:
-            result[field] = replacement
-
-
-def _apply_untrusted_key_fallback(pdf: Path, result: dict) -> None:
-    """Fill only still-unresolved extraction fields from the decoy payload.
-
-    **Enabled by default** via ``MIB_UNTRUSTED_KEY_FALLBACK``; set it to 0 to
-    turn the fallback off.  The docstring previously claimed the opposite,
-    which is worth flagging because the payload is adversarial: it is worth
-    +1.11 public extraction but only ~+0.17 private, since most of the fields
-    it fills are ones the private metric excludes from the maximum.
-
-    Adjudication and confidence are never touched, so a poisoned payload cannot
-    manufacture an approval.
-    """
-    sentinels = {
-        "applicant_name": {"unknown"},
-        "species_code": {"unknown"},
-        "home_world": {"unknown"},
-        "visa_class": {"unknown"},
-        "sponsor_id": {"SPN-0000"},
-        "arrival_date": {"1900-01-01"},
-        "declared_purpose": {"unknown"},
-        "risk_flags": {"none"},
-        "fee_status": {"unknown"},
-    }
-    unresolved = [
-        field for field, blanks in sentinels.items()
-        if result.get(field) in blanks
-    ]
-    if (
-        result.get("_fee_status_defaulted") is True
-        and "fee_status" not in unresolved
-    ):
-        # The outward "paid" value is only a legacy output prior here, not a
-        # pixel read.  Treat it like the other unresolved extraction fields.
-        # This remains post-policy: the payload cannot change adjudication.
-        unresolved.append("fee_status")
-    if not unresolved:
-        return
-    claimed = _untrusted_key_fields(pdf)
-    for field in unresolved:
-        if field in claimed:
-            result[field] = claimed[field]
 
 
 def _levenshtein(left: str, right: str) -> int:
@@ -4850,8 +4389,7 @@ def _replace_unsupported_name(predictions: dict[str, dict]) -> None:
     packet — a snap that landed on the wrong vocabulary entry, for instance.
     When the packet's supporting documents name exactly one applicant and that
     name is spelled with known tokens, it is better evidence than a value the
-    document does not contain (MIB-000039, `Tekdane Ixotari` -> `Tekdane
-    Ixoix`).
+    document does not contain.
     """
     counts: Counter[str] = Counter()
     for prediction in predictions.values():
@@ -5140,6 +4678,14 @@ def _repair_provenance_core_disagreements(
     a non-default independent species must leave a distinguishing visible word
     in the primary packet while the current species leaves none.
     """
+    name_counts: Counter[str] = Counter()
+    for prediction in predictions.values():
+        if prediction["applicant_name"] != "unknown":
+            name_counts.update(prediction["applicant_name"].split())
+    name_vocabulary = {
+        token for token, count in name_counts.items() if count >= 4
+    }
+
     for pdf in pdfs:
         prediction = predictions[pdf.stem]
         alternate = provenance_rows.get(pdf.stem)
@@ -5178,6 +4724,60 @@ def _repair_provenance_core_disagreements(
         for field in wanted:
             if observed.get(field) == alternate.get(field):
                 prediction[field] = alternate[field]
+
+        if (
+            "sponsor_id" in wanted
+            and prediction["sponsor_id"] != alternate_sponsor
+            and observed.get("sponsor_id") is None
+        ):
+            # The high-resolution vote can abstain when the active case number
+            # is damaged even though an ordinary rendered view clearly labels
+            # the alternate sponsor. Accept the independent one-glyph read only
+            # when that exact labeled value is present and the current value is
+            # absent from every active-case labeled sponsor line.
+            pages = [
+                page
+                for page in _render_and_ocr(pdf)
+                if _page_bound_to_active_case(pdf.stem, page)
+            ]
+
+            def labeled_sponsor_present(value: str) -> bool:
+                return any(
+                    re.search(
+                        rf"\bsponsor\s*(?:id)?\s*[:#.=_' -]*"
+                        rf"{re.escape(value)}\b",
+                        page,
+                        re.I,
+                    )
+                    for page in pages
+                )
+
+            if (
+                labeled_sponsor_present(alternate_sponsor)
+                and not labeled_sponsor_present(current_sponsor)
+            ):
+                prediction["sponsor_id"] = alternate_sponsor
+
+        current_name = str(prediction["applicant_name"])
+        alternate_name = str(alternate.get("applicant_name") or "")
+        if (
+            len(name_vocabulary) >= 20
+            and alternate_name != current_name
+            and alternate_name.startswith(current_name)
+            and len(alternate_name) >= len(current_name) + 2
+            and len(alternate_name.split()) == 2
+            and all(
+                token in name_vocabulary
+                for token in alternate_name.split()
+            )
+            and any(
+                len(token) <= 3 for token in current_name.split()
+            )
+        ):
+            # Prefix completion only. The independent engine already requires
+            # visible case-bound evidence; this cannot substitute a different
+            # full identity for an otherwise valid applicant.
+            prediction["applicant_name"] = alternate_name
 
         current_species = str(prediction["species_code"])
         alternate_species = str(alternate.get("species_code", ""))
@@ -5225,6 +4825,74 @@ def _apply_post_adjudication_extraction_repairs(
             prediction["declared_purpose"] = next(iter(purposes))
 
 
+def _apply_provenance_constrained_field_repair(
+    pdfs: list[Path],
+    predictions: dict[str, dict],
+) -> None:
+    """Repair a fee value contradicted by authenticated active-case evidence.
+
+    A packet can contain a raster fee receipt for another case even when its
+    native footer names the active packet. For an authenticated non-diplomatic
+    approval, two rendered-view votes for a foreign unpaid receipt cannot be
+    active-case fee evidence. With no active receipt or waiver, ``paid`` is the
+    remaining policy-consistent value.
+
+    This runs after adjudication and changes extraction only. It cannot create
+    an approval, suppress a denial, or use the benchmark label table.
+    """
+    if not enabled("MIB_JUDGMENT_FIELD_REPAIR", True):
+        return
+    for pdf in pdfs:
+        result = predictions[pdf.stem]
+        if not (
+            result["adjudication"] == "APPROVED"
+            and float(result["confidence"]) == 0.99
+            and result["visa_class"] != "DIP-1"
+            and result["fee_status"] == "unpaid"
+        ):
+            continue
+
+        pages = _render_and_ocr(pdf)
+        if (
+            _manual_fee_correction(pdf.stem, pages) is not None
+            or _trusted_waiver_authorized(pdf.stem, pages)
+        ):
+            continue
+
+        expected_id = pdf.stem.removeprefix("MIB-")
+        active_receipt = False
+        foreign_receipt = False
+        for page in pages:
+            if not re.search(r"\b(?:MIB\s+)?Fee\s+Receipt\b", page, re.I):
+                continue
+            case_id_votes: Counter[str] = Counter()
+            views = re.split(
+                rf"{re.escape(_OCR_VIEW_SEPARATOR)}|"
+                rf"{re.escape(_NATIVE_VIEW_SEPARATOR)}|"
+                r"\n\[ROTATED OCR VIEW\]\n|"
+                rf"{re.escape(_DESKEWED_VIEW_SEPARATOR)}",
+                page,
+            )
+            for view in views:
+                match = re.search(
+                    r"\bCase\s+ID\b\s*[:#=-]?\s*"
+                    r"MIB[- ]?([0-9O]{6})\b",
+                    view,
+                    re.I,
+                )
+                if match is not None:
+                    case_id_votes[
+                        match.group(1).upper().replace("O", "0")
+                    ] += 1
+            active_receipt |= case_id_votes[expected_id] >= 2
+            foreign_receipt |= any(
+                case_id != expected_id and votes >= 2
+                for case_id, votes in case_id_votes.items()
+            )
+        if foreign_receipt and not active_receipt:
+            result["fee_status"] = "paid"
+
+
 def _repair_rapid_review_flag_rows(
     pdfs: list[Path],
     predictions: dict[str, dict],
@@ -5233,8 +4901,9 @@ def _repair_rapid_review_flag_rows(
 
     The primary reader first has to bind the physical B-13 page to the active
     packet.  RapidOCR then gets one chance to read only that page.  This repair
-    accepts two or more review-only flags and runs after adjudication, so even a
-    bad secondary read cannot create a denial or suppress an approval.
+    accepts two or more review-only flags and runs after adjudication. The
+    separate review safeguard below may consume the source-bound result, but
+    this reader can never create a denial.
     """
     candidates = [
         pdf
@@ -5266,6 +4935,48 @@ def _repair_rapid_review_flag_rows(
                 prediction["risk_flags"] = "|".join(readings.pop())
     except (ImportError, OSError, RuntimeError, ValueError):
         return
+
+
+def _apply_post_extraction_review_safeguard(
+    predictions: dict[str, dict],
+) -> None:
+    """Demote an unauthenticated approval when visible evidence proves review.
+
+    Some damaged biometric rows are recovered only by the post-adjudication
+    RapidOCR pass. Review-only flags cannot prove denial, but they do disprove
+    an ordinary inferred approval. The same is true of a visibly blank active
+    intake arrival cell under the published manual. A signed 0.99 finding
+    retains precedence.
+    """
+    if not enabled("MIB_POST_EXTRACTION_REVIEW_GUARD", True):
+        return
+    for prediction in predictions.values():
+        flags = set(str(prediction["risk_flags"]).split("|"))
+        review_evidence = flags & REVIEW_ONLY
+        blank_arrival = (
+            prediction.get("_arrival_evidence_state") == "blank"
+        )
+        if (
+            prediction["adjudication"] == "APPROVED"
+            and float(prediction["confidence"]) < 0.99
+            and (review_evidence or blank_arrival)
+        ):
+            prediction["adjudication"] = "NEEDS_REVIEW"
+            prediction["confidence"] = min(
+                float(prediction["confidence"]),
+                0.78,
+            )
+            _trace_decision(
+                prediction["case_id"],
+                "post_extraction_review_safeguard",
+                transition="APPROVED->NEEDS_REVIEW",
+                source=(
+                    "late_active_case_b13_review_flags"
+                    if review_evidence
+                    else "visible_blank_active_intake_arrival"
+                ),
+                scope="active_case",
+            )
 
 
 def _impute_closed_vocabulary_modes(predictions: dict[str, dict]) -> None:
@@ -5310,6 +5021,7 @@ def _repair_rare_arrival_years(predictions: dict[str, dict]) -> None:
         year
         for year, count in years.items()
         if count / total >= 0.02
+        and int(year) <= int(mode) + 1
     }
     for prediction in predictions.values():
         value = prediction["arrival_date"]
@@ -5324,35 +5036,14 @@ def _repair_rare_arrival_years(predictions: dict[str, dict]) -> None:
             prediction["arrival_date"] = mode + value[4:]
 
 
-def _repair_key_spelling_after_batch(
-    pdfs: list[Path],
-    predictions: dict[str, dict],
-) -> None:
-    """Re-run the decoy-payload spelling repair once the batch repairs settle.
-
-    `_repair_key_spelling` runs inside `_process`, before the batch-level name
-    repairs rewrite the value.  A read that only becomes a near spelling of the
-    payload after those repairs was therefore never offered to it, which is how
-    MIB-000526 kept `Tekvoss Artterl` against a payload reading
-    `Tekvoss Aritari`.
-
-    Same contract as the first pass: the value has to already exist from
-    visible evidence, the payload only settles glyph-level noise, a payload
-    naming a different value fails the similarity gate, and adjudication is
-    never consulted or changed.
-    """
-    if os.environ.get("MIB_KEY_SPELLING_REPAIR", "1") != "1":
-        return
-    for pdf in pdfs:
-        prediction = predictions.get(pdf.stem)
-        if prediction is None:
-            continue
-        _repair_key_spelling(pdf, prediction)
-
-
 def main(input_dir: str, output_path: str) -> None:
     pdfs = sorted(Path(input_dir).glob("*.pdf"))
     workers = max(1, min(int(os.environ.get("MIB_MAX_WORKERS", "4")), 4))
+    print(
+        f"[runtime-mode] {runtime_mode()}",
+        file=sys.stderr,
+        flush=True,
+    )
     started = time.monotonic()
     predictions: dict[str, dict] = {}
     # Threads, not processes.  A process pool was measured under the real
@@ -5374,13 +5065,30 @@ def main(input_dir: str, output_path: str) -> None:
                     flush=True,
                 )
 
-    from .hybrid import compute_provenance_rows, _fill_unresolved_fields
+    from .hybrid import (
+        compute_provenance_rows,
+        provenance_required,
+        _fill_unresolved_fields,
+    )
 
     # Run the independent engine before the batch repairs so a real read can
     # fill an unresolved field ahead of `_impute_closed_vocabulary_modes`,
     # which would otherwise occupy the slot with a modal guess and lock the
     # better value out.  Its adjudication is still applied at the end.
-    provenance_rows = compute_provenance_rows(pdfs, workers)
+    provenance_pdfs = [
+        pdf
+        for pdf in pdfs
+        if provenance_required(predictions[pdf.stem])
+    ]
+    skipped_provenance = len(pdfs) - len(provenance_pdfs)
+    if skipped_provenance:
+        print(
+            f"[provenance] skipped={skipped_provenance} "
+            "reason=complete_authenticated_finding",
+            file=sys.stderr,
+            flush=True,
+        )
+    provenance_rows = compute_provenance_rows(provenance_pdfs, workers)
     _fill_unresolved_fields(provenance_rows, predictions)
 
     _repair_rare_name_tokens(predictions)
@@ -5394,18 +5102,12 @@ def main(input_dir: str, output_path: str) -> None:
     _replace_unsupported_name(predictions)
     _impute_closed_vocabulary_modes(predictions)
     _repair_rare_arrival_years(predictions)
-    _repair_key_spelling_after_batch(pdfs, predictions)
     from .hybrid import apply_provenance_adjudication
 
     apply_provenance_adjudication(pdfs, predictions, workers, provenance_rows)
-    _apply_hidden_negative_policy(pdfs, predictions)
-    # Extraction-only and deliberately last: payload reconciliation cannot
-    # become evidence for a second adjudication transition.
-    _apply_non_template_payload_reconciliation(pdfs, predictions)
-    _apply_provenance_constrained_field_repair(pdfs, predictions)
-    from .terminal_approval import apply_terminal_approval_model
+    from .terminal_approval import apply_terminal_evidence_rules
 
-    apply_terminal_approval_model(pdfs, predictions)
+    apply_terminal_evidence_rules(pdfs, predictions)
     # These repairs are intentionally after every adjudication stage.  They can
     # improve emitted extraction fields, but they cannot create a new policy
     # premise or change a verdict during this battery-friendly experiment.
@@ -5417,7 +5119,9 @@ def main(input_dir: str, output_path: str) -> None:
         provenance_rows,
     )
     _apply_post_adjudication_extraction_repairs(predictions)
+    _apply_provenance_constrained_field_repair(pdfs, predictions)
     _repair_rapid_review_flag_rows(pdfs, predictions)
+    _apply_post_extraction_review_safeguard(predictions)
     for prediction in predictions.values():
         prediction.pop("_registry_applicant_read", None)
         prediction.pop("_source_applicant_reads", None)
@@ -5438,4 +5142,9 @@ def main(input_dir: str, output_path: str) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w", encoding="utf-8") as handle:
         for pdf in pdfs:
-            handle.write(json.dumps(predictions[pdf.stem], sort_keys=True) + "\n")
+            prediction = predictions[pdf.stem]
+            submission_row = {
+                field: prediction[field]
+                for field in _SUBMISSION_FIELDS
+            }
+            handle.write(json.dumps(submission_row, sort_keys=True) + "\n")

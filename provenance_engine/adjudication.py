@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from datetime import date
@@ -594,9 +595,10 @@ class AdjudicationEngine:
         # improve the required output row when a scan leaves these values
         # unresolved, while the resolved case, policy decision, trace, and
         # confidence continue to treat the underlying evidence as unknown.
-        for field_name, fallback in OUTPUT_ONLY_FALLBACKS.items():
-            if values[field_name] is None:
-                values[field_name] = fallback
+        if os.environ.get("MIB_OUTPUT_PRIOR_FALLBACKS", "1") == "1":
+            for field_name, fallback in OUTPUT_ONLY_FALLBACKS.items():
+                if values[field_name] is None:
+                    values[field_name] = fallback
         # The two absolute embargo worlds are themselves the visible policy
         # fact represented by ``planetary_embargo``.  A damaged biometric risk
         # row must not erase that deterministic flag from the canonical output.

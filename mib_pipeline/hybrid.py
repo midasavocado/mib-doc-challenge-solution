@@ -26,8 +26,6 @@ from provenance_engine import (
 )
 
 from .local_cache import load_json, store_json
-from .pattern_policy import apply_evidence_pattern_policy
-from .visible_denials import apply_visible_slash_denials
 
 
 _PRINT_LOCK = threading.Lock()
@@ -45,8 +43,9 @@ _REVIEW_ONLY_FLAGS = {
     "sponsor_mismatch",
 }
 _PROVENANCE_CACHE_SCHEMA = (
-    "visible-provenance-v1:packet-page-markers:"
-    "pinned-calibrator:pinned-exceptions:pinned-recalibrator"
+    "visible-provenance-v2:packet-page-markers:"
+    "pinned-calibrator:pinned-exceptions:pinned-recalibrator:"
+    "source-corroborated-approval-only"
 )
 
 
@@ -115,8 +114,7 @@ def _has_uncorroborated_redacted_stale_visa(
         if flag and flag != "none"
     }
     if (
-        not flags
-        or not flags <= _REVIEW_ONLY_FLAGS
+        not flags <= _REVIEW_ONLY_FLAGS
         or flags & _HARD_DENIAL_FLAGS
         or prediction["visa_class"] == "DIP-1"
         or float(prediction["confidence"]) == 0.99
@@ -163,21 +161,21 @@ def _apply_visible_review_safeguards(
                 or prediction["arrival_date"] == "1900-01-01"
             )
         )
-        review_flag_stale = False
+        stale_non_diplomatic = False
         if (
-            flags & _REVIEW_ONLY_FLAGS
-            and not flags & _HARD_DENIAL_FLAGS
-            and prediction["visa_class"] != "DIP-1"
+            prediction["visa_class"] != "DIP-1"
             and float(prediction["confidence"]) != 0.99
+            and not flags & _HARD_DENIAL_FLAGS
         ):
             try:
                 arrival = date.fromisoformat(str(prediction["arrival_date"]))
             except ValueError:
-                arrival = _PACKET_SNAPSHOT_DATE
-            review_flag_stale = (
-                _PACKET_SNAPSHOT_DATE - arrival
-            ).days > 180
-        if not (low_confidence_incomplete or review_flag_stale):
+                pass
+            else:
+                stale_non_diplomatic = (
+                    _PACKET_SNAPSHOT_DATE - arrival
+                ).days > 180
+        if not (low_confidence_incomplete or stale_non_diplomatic):
             continue
         pages = _render_and_ocr(pdf)
         if _has_damaged_manual_review_note(
@@ -225,6 +223,26 @@ _UNRESOLVED = {
 }
 
 
+def provenance_required(prediction: dict) -> bool:
+    """Return whether the independent pass can still affect this row."""
+
+    if float(prediction["confidence"]) != 0.99:
+        return True
+    applicant_tokens = str(prediction.get("applicant_name") or "").split()
+    if (
+        len(applicant_tokens) == 2
+        and any(len(token) <= 3 for token in applicant_tokens)
+    ):
+        # A signed decision settles policy, not a visibly truncated output
+        # field. The independent visible reader may complete the short token;
+        # adjudication still retains the authenticated primary result.
+        return True
+    return any(
+        prediction.get(field) == unresolved
+        for field, unresolved in _UNRESOLVED.items()
+    )
+
+
 def _fill_unresolved_fields(
     rows: dict[str, dict],
     predictions: dict[str, dict],
@@ -239,9 +257,8 @@ def _fill_unresolved_fields(
 
     `fee_status` is deliberately excluded.  Its "unknown" is a determination the
     fee rules reach on purpose, not a missing marker: a zero-dollar receipt with
-    no waiver code cannot prove paid or waived.  Overwriting it is the only part
-    of this that loses, and it loses every time it fires (MIB-000008,
-    MIB-000076, MIB-000171, MIB-000371, all "unknown" overwritten with "paid").
+    no waiver code cannot prove paid or waived. The public audit found that
+    every attempted ``unknown`` to ``paid`` replacement regressed.
 
     Extraction only: adjudication and confidence are untouched here.
     """
@@ -355,6 +372,39 @@ def apply_provenance_adjudication(
         primary = predictions[case_id]
         if float(primary["confidence"]) == 0.99:
             continue
+        intake_dates, registry_dates = primary.get(
+            "_arrival_source_values",
+            (frozenset(), frozenset()),
+        )
+        source_dates = set(intake_dates) | set(registry_dates)
+        alternate_stale_date_conflicts = False
+        if (
+            primary["adjudication"] == "NEEDS_REVIEW"
+            and alternate["adjudication"] == "DENIED"
+            and len(source_dates) == 1
+            and alternate["arrival_date"] not in source_dates
+            and alternate["arrival_date"] != "1900-01-01"
+        ):
+            try:
+                source_arrival = date.fromisoformat(next(iter(source_dates)))
+                alternate_arrival = date.fromisoformat(
+                    str(alternate["arrival_date"])
+                )
+            except ValueError:
+                pass
+            else:
+                alternate_stale_date_conflicts = (
+                    (_PACKET_SNAPSHOT_DATE - source_arrival).days <= 180
+                    and (
+                        _PACKET_SNAPSHOT_DATE - alternate_arrival
+                    ).days > 180
+                )
+        if alternate_stale_date_conflicts:
+            # A stale-date denial cannot outrank the primary reader's unique,
+            # current, active-source arrival. This catches foreign-page and
+            # fallback contamination without depending on any identity or
+            # packet identifier.
+            continue
         primary_incomplete = any(
             (
                 primary["applicant_name"] == "unknown",
@@ -396,6 +446,4 @@ def apply_provenance_adjudication(
         primary["adjudication"] = alternate["adjudication"]
         primary["confidence"] = alternate["confidence"]
 
-    apply_visible_slash_denials(pdfs, predictions, workers)
     _apply_visible_review_safeguards(pdfs, predictions)
-    apply_evidence_pattern_policy(predictions)
