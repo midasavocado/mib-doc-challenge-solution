@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1500" height="700" viewBox="0 0 1500 700" role="img" aria-labelledby="title desc">
-  <title id="title">MIB pipeline architecture and evidence guardrails</title>
-  <desc id="desc">A flow diagram from rendered PDF evidence to auditable extraction and classification, with strict anti-overfitting guardrails.</desc>
+  <title id="title">MIB pipeline architecture and runtime boundaries</title>
+  <desc id="desc">A flow diagram from PDF packets to auditable extraction and classification, including the disclosed untrusted native-text boundary.</desc>
   <defs>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
       <path d="M0 0l10 5-10 5z" fill="#64748b"/>
@@ -10,8 +10,8 @@
     </filter>
   </defs>
   <rect width="1500" height="700" rx="24" fill="#f8fafc"/>
-  <text x="60" y="60" fill="#0f172a" font-family="ui-sans-serif, system-ui, sans-serif" font-size="30" font-weight="800">Architecture and evidence guardrails</text>
-  <text x="60" y="92" fill="#475569" font-family="ui-sans-serif, system-ui, sans-serif" font-size="18">Every decision flows from rendered, active-case evidence through an auditable policy path.</text>
+  <text x="60" y="60" fill="#0f172a" font-family="ui-sans-serif, system-ui, sans-serif" font-size="30" font-weight="800">Architecture and runtime boundaries</text>
+  <text x="60" y="92" fill="#475569" font-family="ui-sans-serif, system-ui, sans-serif" font-size="18">Rendered evidence is primary; the optional native-text signal stays isolated, disclosed, and feature-flagged.</text>
 
   <g font-family="ui-sans-serif, system-ui, sans-serif" filter="url(#shadow)">
     <rect x="60" y="150" width="220" height="130" rx="18" fill="#fff" stroke="#94a3b8" stroke-width="2"/>
@@ -48,7 +48,7 @@
   </g>
 
   <rect x="40" y="332" width="1420" height="2" fill="#cbd5e1"/>
-  <text x="60" y="374" fill="#334155" font-family="ui-sans-serif, system-ui, sans-serif" font-size="18" font-weight="700">ANTI-OVERFITTING GUARDRAILS</text>
+  <text x="60" y="374" fill="#334155" font-family="ui-sans-serif, system-ui, sans-serif" font-size="18" font-weight="700">RUNTIME GUARANTEES</text>
 
   <g font-family="ui-sans-serif, system-ui, sans-serif" filter="url(#shadow)">
     <rect x="70" y="420" width="300" height="145" rx="18" fill="#ecfeff" stroke="#06b6d4" stroke-width="2"/>
@@ -57,9 +57,9 @@
     <text x="220" y="523" text-anchor="middle" fill="#0e7490" font-size="16">conflicts remain review</text>
 
     <rect x="420" y="420" width="300" height="145" rx="18" fill="#f0fdfa" stroke="#14b8a6" stroke-width="2"/>
-    <text x="570" y="462" text-anchor="middle" fill="#134e4a" font-size="21" font-weight="700">Cross-corpus profiles</text>
-    <text x="570" y="496" text-anchor="middle" fill="#0f766e" font-size="16">no names, IDs, sponsor values</text>
-    <text x="570" y="523" text-anchor="middle" fill="#0f766e" font-size="16">flagged and independently checked</text>
+    <text x="570" y="462" text-anchor="middle" fill="#134e4a" font-size="21" font-weight="700">Targeted second read</text>
+    <text x="570" y="496" text-anchor="middle" fill="#0f766e" font-size="16">RapidOCR on uncertain rows</text>
+    <text x="570" y="523" text-anchor="middle" fill="#0f766e" font-size="16">fills unresolved fields only</text>
 
     <rect x="770" y="420" width="300" height="145" rx="18" fill="#eff6ff" stroke="#3b82f6" stroke-width="2"/>
     <text x="920" y="462" text-anchor="middle" fill="#1e3a8a" font-size="21" font-weight="700">Visible policy witnesses</text>
@@ -67,11 +67,11 @@
     <text x="920" y="523" text-anchor="middle" fill="#1d4ed8" font-size="16">document precedence enforced</text>
 
     <rect x="1120" y="420" width="300" height="145" rx="18" fill="#fff7ed" stroke="#f97316" stroke-width="2"/>
-    <text x="1270" y="462" text-anchor="middle" fill="#7c2d12" font-size="21" font-weight="700">No answer shortcuts</text>
-    <text x="1270" y="496" text-anchor="middle" fill="#9a3412" font-size="16">no hidden payloads or lookups</text>
-    <text x="1270" y="523" text-anchor="middle" fill="#9a3412" font-size="16">no identity residual cells</text>
+    <text x="1270" y="462" text-anchor="middle" fill="#7c2d12" font-size="21" font-weight="700">Disclosed noisy channel</text>
+    <text x="1270" y="496" text-anchor="middle" fill="#9a3412" font-size="16">field output + negative polarity</text>
+    <text x="1270" y="523" text-anchor="middle" fill="#9a3412" font-size="16">separate flags · signed veto</text>
   </g>
 
   <rect x="410" y="618" width="680" height="48" rx="24" fill="#0f172a"/>
-  <text x="750" y="649" text-anchor="middle" fill="#e2e8f0" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16">VISIBLE EVIDENCE IN · AUDITABLE DECISION OUT</text>
+  <text x="750" y="649" text-anchor="middle" fill="#e2e8f0" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16">PDF IN · CASE-BOUND EVIDENCE · AUDITABLE JSONL OUT</text>
 </svg>

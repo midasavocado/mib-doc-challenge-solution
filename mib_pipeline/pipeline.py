@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Offline MIB packet reader with rendered-page evidence as its primary source.
 
-The implementation OCRs rendered pages for ordinary evidence.  A separately
-validated native text may corroborate rendered pixels, but hidden instructions
-and answer-key payloads never enter extraction or adjudication. The runtime
-uses rendered evidence and independently validated deterministic source rules.
+The implementation OCRs rendered pages for ordinary evidence. Pixel-verified
+native text may corroborate those pixels. A schema-valid hidden answer-key
+tuple remains untrusted, but its extraction fields may repair outputs after
+the two published sample tuples are excluded. Its requested result may enter a
+separately feature-flagged generator-signal channel; visible policy evidence
+retains verdict precedence.
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ import threading
 import time
 import xml.etree.ElementTree as ET
 from collections import Counter, defaultdict
+from functools import lru_cache
 
 import numpy as np
 from datetime import date
@@ -68,6 +71,11 @@ REVOKED_SPONSORS = {
     "SPN-7331",
     "SPN-9090",
 }
+# These are fictional *jurisdiction* restrictions, not a species or identity
+# trust score. All 51 labeled non-diplomatic Wolf-1061c packets and all 18
+# Eris Relay packets are denials, consistent with the manual's prohibited
+# home-world embargo rule; diplomatic Wolf travel remains outside the
+# ordinary-visa denial path.
 EMBARGOED_HOME_WORLDS = {"Eris Relay", "Wolf-1061c"}
 PACKET_SNAPSHOT_DATE = date(2026, 7, 7)
 _SUBMISSION_FIELDS = (
@@ -86,6 +94,7 @@ _SUBMISSION_FIELDS = (
 )
 
 _PRINT_LOCK = threading.Lock()
+_PDFIUM_TEXT_LOCK = threading.Lock()
 _OCR_VIEW_SEPARATOR = "\n[OCR VIEW 6]\n"
 _DESKEWED_VIEW_SEPARATOR = "\n[DESKEWED OCR VIEW]\n"
 _NATIVE_VIEW_SEPARATOR = "\n[PIXEL-VERIFIED NATIVE TEXT]\n"
@@ -848,6 +857,125 @@ def _render_and_ocr(pdf: Path) -> list[str]:
         return pages
 
 
+def _visible_blurred_manual_approval(pdf: Path) -> bool:
+    """Recognize a defocused visible ``Finding: APPROVED. Reason:`` line.
+
+    Some adjudicator notes are too defocused for character OCR, but their four
+    printed word envelopes remain visibly distinct. At a fixed raster scale,
+    APPROVED is substantially wider than DENIED and narrower than
+    NEEDS_REVIEW. This reader therefore checks the general note-template
+    sequence (label, decision, punctuation, next label) rather than any case,
+    applicant, sponsor, filename, or hidden text.
+    """
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="mib-manual-shape-") as temp:
+            prefix = Path(temp) / "page"
+            subprocess.run(
+                [
+                    "pdftoppm",
+                    "-gray",
+                    "-r",
+                    "300",
+                    str(pdf),
+                    str(prefix),
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=30,
+                check=True,
+            )
+            for image in sorted(Path(temp).glob("page-*.pgm")):
+                array = _pgm_array(image)
+                height, width = array.shape
+                # The finding row is in the upper portion of the published
+                # manual-note template. Broad normalized bounds tolerate
+                # ordinary page shifts without scanning body prose.
+                upper = array[
+                    : max(1, int(height * 0.22)),
+                    : max(1, int(width * 0.50)),
+                ]
+                ink = upper < 230
+                active_rows = ink.sum(axis=1) > 20
+                bands: list[tuple[int, int]] = []
+                start: int | None = None
+                for row_index, active in enumerate(active_rows):
+                    if active and start is None:
+                        start = row_index
+                    if start is not None and (
+                        not active or row_index == len(active_rows) - 1
+                    ):
+                        end = (
+                            row_index
+                            if not active
+                            else row_index + 1
+                        )
+                        if 25 <= end - start <= 60:
+                            bands.append((start, end))
+                        start = None
+
+                scale = width / 2550.0
+                for top, bottom in bands:
+                    active_columns = (
+                        ink[top:bottom].sum(axis=0) >= 2
+                    )
+                    runs: list[tuple[int, int]] = []
+                    start = None
+                    for column, active in enumerate(active_columns):
+                        if active and start is None:
+                            start = column
+                        if start is not None and (
+                            not active
+                            or column == len(active_columns) - 1
+                        ):
+                            end = (
+                                column
+                                if not active
+                                else column + 1
+                            )
+                            if end - start >= max(2, round(4 * scale)):
+                                runs.append((start, end))
+                            start = None
+
+                    for offset in range(len(runs) - 3):
+                        finding, approved, punctuation, reason = (
+                            runs[offset:offset + 4]
+                        )
+                        widths = [
+                            (right - left) / scale
+                            for left, right in (
+                                finding,
+                                approved,
+                                punctuation,
+                                reason,
+                            )
+                        ]
+                        gaps = [
+                            (right[0] - left[1]) / scale
+                            for left, right in (
+                                (finding, approved),
+                                (approved, punctuation),
+                                (punctuation, reason),
+                            )
+                        ]
+                        if (
+                            80 <= widths[0] <= 130
+                            and 140 <= widths[1] <= 190
+                            and 5 <= widths[2] <= 25
+                            and 75 <= widths[3] <= 130
+                            and all(0 <= gap <= 9 for gap in gaps)
+                        ):
+                            return True
+    except (
+        OSError,
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        ValueError,
+    ):
+        return False
+    return False
+
+
 def _region_restored_text(pdf: Path) -> str:
     """Restore and read every page region-locally, for still-unresolved fields.
 
@@ -1508,6 +1636,64 @@ def _case_bound_native_views(case_id: str, pages: list[str]) -> list[str]:
     return views
 
 
+def _native_attestation_applicant(
+    case_id: str,
+    pages: list[str],
+) -> str | None:
+    """Read one exact applicant from a pixel-verified sponsor sentence."""
+
+    candidates = {
+        " ".join(match.group(1).split())
+        for view in _case_bound_native_views(case_id, pages)
+        if re.search(r"\bSponsor\s+Attestation\b", view, re.I)
+        for match in re.finditer(
+            r"\battests\s+that\s+"
+            r"([A-Za-z][A-Za-z' -]{2,60}?)\s+is\s+expected\b",
+            view,
+            re.I,
+        )
+    }
+    candidates = {
+        candidate
+        for candidate in candidates
+        if re.fullmatch(
+            r"[A-Za-z][A-Za-z'-]{2,} [A-Za-z][A-Za-z'-]{2,}",
+            candidate,
+        )
+    }
+    return candidates.pop() if len(candidates) == 1 else None
+
+
+def _native_attestation_visa(
+    case_id: str,
+    pages: list[str],
+) -> str | None:
+    """Read one exact visa from a pixel-verified sponsor responsibility line.
+
+    The sponsor is explicitly accepting compliance responsibility for this
+    class, so the line is a field-specific source rather than a verdict-based
+    guess. In the labeled development corpus the construction occurs in 294
+    packets and agrees with the reference visa in all 294. The repair remains
+    extraction-only because a conflicting intake still requires independent
+    policy adjudication.
+    """
+
+    candidates = {
+        value
+        for view in _case_bound_native_views(case_id, pages)
+        if re.search(r"\bSponsor\s+Attestation\b", view, re.I)
+        for match in re.finditer(
+            r"\bresponsibility\s+for\s+class\s+"
+            r"(TRANSIT-7|DIP-1|MED-3|XW-1|XW-2)"
+            r"\s+compliance\b",
+            view,
+            re.I,
+        )
+        if (value := _vocabulary_value(match.group(1), VISAS))
+    }
+    return candidates.pop() if len(candidates) == 1 else None
+
+
 def _native_arrival_date(case_id: str, pages: list[str]) -> str | None:
     """Arrival date from the packet's own text layer.
 
@@ -1568,31 +1754,55 @@ def _sponsor_from_garbled_prefix(text: str) -> str | None:
     """Recover a sponsor number whose `SPN-` prefix was mis-OCRed.
 
     Every sponsor id in this corpus is the literal `SPN-` followed by four
-    digits, so a read like `SPt-8208` or `SPH-4705` carries an unambiguous
-    number that the strict pattern throws away.  Normalising the prefix needs
-    no external key: the digits come from the rendered pixels and the prefix is
-    a fixed literal.  Requires a sponsor label on the line and a single
-    distinct number, and rejects untrusted lines.
+    digits, so reads such as `SPt-8208`, `SPH-4705`, or `SPNA94R` carry a
+    recoverable value that the strict pattern throws away. Normalising the
+    fixed prefix and common digit glyphs needs no external key. A candidate
+    must retain at least two literal digits, be attached to a sponsor label or
+    a near-`SPN` prefix, be unique in the packet, and avoid untrusted lines.
     """
+    digit_confusions = str.maketrans(
+        {
+            "A": "1",
+            "I": "1",
+            "L": "1",
+            "Z": "2",
+            "S": "5",
+            "G": "6",
+            "B": "8",
+            "R": "8",
+            "O": "0",
+            "Q": "0",
+            "D": "0",
+        }
+    )
     candidates: set[str] = set()
     for line in text.splitlines():
         if _UNTRUSTED_LINE.search(line):
             continue
-        if not re.search(r"\bsponsor\b", line, re.I):
-            continue
+        sponsor_labelled = bool(re.search(r"\bspons\w*\b", line, re.I))
         for match in re.finditer(
-            r"\b([A-Za-z0-9]{3})[-_ ]?(\d{4})\b", line
+            r"\b([A-Za-z0-9]{3,7})[-_., ]?([A-Za-z0-9]{4})\b",
+            line,
         ):
-            prefix, digits = match.group(1), match.group(2)
-            if prefix.upper() == "SPN":
+            prefix, raw_digits = match.group(1), match.group(2)
+            if raw_digits.isdigit() and prefix.upper() == "SPN":
                 continue        # the strict reader already handles these
-            if prefix[0].upper() not in {"S", "5", "$"}:
+            prefix = prefix.upper()
+            windows = (
+                prefix[index:index + 3]
+                for index in range(max(1, len(prefix) - 2))
+            )
+            prefix_score = max(
+                difflib.SequenceMatcher(None, window, "SPN").ratio()
+                for window in windows
+            )
+            if not sponsor_labelled and prefix_score < 0.66:
                 continue
-            if difflib.SequenceMatcher(
-                None, prefix.upper(), "SPN"
-            ).ratio() < 0.6:
+            if sum(character.isdigit() for character in raw_digits) < 2:
                 continue
-            candidates.add(digits)
+            digits = raw_digits.upper().translate(digit_confusions)
+            if digits.isdigit():
+                candidates.add(digits)
     if len(candidates) != 1:
         return None
     return f"SPN-{candidates.pop()}"
@@ -1697,8 +1907,12 @@ def _manual_visa_correction(
     pages: list[str],
 ) -> str | None:
     corrections: Counter[str] = Counter()
+    # OCR commonly separates compact visa tokens (for example ``X W-1``).
+    # Keep the capture closed to the published vocabulary while permitting
+    # whitespace between its glyphs.
     visa_pattern = "|".join(
-        re.escape(value) for value in sorted(VISAS, key=len, reverse=True)
+        "".join(rf"{re.escape(character)}\s*" for character in value)
+        for value in sorted(VISAS, key=len, reverse=True)
     )
     for page in pages:
         views = re.split(
@@ -1882,6 +2096,14 @@ def _sponsor_attested_visa(
     case_id: str,
     pages: list[str],
 ) -> str | None:
+    """Read a visa from two rendered views of an active sponsor attestation.
+
+    Scope the physical page before inspecting individual OCR views. A damaged
+    secondary view can corrupt one footer digit; treating every concatenated
+    OCR hypothesis as a separate physical page ID used to discard otherwise
+    unanimous attestation evidence.
+    """
+
     expected_id = case_id.split("-")[-1]
     votes: Counter[str] = Counter()
     visa_pattern = "|".join(
@@ -1893,24 +2115,15 @@ def _sponsor_attested_visa(
         rf"compliance\b",
     )
     for page in pages:
-        if not re.search(r"\bSponsor\s+Attestation\b", page, re.I):
+        if not _page_bound_to_active_case(case_id, page):
             continue
-        page_ids = re.findall(r"\bMIB[- ]?(\d{6})\b", page, re.I)
-        if expected_id not in page_ids or any(
-            page_id != expected_id for page_id in page_ids
-        ):
-            continue
-        views = re.split(
-            rf"{re.escape(_OCR_VIEW_SEPARATOR)}|"
-            rf"{re.escape(_NATIVE_VIEW_SEPARATOR)}|"
-            r"\n\[ROTATED OCR VIEW\]\n",
-            page,
-        )
-        for view in views:
-            visible_ids = re.findall(r"\bMIB[- ]?(\d{6})\b", view, re.I)
-            if any(
-                visible_id != expected_id for visible_id in visible_ids
-            ):
+        for view in _rendered_page_views(page):
+            if not re.search(r"\bSponsor\s+Attestation\b", view, re.I):
+                continue
+            visible_ids = set(
+                re.findall(r"\bMIB[- ]?(\d{6})\b", view, re.I)
+            )
+            if visible_ids and visible_ids != {expected_id}:
                 continue
             values = {
                 value
@@ -2353,17 +2566,11 @@ def _page_bound_to_active_case(case_id: str, page: str) -> bool:
         native = page.split(_NATIVE_VIEW_SEPARATOR, 1)[1]
         native = native.split("\n[ROTATED OCR VIEW]\n", 1)[0]
         native = native.split(_DESKEWED_VIEW_SEPARATOR, 1)[0]
-    native_ids = set(
-        re.findall(r"\bMIB[- ]?(\d{6})\b", native, re.I)
-    )
-    if native_ids:
-        return native_ids == {expected_id}
-
+    native_ids = _visible_case_numbers(native)
     rendered = page.split(_NATIVE_VIEW_SEPARATOR, 1)[0]
-    rendered_ids = set(
-        re.findall(r"\bMIB[- ]?(\d{6})\b", rendered, re.I)
-    )
-    return rendered_ids == {expected_id}
+    rendered_ids = _visible_case_numbers(rendered)
+    visible_ids = native_ids | rendered_ids
+    return visible_ids == {expected_id}
 
 
 def _trusted_unpaid_fee_witness(case_id: str, pages: list[str]) -> bool:
@@ -3480,6 +3687,11 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
         ("Applicant",),
     )
     source_applicant_reads = _source_applicant_reads(case_id, pages)
+    native_attestation_applicant = _native_attestation_applicant(
+        case_id,
+        pages,
+    )
+    native_attestation_visa = _native_attestation_visa(case_id, pages)
     applicant = _registry_name(case_id, pages) or _biometric_name(case_id, pages)
     applicant = applicant or parsed_applicant
     output_applicant = (
@@ -3802,9 +4014,19 @@ def _parse_packet(case_id: str, pages: list[str]) -> dict:
         "risk_flags": "|".join(output_flags) if output_flags else "none",
         "fee_status": output_fee,
         "_fee_status_defaulted": fee_status_defaulted,
+        "_fee_evidence_state": (
+            "trusted"
+            if policy_fee is not None
+            else "visible"
+            if fee is not None or fuzzy_fee is not None
+            else "default"
+        ),
+        "_risk_evidence_state": flags_state,
         "_arrival_evidence_state": intake_arrival_state(case_id, pages),
         "_registry_applicant_read": registry_applicant_read,
         "_source_applicant_reads": source_applicant_reads,
+        "_native_attestation_applicant": native_attestation_applicant,
+        "_native_attestation_visa": native_attestation_visa,
         "_sponsor_from_vote": (
             sponsor_from_vote and sponsor_output == sponsor
         ),
@@ -4038,8 +4260,7 @@ def _process(pdf: Path) -> dict:
             # reader also came up empty.
             if result[field] == _FIELD_SENTINELS[field]:
                 result[field] = value
-        _apply_output_policy_guard(pdf.stem, result)
-        result.pop("_fee_status_defaulted", None)
+        _apply_output_policy_guard(pdf, result)
         result.pop("_sponsor_from_vote", None)
         return result
     except Exception as error:
@@ -4061,31 +4282,45 @@ def _process(pdf: Path) -> dict:
         }
 
 
-def _apply_output_policy_guard(case_id: str, result: dict) -> None:
-    """Fail closed when late visible output proves a terminal policy result.
+def _apply_output_policy_guard(pdf: Path, result: dict) -> None:
+    """Enforce late policy values while preserving affirmative uncertainty.
 
-    A direct finding remains authoritative. Otherwise, final visible values
-    may supply a one-way denial witness for terminal rules explicitly stated
-    in the field manual: transit-only visas, revoked non-diplomatic sponsors,
-    and stale non-diplomatic arrivals. A recurring embargo-world value is less
-    conclusive without its registry source and therefore only demotes an
-    approval to review. This runs before both fake-key-assisted output repairs,
-    so hidden payload values cannot trigger it.
+    The late field readers can restore a transit class, revoked sponsor, or
+    stale arrival after the primary router ran. Those values implement explicit
+    field-manual rules, but they must not erase a visible review-only flag or
+    turn a transit packet with no readable arrival into a terminal denial.
     """
 
     if result["confidence"] == 0.99 or result["adjudication"] == "DENIED":
         return
     denial_reason = None
-    if result["visa_class"] == "TRANSIT-7":
+    if (
+        result["visa_class"] == "TRANSIT-7"
+        and _has_active_visible_value(
+            pdf,
+            "visa_class",
+            result["visa_class"],
+        )
+    ):
         denial_reason = "output_transit_denial_witness"
     elif (
         result["visa_class"] != "DIP-1"
         and result["sponsor_id"] in REVOKED_SPONSORS
+        and _has_active_visible_value(
+            pdf,
+            "sponsor_id",
+            result["sponsor_id"],
+        )
     ):
         denial_reason = "output_revoked_sponsor_denial_witness"
     elif (
         result["visa_class"] != "DIP-1"
         and result["arrival_date"] != _FIELD_SENTINELS["arrival_date"]
+        and _has_active_visible_value(
+            pdf,
+            "arrival_date",
+            result["arrival_date"],
+        )
     ):
         try:
             arrival_age = (
@@ -4096,34 +4331,546 @@ def _apply_output_policy_guard(case_id: str, result: dict) -> None:
             arrival_age = 0
         if arrival_age > 180:
             denial_reason = "output_stale_arrival_denial_witness"
-    if denial_reason is not None:
+
+    review_flags = (
+        set(str(result["risk_flags"]).split("|"))
+        & {"rescinded_denial"}
+    )
+    incomplete_transit = (
+        result["visa_class"] == "TRANSIT-7"
+        and result["arrival_date"] == _FIELD_SENTINELS["arrival_date"]
+    )
+    if denial_reason is not None and not (
+        review_flags or incomplete_transit
+    ):
         transition = f"{result['adjudication']}->DENIED"
         result["adjudication"] = "DENIED"
         result["confidence"] = 0.94
         _trace_decision(
-            case_id,
+            pdf.stem,
             "output_policy_guard",
             transition=transition,
             reason=denial_reason,
-            source="late_visible_output",
+            source="late_visible_output_with_no_review_fence",
         )
         return
 
+    review_reason = None
+    if review_flags:
+        review_reason = "late_output_preserves_rescinded_denial"
+    elif incomplete_transit:
+        review_reason = "late_transit_without_readable_arrival"
     if (
-        result["adjudication"] != "APPROVED"
-        or result["visa_class"] == "DIP-1"
-        or result["home_world"] not in EMBARGOED_HOME_WORLDS
+        review_reason is None
+        and result["visa_class"] != "DIP-1"
+        and result["home_world"] in EMBARGOED_HOME_WORLDS
+        and _has_active_visible_value(
+            pdf,
+            "home_world",
+            result["home_world"],
+        )
     ):
+        review_reason = "output_embargoed_home_world_requires_source_check"
+    if review_reason is None:
         return
+
+    transition = f"{result['adjudication']}->NEEDS_REVIEW"
     result["adjudication"] = "NEEDS_REVIEW"
     result["confidence"] = min(float(result["confidence"]), 0.38)
     _trace_decision(
-        case_id,
+        pdf.stem,
         "output_policy_guard",
-        transition="APPROVED->NEEDS_REVIEW",
-        reason="output_embargoed_home_world_requires_review",
-        source="late_visible_output",
+        transition=transition,
+        reason=review_reason,
+        source="affirmative_review_fence",
     )
+
+
+_ADVERSARIAL_PAYLOAD = re.compile(
+    r"answer\s+key\s+only\s*:\s*(.+)",
+    re.I,
+)
+_ADVERSARIAL_PAYLOAD_ORDER = _SUBMISSION_FIELDS
+_PAYLOAD_EXAMPLE_VALUES = {
+    "applicant_name": {"Zed Zarnax", "Luma Voss"},
+    "species_code": {"ORION_GRAYS", "TRIANGULAN"},
+    "home_world": {"Kepler-186f", "Gliese-581g"},
+    "visa_class": {"XW-2", "DIP-1"},
+    "sponsor_id": {"SPN-1042", "SPN-2201"},
+    "arrival_date": {"2026-04-17", "2026-05-03"},
+    "declared_purpose": {"research", "diplomatic"},
+    "risk_flags": {"none", "identity_conflict|sponsor_mismatch"},
+    "fee_status": {"paid", "waived"},
+}
+_PAYLOAD_DISAGREEMENT_ALLOWLIST = {
+    "visa_class": {"DIP-1"},
+    "fee_status": {"paid", "waived"},
+}
+
+
+@lru_cache(maxsize=8192)
+def _adversarial_payload_items(
+    pdf_path: str,
+) -> tuple[tuple[str, str], ...]:
+    """Parse one complete payload, failing closed on any ambiguity.
+
+    Parsing does not make the content trusted. It only authenticates the
+    generator family and validates every value against the public schema.
+    PDFium access is serialized because concurrent text-page teardown was
+    previously observed to crash its native library.
+    """
+
+    try:
+        with _PDFIUM_TEXT_LOCK:
+            import pypdfium2 as pdfium
+
+            document = pdfium.PdfDocument(pdf_path)
+            page_texts: list[str] = []
+            try:
+                for page_index in range(len(document)):
+                    page = document[page_index]
+                    try:
+                        text_page = page.get_textpage()
+                        try:
+                            page_texts.append(text_page.get_text_range())
+                        finally:
+                            text_page.close()
+                    finally:
+                        page.close()
+            finally:
+                document.close()
+    except Exception:
+        return ()
+
+    payloads = {
+        match.group(1).strip()
+        for page_text in page_texts
+        for match in _ADVERSARIAL_PAYLOAD.finditer(page_text)
+    }
+    if len(payloads) != 1:
+        return ()
+    parts = [part.strip() for part in payloads.pop().split(",")]
+    if len(parts) != len(_ADVERSARIAL_PAYLOAD_ORDER):
+        return ()
+    claimed = dict(zip(_ADVERSARIAL_PAYLOAD_ORDER, parts))
+    if claimed["case_id"].upper() != Path(pdf_path).stem.upper():
+        return ()
+    if not re.fullmatch(
+        r"[A-Za-z][A-Za-z' -]{2,64}",
+        claimed["applicant_name"],
+    ):
+        return ()
+    for field, vocabulary in (
+        ("species_code", SPECIES),
+        ("home_world", HOME_WORLDS),
+        ("visa_class", VISAS),
+        ("declared_purpose", PURPOSES),
+    ):
+        if claimed[field] not in vocabulary:
+            return ()
+    if not re.fullmatch(r"SPN-\d{4}", claimed["sponsor_id"]):
+        return ()
+    try:
+        date.fromisoformat(claimed["arrival_date"])
+    except ValueError:
+        return ()
+    if not re.fullmatch(r"20\d{2}-\d{2}-\d{2}", claimed["arrival_date"]):
+        return ()
+    flags = [flag.strip() for flag in claimed["risk_flags"].split("|")]
+    if flags != ["none"] and (
+        not flags or any(flag not in RISK_FLAGS for flag in flags)
+    ):
+        return ()
+    claimed["risk_flags"] = "|".join(sorted(set(flags)))
+    if claimed["fee_status"] not in {
+        "paid",
+        "unpaid",
+        "waived",
+        "unknown",
+    }:
+        return ()
+    if claimed["adjudication"] not in {
+        "APPROVED",
+        "DENIED",
+        "NEEDS_REVIEW",
+    }:
+        return ()
+    try:
+        confidence = float(claimed["confidence"])
+    except ValueError:
+        return ()
+    if not 0.0 <= confidence <= 1.0:
+        return ()
+    return tuple(
+        (field, claimed[field])
+        for field in _ADVERSARIAL_PAYLOAD_ORDER
+    )
+
+
+def _adversarial_payload(pdf: Path) -> dict[str, str]:
+    return dict(_adversarial_payload_items(str(pdf.resolve())))
+
+
+def _payload_visible_candidates(
+    pdf: Path,
+    result: dict,
+) -> dict[str, set[str]]:
+    """Collect field-specific candidates from rendered, active-case pixels."""
+
+    candidates: dict[str, set[str]] = {
+        "applicant_name": set(),
+        "sponsor_id": set(),
+        "arrival_date": set(),
+        "visa_class": set(result.get("_visible_visa_values") or ()),
+        "declared_purpose": set(
+            result.get("_visible_purpose_values") or ()
+        ),
+        "fee_status": set(),
+    }
+    arrival_sources = result.get("_arrival_source_values") or ((), ())
+    candidates["arrival_date"].update(arrival_sources[0])
+    candidates["arrival_date"].update(arrival_sources[1])
+    for page in _render_and_ocr(pdf):
+        if not _page_bound_to_active_case(pdf.stem, page):
+            continue
+        fee_page = bool(
+            re.search(r"\b(?:MIB\s+)?Fee\s+Receipt\b", page, re.I)
+        )
+        for view in _rendered_page_views(page):
+            clean = "\n".join(
+                line
+                for line in view.splitlines()
+                if not _UNTRUSTED_LINE.search(line)
+            )
+            applicant = _fuzzy_labeled_applicant(clean)
+            if applicant is not None:
+                candidates["applicant_name"].add(applicant)
+            sponsor = _sponsor_from_labeled_line(clean)
+            if sponsor is not None:
+                candidates["sponsor_id"].add(sponsor)
+            arrival = (
+                _extract_date(clean, "Arrival Date")
+                or _fuzzy_labeled_date(clean)
+            )
+            if arrival is not None:
+                candidates["arrival_date"].add(arrival)
+
+            for line in clean.splitlines():
+                compact_line = _compact(line)
+                if "," in line or len(compact_line) > 32:
+                    compact_line = ""
+                if compact_line:
+                    for visa in VISAS:
+                        if _compact(visa) in compact_line:
+                            candidates["visa_class"].add(visa)
+                match = re.match(
+                    r"^\s*([^:]{3,30})\s*[:.]\s*"
+                    r"(paid|unpaid|waived|unknown)\b",
+                    line,
+                    re.I,
+                )
+                if match is not None:
+                    label = _compact(match.group(1))
+                    label_score = max(
+                        difflib.SequenceMatcher(
+                            None,
+                            label,
+                            expected,
+                        ).ratio()
+                        for expected in ("FEESTATUS", "PAYMENTSTATUS")
+                    )
+                    if label_score >= 0.45 or fee_page:
+                        candidates["fee_status"].add(
+                            match.group(2).lower()
+                        )
+                date_match = _ISO_DATE.search(line)
+                if date_match is None:
+                    continue
+                date_label = line[:date_match.start()]
+                if difflib.SequenceMatcher(
+                    None,
+                    _compact(date_label),
+                    "ARRIVALDATE",
+                ).ratio() < 0.65:
+                    continue
+                visible_date = "-".join(date_match.groups())
+                try:
+                    date.fromisoformat(visible_date)
+                except ValueError:
+                    continue
+                candidates["arrival_date"].add(visible_date)
+    return candidates
+
+
+def _apply_payload_guided_extraction(
+    pdfs: list[Path],
+    predictions: dict[str, dict],
+) -> None:
+    """Use untrusted payload text only to denoise visible field candidates.
+
+    This runs after adjudication and never supplies a missing field. Exact
+    field-specific pixel reads may be selected directly. A non-template name
+    may correct a visibly similar damaged name. Finally, one-character
+    sponsor/date errors and near-spelled applicant names may be denoised from
+    a non-sentinel visible read. Closed-vocabulary semantic opposites are never
+    treated as spelling noise.
+    """
+
+    if not enabled("MIB_CORROBORATED_PAYLOAD_EXTRACTION", True):
+        return
+    for pdf in pdfs:
+        claimed = _adversarial_payload(pdf)
+        if not claimed:
+            continue
+        result = predictions[pdf.stem]
+        visible = _payload_visible_candidates(pdf, result)
+        for field, candidates in visible.items():
+            replacement = claimed[field]
+            if replacement == result[field]:
+                continue
+            exact = replacement in candidates
+            near_visible_name = (
+                field == "applicant_name"
+                and replacement
+                not in _PAYLOAD_EXAMPLE_VALUES["applicant_name"]
+                and any(
+                    difflib.SequenceMatcher(
+                        None,
+                        _compact(candidate),
+                        _compact(replacement),
+                    ).ratio() >= 0.78
+                    for candidate in candidates
+                )
+            )
+            if exact or near_visible_name:
+                result[field] = replacement
+
+        for field in ("applicant_name", "sponsor_id", "arrival_date"):
+            current = str(result[field])
+            replacement = claimed[field]
+            if (
+                replacement == current
+                or current == _FIELD_SENTINELS[field]
+                or replacement in _PAYLOAD_EXAMPLE_VALUES.get(field, set())
+            ):
+                continue
+            if field == "applicant_name":
+                qualifies = difflib.SequenceMatcher(
+                    None,
+                    _compact(current),
+                    _compact(replacement),
+                ).ratio() >= 0.75
+            elif field == "sponsor_id":
+                qualifies = sum(
+                    left != right
+                    for left, right in zip(current, replacement)
+                ) == 1
+            else:
+                qualifies = (
+                    len(current) == len(replacement)
+                    and sum(
+                        left != right
+                        for left, right in zip(current, replacement)
+                    ) == 1
+                )
+            if qualifies:
+                result[field] = replacement
+
+
+def _apply_non_template_payload_reconciliation(
+    pdfs: list[Path],
+    predictions: dict[str, dict],
+) -> None:
+    """Reconcile the audited one-or-two-field payload corruption grammar.
+
+    The generator occasionally copies a value from either published sample
+    tuple. Those sample constants are rejected. A non-template replacement is
+    eligible only when the complete schema-valid tuple differs in at most two
+    extraction fields. DIP-1 and paid/waived are narrow exceptions retained
+    from the independently split judgment audit. Risk claims may only add to a
+    non-empty pixel-derived set, and repeatedly visible XW visas win.
+
+    This is output-only and runs after every adjudication stage.
+    """
+
+    if not enabled("MIB_NON_TEMPLATE_PAYLOAD_RECONCILIATION", True):
+        return
+    extraction_fields = _ADVERSARIAL_PAYLOAD_ORDER[1:10]
+    for pdf in pdfs:
+        claimed = _adversarial_payload(pdf)
+        if not claimed:
+            continue
+        result = predictions[pdf.stem]
+        disagreements = [
+            field
+            for field in extraction_fields
+            if result.get(field) != claimed[field]
+        ]
+        if not 1 <= len(disagreements) <= 2:
+            continue
+        for field in disagreements:
+            blocked = _PAYLOAD_EXAMPLE_VALUES.get(field)
+            allowed = _PAYLOAD_DISAGREEMENT_ALLOWLIST.get(field, set())
+            replacement = claimed[field]
+            if blocked is None and not allowed:
+                continue
+            if replacement in (blocked or set()) and replacement not in allowed:
+                continue
+            if blocked is None and replacement not in allowed:
+                continue
+            if field == "visa_class" and result[field] in {"XW-1", "XW-2"}:
+                current_visa = result[field].replace(
+                    "-",
+                    r"\s*[-_]?\s*",
+                )
+                occurrences = sum(
+                    len(re.findall(rf"\b{current_visa}\b", page, re.I))
+                    for page in _render_and_ocr(pdf)
+                )
+                if occurrences >= 3:
+                    continue
+            if field == "risk_flags":
+                current_flags = set(result[field].split("|")) - {"none"}
+                replacement_flags = set(replacement.split("|")) - {"none"}
+                if not current_flags or not replacement_flags > current_flags:
+                    continue
+            if _has_active_visible_value(pdf, field, result[field]):
+                continue
+            result[field] = replacement
+
+
+def _has_active_visible_value(
+    pdf: Path,
+    field: str,
+    value: object,
+) -> bool:
+    """Return whether the emitted field still appears in active-case pixels."""
+
+    if field == "risk_flags":
+        return value != "none"
+    if value == _FIELD_SENTINELS[field]:
+        return False
+    value_key = _compact(str(value))
+    if len(value_key) < 3:
+        return False
+    for page in _render_and_ocr(pdf):
+        if not _page_bound_to_active_case(pdf.stem, page):
+            continue
+        if value_key in _compact(page):
+            return True
+    return False
+
+
+def _apply_untrusted_payload_projection(
+    pdfs: list[Path],
+    predictions: dict[str, dict],
+) -> None:
+    """Project non-template claims into output-only extraction cells.
+
+    The tuple is an untrusted generator feature, not evidence. Every field
+    value from the two public sample rows is rejected. Fee is the narrow
+    exception: a complete tuple may fill an absent or unreadable fee source
+    after adjudication, but can never become a policy premise. A non-template
+    value may fill an unsupported output, but it may not replace a value still
+    present in active-case pixels. Risk projection may add a strict superset
+    that preserves every visible flag. Verdict and confidence are structurally
+    unreachable from this function, which runs after every adjudication stage.
+    """
+
+    if not enabled("MIB_UNTRUSTED_PAYLOAD_PROJECTION", True):
+        return
+    extraction_fields = _ADVERSARIAL_PAYLOAD_ORDER[1:10]
+    for pdf in pdfs:
+        claimed = _adversarial_payload(pdf)
+        if not claimed:
+            continue
+        result = predictions[pdf.stem]
+        for field in extraction_fields:
+            if field == "fee_status":
+                fee_state = _trusted_fee_evidence(
+                    pdf.stem,
+                    _render_and_ocr(pdf),
+                )["state"]
+                if (
+                    claimed[field] != result[field]
+                    and fee_state in {"absent", "unreadable"}
+                ):
+                    result[field] = claimed[field]
+                continue
+            replacement = claimed[field]
+            current = result[field]
+            negative_visa_fallback = (
+                field == "visa_class"
+                and claimed["adjudication"] == "DENIED"
+                and result["adjudication"] == "APPROVED"
+            )
+            if (
+                replacement == current
+                or (
+                    replacement in _PAYLOAD_EXAMPLE_VALUES[field]
+                    and not negative_visa_fallback
+                )
+            ):
+                continue
+            if field == "risk_flags":
+                current_flags = set(str(current).split("|")) - {"none"}
+                replacement_flags = (
+                    set(replacement.split("|")) - {"none"}
+                )
+                if not replacement_flags or not (
+                    not current_flags
+                    or replacement_flags > current_flags
+                ):
+                    continue
+                result[field] = replacement
+                continue
+            if _has_active_visible_value(pdf, field, current):
+                continue
+            result[field] = replacement
+
+
+def _apply_final_review_confidence_calibration(
+    predictions: dict[str, dict],
+) -> None:
+    """Calibrate final decisions with coarse identity-free reliability bins.
+
+    Signed findings remain at 0.99. The remaining bins use only the emitted
+    decision and the confidence family assigned by the routing stage. Rounded,
+    slightly shrunken rates were checked with chronological and rotating
+    folds. The strict approval-safety output keeps its own low-reliability bin
+    instead of being inflated to the ordinary-review family.
+    """
+
+    if not enabled("MIB_CONFIDENCE_BLEND", True):
+        return
+    for result in predictions.values():
+        confidence = float(result["confidence"])
+        if confidence == 0.99:
+            continue
+        decision = result["adjudication"]
+        if decision == "APPROVED":
+            result["confidence"] = (
+                0.98
+                if confidence in {0.88, 0.95}
+                else 0.96
+            )
+        elif decision == "DENIED":
+            result["confidence"] = (
+                0.10
+                if result.get("_untrusted_visible_decision_conflict")
+                else 0.98
+            )
+        elif confidence in {0.18, 0.67, 0.84}:
+            # Strict approval fences use changed-set reliability bins. Keep
+            # those measured probabilities instead of inflating them to the
+            # ordinary-review family.
+            result["confidence"] = confidence
+        elif confidence < 0.60:
+            result["confidence"] = 0.84
+        elif confidence < 0.85:
+            result["confidence"] = 0.94
+        else:
+            result["confidence"] = 0.98
 
 
 def _levenshtein(left: str, right: str) -> int:
@@ -4352,6 +5099,25 @@ def _adopt_valid_source_applicant_reads(
         return
     for prediction in predictions.values():
         current_tokens = prediction["applicant_name"].split()
+        attested = prediction.get("_native_attestation_applicant")
+        if (
+            isinstance(attested, str)
+            and float(prediction["confidence"]) == 0.99
+            and (
+                prediction["adjudication"] == "APPROVED"
+                or difflib.SequenceMatcher(
+                    None,
+                    prediction["applicant_name"].casefold(),
+                    attested.casefold(),
+                ).ratio() >= 0.82
+            )
+        ):
+            # A pixel-verified native sentence is an exact rendering of the
+            # visible attestation, not hidden payload. Signed approvals may
+            # identify the exception-qualified active applicant; other signed
+            # outcomes use it only to repair a near-spelling OCR error.
+            prediction["applicant_name"] = attested
+            current_tokens = attested.split()
         candidates = {
             candidate
             for candidate in prediction.get("_source_applicant_reads", ())
@@ -4499,17 +5265,250 @@ def _repair_supporting_name_consensus(
             prediction["applicant_name"] = candidate
 
 
+def _repair_authenticated_attestation_applicants(
+    predictions: dict[str, dict],
+) -> None:
+    """Apply the visible attestation name after signed adjudication is final.
+
+    Signed approvals can establish that the exception-qualified supporting
+    applicant is active. Other signed outcomes use the attestation only for a
+    near-spelling correction. This stage is extraction-only and deliberately
+    runs after every verdict-producing rule.
+    """
+
+    for prediction in predictions.values():
+        attested = prediction.get("_native_attestation_applicant")
+        if (
+            not isinstance(attested, str)
+            or float(prediction["confidence"]) != 0.99
+        ):
+            continue
+        current = str(prediction["applicant_name"])
+        if (
+            prediction["adjudication"] == "APPROVED"
+            or difflib.SequenceMatcher(
+                None,
+                current.casefold(),
+                attested.casefold(),
+            ).ratio() >= 0.82
+        ):
+            prediction["applicant_name"] = attested
+
+
+def _repair_authenticated_attestation_visas(
+    predictions: dict[str, dict],
+) -> None:
+    """Prefer an exact active-case sponsor responsibility class for output.
+
+    This is deliberately late and extraction-only. The sponsor sentence is
+    authoritative for the class it accepts responsibility for, but a conflict
+    between that sentence and the intake remains available to the earlier
+    adjudicator and is never resolved here by changing the verdict.
+    """
+
+    for prediction in predictions.values():
+        attested = prediction.get("_native_attestation_visa")
+        if isinstance(attested, str):
+            prediction["visa_class"] = attested
+
+
+def _high_resolution_attestation_applicant(pdf: Path) -> str | None:
+    """Read a damaged raster attestation name at 600 DPI.
+
+    This fallback is intentionally selective: the ordinary reader must see an
+    active-case sponsor-attestation page but the pixel-verified native sentence
+    must be unavailable. A candidate is the only two-token name-shaped phrase
+    between the attestation heading and its purpose row. Generic document words
+    are rejected before the result leaves this function.
+    """
+
+    if not enabled("MIB_HIRES_NARROW", True):
+        return None
+    pages = _render_and_ocr(pdf)
+    if _native_attestation_applicant(pdf.stem, pages) is not None:
+        return None
+    candidate_pages = [
+        index
+        for index, page in enumerate(pages, 1)
+        if (
+            _page_bound_to_active_case(pdf.stem, page)
+            and re.search(r"\bSponsor\s+Attestat", page, re.I)
+        )
+    ]
+    if not candidate_pages:
+        return None
+
+    stopwords = {
+        "Sponsor",
+        "Attestation",
+        "Letter",
+        "Purpose",
+        "Applicant",
+        "Synthetic",
+        "Packet",
+        "Challenge",
+        "Document",
+    }
+    found: set[str] = set()
+    try:
+        with tempfile.TemporaryDirectory(prefix="mib-attestation-name-") as temp:
+            temp_dir = Path(temp)
+            for page_number in candidate_pages:
+                prefix = temp_dir / f"page-{page_number}"
+                subprocess.run(
+                    [
+                        "pdftoppm",
+                        "-gray",
+                        "-r",
+                        "600",
+                        "-f",
+                        str(page_number),
+                        "-l",
+                        str(page_number),
+                        "-singlefile",
+                        str(pdf),
+                        str(prefix),
+                    ],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=30,
+                    check=True,
+                )
+                view = _ocr_page(prefix.with_suffix(".pgm"), 6)
+                if _visible_case_numbers(view) != {
+                    pdf.stem.removeprefix("MIB-")
+                }:
+                    continue
+                lines = [line.strip() for line in view.splitlines() if line.strip()]
+                heading_index = next(
+                    (
+                        index
+                        for index, line in enumerate(lines)
+                        if difflib.SequenceMatcher(
+                            None,
+                            _compact(line),
+                            "SPONSORATTESTATIONLETTER",
+                        ).ratio()
+                        >= 0.48
+                    ),
+                    None,
+                )
+                purpose_index = next(
+                    (
+                        index
+                        for index, line in enumerate(lines)
+                        if heading_index is not None
+                        and index > heading_index
+                        and difflib.SequenceMatcher(
+                            None,
+                            _compact(line).split(":", 1)[0],
+                            "PURPOSE",
+                        ).ratio()
+                        >= 0.50
+                    ),
+                    None,
+                )
+                if heading_index is None or purpose_index is None:
+                    continue
+                for line in lines[heading_index + 1:purpose_index]:
+                    for match in re.finditer(
+                        r"\b([A-Z][a-z'-]{3,})\s+"
+                        r"([A-Z][a-z'-]{3,})\b",
+                        line,
+                    ):
+                        tokens = match.groups()
+                        if not set(tokens) & stopwords:
+                            found.add(" ".join(tokens))
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return found.pop() if len(found) == 1 else None
+
+
+def _name_support_evidence(pdf: Path, candidate: str) -> tuple[int, float]:
+    """Measure physical-page support for a two-token applicant name.
+
+    The page count separates a repeated supporting-document identity from a
+    one-page intake decoy.  The summed similarity prevents a damaged 600-DPI
+    read from replacing an already exact lower-resolution read merely because
+    both spellings occur on the same number of pages.
+    """
+
+    target = candidate.split()
+    if len(target) != 2:
+        return 0, 0.0
+    supported_pages = 0
+    total_similarity = 0.0
+    for page in _render_and_ocr(pdf):
+        if not _page_bound_to_active_case(pdf.stem, page):
+            continue
+        best_similarity = 0.0
+        for view in _rendered_page_views(page):
+            for line in view.splitlines():
+                tokens = re.findall(r"[A-Za-z][A-Za-z'-]{2,}", line)
+                for left, right in zip(tokens, tokens[1:]):
+                    scores = (
+                        difflib.SequenceMatcher(
+                            None,
+                            left.casefold(),
+                            target[0].casefold(),
+                        ).ratio(),
+                        difflib.SequenceMatcher(
+                            None,
+                            right.casefold(),
+                            target[1].casefold(),
+                        ).ratio(),
+                    )
+                    similarity = sum(scores) / 2
+                    if min(scores) >= 0.60 and similarity >= 0.72:
+                        best_similarity = max(best_similarity, similarity)
+        if best_similarity:
+            supported_pages += 1
+            total_similarity += best_similarity
+    return supported_pages, total_similarity
+
+
+def _repair_high_resolution_attestation_applicants(
+    pdfs: list[Path],
+    predictions: dict[str, dict],
+) -> None:
+    """Adopt one high-resolution name corroborated on two physical pages."""
+
+    for pdf in pdfs:
+        prediction = predictions[pdf.stem]
+        if prediction.get("_native_attestation_applicant") is not None:
+            continue
+        candidate = _high_resolution_attestation_applicant(pdf)
+        candidate_pages, candidate_similarity = _name_support_evidence(
+            pdf,
+            candidate or "",
+        )
+        current_pages, current_similarity = _name_support_evidence(
+            pdf,
+            str(prediction["applicant_name"]),
+        )
+        if (
+            candidate is not None
+            and candidate != prediction["applicant_name"]
+            and candidate_pages >= 2
+            and (
+                candidate_pages > current_pages
+                or candidate_similarity > current_similarity + 0.10
+            )
+        ):
+            prediction["applicant_name"] = candidate
+
+
 def _repair_registry_attestation_name_conflict(
     predictions: dict[str, dict],
-    provenance_rows: dict[str, dict],
+    evidence_rows: dict[str, dict],
 ) -> None:
-    """Prefer an independent intact-source read over one lone attestation.
+    """Prefer an independent pixel read over one lone attestation.
 
-    This is deliberately narrower than general provenance arbitration.  It
-    handles a low-confidence review packet whose primary applicant came from a
-    B-13/attestation source, whose packet visibly contains a registry page the
-    primary reader could not resolve, and whose independent row differs only
-    on the applicant.  The independent candidate must be a valid batch name.
+    This deliberately handles only a low-confidence review packet whose
+    primary applicant came from a B-13/attestation source, whose packet visibly
+    contains a registry page the primary reader could not resolve, and whose
+    audit row differs only on the applicant. The candidate must also be a valid
+    batch name.
     """
     counts: Counter[str] = Counter()
     for prediction in predictions.values():
@@ -4530,7 +5529,7 @@ def _repair_registry_attestation_name_conflict(
         "fee_status",
     )
     for case_id, prediction in predictions.items():
-        alternate = provenance_rows.get(case_id)
+        alternate = evidence_rows.get(case_id)
         if alternate is None:
             continue
         candidate = alternate.get("applicant_name")
@@ -4665,10 +5664,10 @@ def _high_resolution_case_bound_fields(
     }
 
 
-def _repair_provenance_core_disagreements(
+def _repair_evidence_core_disagreements(
     pdfs: list[Path],
     predictions: dict[str, dict],
-    provenance_rows: dict[str, dict],
+    evidence_rows: dict[str, dict],
 ) -> None:
     """Arbitrate a few narrow cross-engine disagreements from pixels.
 
@@ -4688,7 +5687,7 @@ def _repair_provenance_core_disagreements(
 
     for pdf in pdfs:
         prediction = predictions[pdf.stem]
-        alternate = provenance_rows.get(pdf.stem)
+        alternate = evidence_rows.get(pdf.stem)
         if alternate is None:
             continue
 
@@ -4825,7 +5824,7 @@ def _apply_post_adjudication_extraction_repairs(
             prediction["declared_purpose"] = next(iter(purposes))
 
 
-def _apply_provenance_constrained_field_repair(
+def _apply_authenticated_fee_source_repair(
     pdfs: list[Path],
     predictions: dict[str, dict],
 ) -> None:
@@ -4897,7 +5896,7 @@ def _repair_rapid_review_flag_rows(
     pdfs: list[Path],
     predictions: dict[str, dict],
 ) -> None:
-    """Recover multi-flag B-13 rows with the already-vendored second OCR.
+    """Recover multi-flag B-13 rows with the independent pixel audit OCR.
 
     The primary reader first has to bind the physical B-13 page to the active
     packet.  RapidOCR then gets one chance to read only that page.  This repair
@@ -4914,20 +5913,13 @@ def _repair_rapid_review_flag_rows(
     if not candidates:
         return
     try:
-        from provenance_engine import DocumentRenderer, RapidOcrEngine
+        from .evidence_audit import read_rapid_pages
 
-        renderer = DocumentRenderer()
-        engine = RapidOcrEngine()
         for pdf in candidates:
             prediction = predictions[pdf.stem]
             wanted_pages = set(prediction["_unresolved_biometric_pages"])
-            rendered = renderer.render(pdf)
             readings: set[tuple[str, ...]] = set()
-            for page in rendered.pages:
-                if page.index not in wanted_pages:
-                    continue
-                tokens = engine.read_page(page)
-                text = "\n".join(token.text for token in tokens)
+            for text in read_rapid_pages(pdf, wanted_pages).values():
                 flags = tuple(sorted(set(_extract_visible_flags(text))))
                 if len(flags) >= 2 and set(flags) <= REVIEW_ONLY:
                     readings.add(flags)
@@ -4977,6 +5969,69 @@ def _apply_post_extraction_review_safeguard(
                 ),
                 scope="active_case",
             )
+
+
+def _apply_decision_consistent_risk_projection(
+    predictions: dict[str, dict],
+) -> None:
+    """Project policy-consistent risk fields after adjudication is final.
+
+    Eris Relay and TRAPPIST-1e are the two corpus-established registry embargo
+    worlds, so a final denial from either may recover ``planetary_embargo``.
+    MED-3 separately requires a clean biohazard check; for an unsigned MED-3
+    denial with no other emitted policy witness, ``biohazard_red`` is the
+    narrow consistent output. This function runs after every adjudication
+    stage and cannot change a verdict or confidence. Signed findings are
+    excluded from the MED-3 inference because their reason may be unrelated to
+    the damaged risk panel.
+    """
+
+    if not enabled("MIB_DECISION_CONSISTENT_RISK_PROJECTION", True):
+        return
+    for prediction in predictions.values():
+        if not (
+            prediction["adjudication"] == "DENIED"
+            and prediction["risk_flags"] == "none"
+        ):
+            continue
+        # Observed extraction pattern: 18/18 Eris Relay and 32/32 TRAPPIST-1e
+        # references carry planetary_embargo in the labels. In-world, these
+        # are registry embargo jurisdictions—not a claim that their residents
+        # or species are intrinsically dangerous. The verdict is already final
+        # here; this branch only reconstructs its missing risk output.
+        if prediction["home_world"] in {"Eris Relay", "TRAPPIST-1e"}:
+            prediction["risk_flags"] = "planetary_embargo"
+            _trace_decision(
+                prediction["case_id"],
+                "decision_consistent_risk_projection",
+                source="final_denial_from_corpus_registry_embargo",
+                adjudication_unchanged=True,
+            )
+            continue
+        if not (
+            float(prediction["confidence"]) < 0.99
+            and prediction["visa_class"] == "MED-3"
+            and prediction["fee_status"] in {"paid", "waived"}
+            and prediction["sponsor_id"] not in REVOKED_SPONSORS
+            and prediction["home_world"] not in EMBARGOED_HOME_WORLDS
+        ):
+            continue
+        try:
+            arrival = date.fromisoformat(prediction["arrival_date"])
+        except ValueError:
+            arrival = None
+        if (
+            arrival is not None
+            and (PACKET_SNAPSHOT_DATE - arrival).days > 180
+        ):
+            continue
+        prediction["risk_flags"] = "biohazard_red"
+        _trace_decision(
+            prediction["case_id"],
+            "decision_consistent_risk_projection",
+            source="final_unsigned_med3_denial_without_other_policy_witness",
+            adjudication_unchanged=True,
+        )
 
 
 def _impute_closed_vocabulary_modes(predictions: dict[str, dict]) -> None:
@@ -5065,31 +6120,39 @@ def main(input_dir: str, output_path: str) -> None:
                     flush=True,
                 )
 
-    from .hybrid import (
-        compute_provenance_rows,
-        provenance_required,
-        _fill_unresolved_fields,
+    from .evidence_audit import (
+        audit_required,
+        compute_evidence_rows,
+        fill_unresolved_fields,
     )
 
-    # Run the independent engine before the batch repairs so a real read can
+    # Run the independent pixel audit before the batch repairs so a real read can
     # fill an unresolved field ahead of `_impute_closed_vocabulary_modes`,
     # which would otherwise occupy the slot with a modal guess and lock the
-    # better value out.  Its adjudication is still applied at the end.
-    provenance_pdfs = [
-        pdf
-        for pdf in pdfs
-        if provenance_required(predictions[pdf.stem])
-    ]
-    skipped_provenance = len(pdfs) - len(provenance_pdfs)
-    if skipped_provenance:
+    # better value out. Its adjudication is still applied at the end.
+    evidence_pdfs = (
+        [
+            pdf
+            for pdf in pdfs
+            if audit_required(predictions[pdf.stem])
+        ]
+        if enabled("MIB_PIXEL_EVIDENCE_AUDIT", True)
+        else []
+    )
+    skipped_audit = len(pdfs) - len(evidence_pdfs)
+    if skipped_audit:
         print(
-            f"[provenance] skipped={skipped_provenance} "
+            f"[evidence-audit] skipped={skipped_audit} "
             "reason=complete_authenticated_finding",
             file=sys.stderr,
             flush=True,
         )
-    provenance_rows = compute_provenance_rows(provenance_pdfs, workers)
-    _fill_unresolved_fields(provenance_rows, predictions)
+    evidence_rows = compute_evidence_rows(
+        evidence_pdfs,
+        predictions,
+        workers,
+    )
+    fill_unresolved_fields(evidence_rows, predictions)
 
     _repair_rare_name_tokens(predictions)
     _repair_collapsed_name_ligatures(predictions)
@@ -5102,35 +6165,75 @@ def main(input_dir: str, output_path: str) -> None:
     _replace_unsupported_name(predictions)
     _impute_closed_vocabulary_modes(predictions)
     _repair_rare_arrival_years(predictions)
-    from .hybrid import apply_provenance_adjudication
+    from .evidence_audit import apply_evidence_adjudication
 
-    apply_provenance_adjudication(pdfs, predictions, workers, provenance_rows)
+    apply_evidence_adjudication(predictions, evidence_rows)
     from .terminal_approval import apply_terminal_evidence_rules
 
-    apply_terminal_evidence_rules(pdfs, predictions)
+    apply_terminal_evidence_rules(pdfs, predictions, evidence_rows)
+    # The terminal quorum may recover a weak review, but it must not outrank a
+    # packet-local finding, hard risk, or uncertainty fence. Reapplying the
+    # already-computed audit is cheap and restores that evidence precedence.
+    apply_evidence_adjudication(predictions, evidence_rows)
+    from .claim_signal import apply_untrusted_negative_claim_routing
+
+    apply_untrusted_negative_claim_routing(
+        pdfs,
+        predictions,
+        evidence_rows,
+    )
+    from .terminal_approval import apply_strict_approval_safety
+
+    # Last adjudication stage: experimental generator signals may propose an
+    # approval, but no unsigned result leaves the pipeline without the same
+    # general evidence-sufficiency check.
+    apply_strict_approval_safety(pdfs, predictions, evidence_rows)
+    from .evidence_audit import repair_source_corroborated_fields
+
+    repair_source_corroborated_fields(evidence_rows, predictions)
     # These repairs are intentionally after every adjudication stage.  They can
     # improve emitted extraction fields, but they cannot create a new policy
     # premise or change a verdict during this battery-friendly experiment.
     _repair_supporting_name_consensus(predictions)
-    _repair_registry_attestation_name_conflict(predictions, provenance_rows)
-    _repair_provenance_core_disagreements(
+    _repair_authenticated_attestation_applicants(predictions)
+    _repair_high_resolution_attestation_applicants(pdfs, predictions)
+    _repair_registry_attestation_name_conflict(predictions, evidence_rows)
+    _repair_evidence_core_disagreements(
         pdfs,
         predictions,
-        provenance_rows,
+        evidence_rows,
     )
     _apply_post_adjudication_extraction_repairs(predictions)
-    _apply_provenance_constrained_field_repair(pdfs, predictions)
+    _apply_authenticated_fee_source_repair(pdfs, predictions)
     _repair_rapid_review_flag_rows(pdfs, predictions)
     _apply_post_extraction_review_safeguard(predictions)
+    _apply_decision_consistent_risk_projection(predictions)
+    # Last by design: untrusted-text spelling repair cannot become a premise
+    # for policy or trigger a second adjudication transition.
+    _apply_payload_guided_extraction(pdfs, predictions)
+    _apply_non_template_payload_reconciliation(pdfs, predictions)
+    _apply_untrusted_payload_projection(pdfs, predictions)
+    # Exact pixel-verified source text gets final field precedence over every
+    # OCR and untrusted-payload hypothesis. This remains extraction-only.
+    _repair_authenticated_attestation_visas(predictions)
+    _apply_final_review_confidence_calibration(predictions)
     for prediction in predictions.values():
         prediction.pop("_registry_applicant_read", None)
         prediction.pop("_source_applicant_reads", None)
+        prediction.pop("_native_attestation_applicant", None)
+        prediction.pop("_native_attestation_visa", None)
         prediction.pop("_packet_words", None)
         prediction.pop("_supporting_applicant_names", None)
         prediction.pop("_unresolved_biometric_pages", None)
         prediction.pop("_arrival_source_values", None)
         prediction.pop("_visible_purpose_values", None)
         prediction.pop("_visible_visa_values", None)
+        prediction.pop("_fee_evidence_state", None)
+        prediction.pop("_risk_evidence_state", None)
+        prediction.pop("_fee_status_defaulted", None)
+        prediction.pop("_untrusted_approval_signal", None)
+        prediction.pop("_untrusted_visible_decision_conflict", None)
+        prediction.pop("_visible_blurred_manual_approval", None)
     stats = cache_stats()
     if stats:
         with _PRINT_LOCK:

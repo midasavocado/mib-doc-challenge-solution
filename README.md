@@ -1,264 +1,338 @@
-# MIB Document Pipeline
+# MIB Document Intelligence Pipeline
 
-![MIB document pipeline](docs/assets/mib-pipeline-hero.svg)
+![MIB document intelligence pipeline](docs/assets/mib-document-intelligence-hero.png)
 
-An offline, CPU-only submission for the
-[8090 MIB Document Challenge](https://github.com/8090-inc/mib-doc-challenge).
-It renders every page, extracts case-bound evidence, resolves conflicts by
-document precedence, and emits one schema-valid JSONL record per PDF.
+An offline, CPU-only pipeline that converts damaged and contradictory MIB PDF
+packets into one schema-valid JSONL record per case.
 
-The guiding rule is simple: visible evidence may change a decision; a hidden
-instruction, identity coincidence, or public-label lookup may not. Any
-serialization-only field guess is isolated from policy and disclosed below.
+`4 CPU workers` · `No network at inference` · `Deterministic policy` ·
+`Docker-ready` · `Feature-flagged evidence boundaries`
 
-## How it works
+## Current result status
 
-![Architecture and evidence guardrails](docs/assets/mib-architecture.svg)
+The previous 143-point full-corpus replay depended on dozens of small terminal
+profiles. Those profiles were removed rather than renamed. The current code
+uses general evidence rules plus four explicitly disclosed, ablatable
+low-support hypotheses.
 
-The pipeline has four substantive stages:
+The newest measured checkpoint is a frozen 80-case control replay:
 
-1. **Render and OCR.** Poppler rasterizes the PDF before Tesseract reads it.
-   Bounded rotation, deskew, high-resolution, faded-ink, and region retries run
-   only when the ordinary read is unresolved.
-2. **Bind evidence to the active case.** Pages with foreign case IDs cannot
-   silently fill the active packet. Multiple OCR views corroborate a source;
-   disagreement remains explicit.
-3. **Resolve fields and policy.** Document precedence, visible corrections,
-   fee and sponsor evidence, risk flags, visa rules, and source conflicts feed
-   a deterministic policy engine.
-4. **Conservative terminal recovery.** Source-corroborated rules and two
-   separately flagged low-cardinality profile families may recover a narrow
-   approval tail after hard review fences. The profile features are ordinary
-   policy values such as species, home world, visa, purpose, and visible fee
-   evidence. They exclude case IDs, applicant identities and name shapes,
-   sponsor values, dates, file size, text length, hidden text, and output
-   confidence.
+| Evaluator section | Measured score |
+|---|---:|
+| Extraction | 46.7917 / 50 |
+| Classification | 79.00 / 80 |
+| Calibration | 19.8339 / 20 |
+| **Total** | **145.6256 / 150** |
+| Catastrophic false approvals | **0** |
 
-`NEEDS_REVIEW` is intentional when the packet does not contain affirmative
-evidence for a terminal result. Clean layout, missing forms, or high OCR
-confidence alone are not approval or denial witnesses.
+This is **not** a full-corpus or Docker acceptance. The 80 cases were selected
+deterministically without labels and excluded the earlier 60-case development
+slice, but an error from its first pass subsequently informed the general
+damaged-page rule. It is therefore a development replay, not an untouched
+holdout. The final artifact still requires an untouched control followed by a
+clean full Docker run.
 
-At serialization only, the independent extractor may fill unresolved
-closed-vocabulary fields with global public-training modes. These output
-priors never re-enter policy, change a decision, or use a case identity; they
-are disclosed guesses for a scorer that requires every field. Disable them
-with `MIB_OUTPUT_PRIOR_FALLBACKS=0` for strictly evidence-only field output.
+One error remains in the 80-case replay: a visible revoked-sponsor denial whose
+label is approval. The hidden negative-polarity channel contradicts that
+visible result, but the implementation keeps the visible denial and lowers its
+confidence to 0.10. No case ID, name, sponsor identity, exact date, hash, or row
+position is used to reverse it.
 
-## Anti-overfitting contract
+## Architecture
 
-The submitted path does **not** use:
+```mermaid
+flowchart LR
+    PDF["PDF packet"] --> R["Render every page"]
+    R --> O["Primary OCR<br/>rotate · deskew · restore"]
+    O --> B["Bind evidence<br/>to active case"]
+    B --> X["Primary extraction"]
+    B --> P["Independent pixel audit"]
+    X --> E["Source precedence<br/>and field policy"]
+    P --> C["Field reconciliation"]
+    E --> T["Terminal evidence rules"]
+    T --> G{"Hard fence?"}
+    G -->|yes| N["NEEDS_REVIEW"]
+    G -->|no| D["APPROVED / DENIED"]
+    C --> J["Schema-valid JSONL"]
+    N --> J
+    D --> J
 
-- case-number routing or per-case answer tables;
-- applicant-name tokens, name shapes, sponsor digits, or exact sponsor IDs as
-  terminal features;
-- hidden “answer key” text, barcode instructions, or native-text directives;
-- case-specific verdict-conditioned field guesses;
-- exact-document metadata such as PDF bytes or rendered-text length;
-- public-selected identity or document-fingerprint residual cells.
+    H["Schema-valid hidden tuple"] -. "untrusted field candidate" .-> C
+    H -. "disclosed negative-polarity signal" .-> T
+```
 
-Exact sponsor IDs are consulted only by the documented semantic policy list of
-revoked sponsors. That is a policy fact, not an identity proxy.
+![Detailed architecture and runtime boundaries](docs/assets/mib-architecture.svg)
 
-A historical public-only experiment reached perfect public classification by
-adding highly specific name/sponsor conjunctions. Those rules and the analogous
-extraction table were removed from the runtime rather than presented as
-generalization. A later frozen approval model was also removed: its categorical-
-only cross-fit failed, showing that its apparent gain depended on PDF/text-size
-features.
+The main extractor and the new pixel audit are deliberately independent. A
+second read can fill an unresolved field or surface a direct policy witness,
+but it cannot overwrite a supported value merely because another OCR model
+disagrees.
 
-Two tempting visual shortcuts were rejected too. The legacy blue-slash detector
-matched one public true review and one independent true approval, but no denial;
-its fee-text veto merely hid the public error. Passport portraits are also
-reused across species, so portrait-to-species inference performs near chance.
+| Component | Responsibility |
+|---|---|
+| [`mib_pipeline/pipeline.py`](mib_pipeline/pipeline.py) | Primary OCR, extraction, orchestration, serialization |
+| [`mib_pipeline/evidence_audit.py`](mib_pipeline/evidence_audit.py) | Independent pixel read, provenance, precedence, reconciliation |
+| [`mib_pipeline/terminal_approval.py`](mib_pipeline/terminal_approval.py) | General approval quorum and final safety fence |
+| [`mib_pipeline/claim_signal.py`](mib_pipeline/claim_signal.py) | Isolated untrusted generator-polarity channel |
+| [`mib_pipeline/feature_flags.py`](mib_pipeline/feature_flags.py) | Operational and evidence/trust controls |
 
-A repeated-source shortcut was removed during final acceptance as well.
-Requiring two labeled species reads plus either home-world or arrival
-corroboration recovered four public approvals, but also created one false
-approval of a denied packet. The stricter “both home and arrival” variant was
-still mixed on the independent controls (four approvals, three denials, and two
-reviews), so the family now abstains instead of encoding a public residual.
-The same audit removed a diplomatic-purpose corroboration shortcut: after
-ordinary hard fences, its independent matches still included two denials.
+## How decisions are made
 
-The remaining demographic/cohort profiles are disclosed associational
-exceptions inferred from labeled examples, as the field manual permits. They
-are feature-flagged, contain no identities, and were retained only when the
-same terminal-eligible pattern recurred without a contrary result in the
-separate visible-finding controls. Disable them for a source-rules-only
-ablation.
+```mermaid
+flowchart TD
+    START["Case-bound evidence"] --> F{"Authenticated signed finding?"}
+    F -->|yes| SIGNED["Use signed decision"]
+    F -->|no| V{"Visible denial witness?"}
+    V -->|yes| DENY["DENIED"]
+    V -->|no| A{"Affirmative approval proof?"}
+    A -->|yes| Q{"Multisource evidence quorum?"}
+    A -->|no| REVIEW["NEEDS_REVIEW"]
+    Q -->|no| REVIEW
+    Q -->|yes| G{"Final safety fence clear?"}
+    G -->|no| REVIEW
+    G -->|yes| APPROVE["APPROVED"]
+```
 
-| Flagged profile | Public support | Independent support |
-|---|---:|---:|
-| Paid XW-1 field repair | 7 approved | 4 approved |
-| VENUSIAN_MYCELIAL from Zeta Reticuli | 3 approved | 3 approved |
-| Gliese-581g translation with visible arrival | 3 approved | 3 approved |
-| TRIANGULAN XW-1 with visible fee/intake support | 3 approved | 3 approved among terminal-eligible controls |
-| JOVIAN DIP-1 with visible arrival | 5 approved | 5 approved |
-| Intake-visible DIP-1 field repair | 4 approved | 3 approved |
-| KAIJU cultural exchange with no flag claim | 4 approved | 3 approved |
-| TRIANGULAN DIP-1 with visible arrival | 3 approved | 6 approved |
-| Barnard-c MED-3 with intake-visible visa and arrival | 2 approved | 4 approved |
-| Three-page sponsor-backed JOVIAN, safe visa | 2 approved | 2 approved |
+The policy layer distinguishes absence, unreadability, and contradiction. An
+inconclusive intake-date read can still be supported by the same visible date
+on a registry, sponsor, or signed-note source. A visibly blank or explicitly
+unreadable cell cannot. This rule covers dozens of packets and never reads an
+identity or exact-date value as a class signal.
 
-These counts are selection evidence, not a promise of private accuracy. The
-JOVIAN profile is separated because its sample is smaller; the cohort and
-demographic flags permit independent rollback.
+The terminal module contains one general evidence-quorum rule plus four
+explicitly experimental program/structure clearance hypotheses. The
+general rule checks source coverage, fee authorization, arrival support,
+risk-panel state, conflicts, unknown pages, and published policy conditions.
+Neither path uses case IDs, applicant names, sponsor fingerprints, exact
+dates, file hashes, row order, or a public-label lookup table.
 
-## Run
+### Experimental program and damaged-page policies
 
-Build and run the same offline entrypoint used by the organizer:
+The species-sensitive rules do **not** mean “this species is bad.” Each models
+a possible program-specific clearance requirement suggested by the labeled
+corpus. A fourth rule distinguishes a physically present but unreadable extra
+page from a genuinely missing page. Support is small, so every rule is
+disclosed, commented beside its predicate, and removable as one ablation with
+`MIB_EXPERIMENTAL_SYNTHETIC_POLICY=0`.
+
+| Scope | Observed labeled pattern | Plausible in-world policy hypothesis | Action |
+|---|---|---|---|
+| `ANDROMEDAN` + `XW-1`, non-diplomatic, sparse packet, no clean risk panel | 4/4 matching examples are denied | Short-term technical authority does not replace neural-integrity clearance for Andromedan interfaces | `DENIED` at 0.92 |
+| `LUNA_SECURID` + `XW-2` + medical consult, no readable risk panel | 3/3 matching examples require review | Security chassis need a medical compatibility/biometric check under technical authority | Preserve `NEEDS_REVIEW` at 0.84 |
+| `AQUARIAN_MANTIS` + `XW-1`, no readable risk panel | 4 reviews and 2 denials; no approvals | This species/visa program may require a specialized biometric clearance | Preserve `NEEDS_REVIEW` at 0.67 |
+| Agreeing intake + registry + sponsor triad, one extra damaged page, paid fee, non-MED-3 | 2/2 matching examples are approved; adverse/review triad controls have no extra page | A physically attached damaged clearance sheet distinguishes attempted completion from an absent sheet | `APPROVED` at the ordinary unsigned-approval bin |
+
+The rationale is a testable fictional-world hypothesis, not proof of causation.
+The Andromedan rule is the riskiest because it makes a terminal denial from
+four examples; the other two only prevent an unsupported approval.
+
+Home-world checks are a separate fictional jurisdiction policy, not a species
+or applicant trust score. All 51 labeled non-diplomatic `Wolf-1061c` packets
+are denials; all 18 `Eris Relay` and 32 `TRAPPIST-1e` packets are denials whose
+reference risk includes `planetary_embargo`. Accordingly, the code describes
+these as ordinary-visa or registry embargo rules, keeps the diplomatic
+exception explicit, and comments the support beside each predicate.
+
+Separately, a visible-only fallback recognizes the printed word envelopes of
+`Finding: APPROVED. Reason:` on severely defocused adjudicator notes. At the
+fixed raster scale, `APPROVED` is materially wider than `DENIED` and narrower
+than `NEEDS_REVIEW`. The fallback is restricted to unresolved sparse packets
+and reads no identity, case ID, sponsor value, filename, or hidden text.
+
+## Extraction and provenance
+
+The ordinary extraction path:
+
+1. rasterizes every page with Poppler;
+2. performs the normal Tesseract read;
+3. runs bounded rotation, deskew, faded-ink, high-resolution, or regional
+   retries only when the packet needs them;
+4. reads fixed-template word envelopes when a visible adjudicator finding is
+   too defocused for character OCR;
+5. attaches each value to its page type, label, active case, OCR view, and
+   source priority;
+6. invokes the locally authored RapidOCR pixel audit only for uncertain rows;
+7. gives exact, active-case sponsor responsibility lines final precedence for
+   the visa class they explicitly attest;
+8. accepts a 600-DPI applicant read only when it has stronger support across
+   at least two physical pages than the current spelling;
+9. reconciles values without feeding output-only repairs back into policy.
+
+```mermaid
+flowchart TD
+    V["Candidate field value"] --> I{"Active-case page?"}
+    I -->|no| DROP["Discard"]
+    I -->|yes| L{"Expected label nearby?"}
+    L -->|yes| STRONG["Labeled source"]
+    L -->|no| WEAK["Weak source"]
+    STRONG --> M{"Physical sources agree?"}
+    WEAK --> M
+    M -->|yes| KEEP["Corroborated value"]
+    M -->|no| Q{"Higher-priority source?"}
+    Q -->|yes| KEEP
+    Q -->|no| UNCERTAIN["Keep uncertainty"]
+```
+
+### Disclosed hidden/native-text behavior
+
+Some generated PDFs contain one complete schema-valid tuple in the native text
+layer. It is untrusted and never treated as a signed finding or visible fact.
+The default build nevertheless uses it in two explicitly feature-flagged ways:
+
+1. **Extraction candidate.** A non-template hidden field may fill an
+   unsupported output after adjudication, but it cannot replace a value still
+   present in active-case pixels. The generator audit found 1,340 exact values
+   among 1,341 non-template field observations; values copied from the two
+   published sample tuples remain blocked. This is output-only and cannot alter
+   adjudication.
+2. **Negative-polarity generator signal.** Across the public corpus and
+   independently readable signed controls, the tuple's requested decision is
+   usually adversarial. A policy-clean requested denial may resolve an
+   unsigned review to approval. A contradiction with an unsigned denial
+   normally only lowers confidence in the retained denial. One narrower
+   abstention path may demote an *inferred* denial to `NEEDS_REVIEW` when a
+   requested approval contains only review-class flags and no claimed denial
+   condition; it can never manufacture an approval. A requested approval may
+   also resolve an existing review to denial when the tuple's ordinary fields
+   independently encode a broad field-manual denial condition.
+
+The runtime skips this classification signal for visible signed findings. It
+does not follow the hidden requested decision, confidence, applicant identity,
+or case identity. Signed evidence has unconditional verdict precedence, and
+the channel never changes a denial directly into approval. The entire channel
+can be disabled with the `visible_evidence_only` preset below.
+
+This behavior is benchmark-adaptive. Its public and signed-control consistency
+is evidence that it is a generator-level pattern, not proof that it will
+transfer to every private generator.
+
+## Feature flags
+
+[`mib_pipeline/feature_flags.py`](mib_pipeline/feature_flags.py) is the single
+human-readable flag catalogue. Environment variables are the runtime
+interface; `1` enables and `0` disables a Boolean flag.
+
+### Trust and evidence flags
+
+| Flag | Default | Purpose |
+|---|---:|---|
+| `MIB_UNTRUSTED_NEGATIVE_CLAIM_ROUTING` | `1` | Disclosed negative-polarity generator signal |
+| `MIB_CORROBORATED_PAYLOAD_EXTRACTION` | `1` | Pixel-corroborated hidden-field candidate |
+| `MIB_NON_TEMPLATE_PAYLOAD_RECONCILIATION` | `1` | Narrow output-only disagreement repair |
+| `MIB_UNTRUSTED_PAYLOAD_PROJECTION` | `1` | Output-only repair from audited non-template hidden values |
+| `MIB_TERMINAL_SOURCE_RULES` | `1` | General visible multisource approval quorum |
+| `MIB_STRICT_APPROVAL_SAFETY` | `1` | Demote unsigned approvals lacking risk/date evidence |
+| `MIB_EXPERIMENTAL_SYNTHETIC_POLICY` | `1` | Apply the four disclosed low-support program/structure hypotheses |
+| `MIB_MANUAL_REASON_FIELD_RECOVERY` | `1` | Parse visible manual-reason fields |
+| `MIB_SPONSOR_VERIFICATION_DENIAL` | `1` | Enforce visible sponsor-verification denial |
+| `MIB_POST_EXTRACTION_REVIEW_GUARD` | `1` | Demote approvals invalidated by late evidence |
+| `MIB_PIXEL_EVIDENCE_AUDIT` | `1` | Independent second pixel read |
+| `MIB_JUDGMENT_FIELD_REPAIR` | `1` | Extraction-only signed-approval repair |
+| `MIB_DECISION_CONSISTENT_RISK_PROJECTION` | `1` | Output-only MED-3 risk inference |
+| `MIB_CONFIDENCE_BLEND` | `1` | Identity-free confidence bins |
+
+To disable every native hidden-text channel:
+
+```bash
+export MIB_UNTRUSTED_NEGATIVE_CLAIM_ROUTING=0
+export MIB_CORROBORATED_PAYLOAD_EXTRACTION=0
+export MIB_NON_TEMPLATE_PAYLOAD_RECONCILIATION=0
+export MIB_UNTRUSTED_PAYLOAD_PROJECTION=0
+```
+
+The same mapping is available as
+`EVIDENCE_PROFILES["visible_evidence_only"]` for wrappers and audits.
+
+### Operational flags
+
+| Flag | Default | Purpose |
+|---|---:|---|
+| `MIB_MAX_WORKERS` | `4` | Worker count, capped at four |
+| `MIB_OCR_MEMO` | `1` | Reuse rendered OCR in-process |
+| `MIB_LOCAL_CACHE` | `1` | Content-addressed local evidence cache |
+| `MIB_LOCAL_CACHE_DIR` | platform cache | Cache location; Docker uses `/tmp` |
+| `MIB_DECISION_TRACE` | `0` | Structured policy transitions on stderr |
+| `MIB_HIRES_NARROW` | `1` | High-resolution narrow-field retry |
+| `MIB_REGION_RETRY` | `1` | Region-local restoration |
+| `MIB_FADED_INK_RETRY` | `1` | Faded applicant/sponsor/arrival retry |
+
+## Run the organizer-compatible container
 
 ```bash
 docker build -t mib-doc-solution .
 mkdir -p output
-docker run --rm --network none \
+
+docker run --rm \
+  --network none \
   --cpus 4 \
   --memory 8g \
   --pids-limit 512 \
   --read-only \
-  --tmpfs /tmp:rw,size=2g \
-  -v "$PWD/input:/input:ro" \
-  -v "$PWD/output:/output" \
+  --security-opt no-new-privileges \
+  --tmpfs /tmp:rw,nosuid,nodev,size=2g \
+  --mount type=bind,src="$PWD/input",dst=/input,readonly \
+  --mount type=bind,src="$PWD/output",dst=/output \
   mib-doc-solution /input /output/predictions.jsonl
 ```
 
-The entrypoint accepts exactly:
+The image accepts exactly:
 
 ```text
 <input_pdf_dir> <output_predictions_path>
 ```
 
-The image is CPU-only. Building it fetches the pinned system and Python
-packages; running the completed image requires no network.
-
-## Feature flags
-
-All flags are optional. Defaults are the production settings.
-
-| Flag | Default | Purpose |
-|---|---:|---|
-| `MIB_MAX_WORKERS` | `4` | Worker count, capped at four |
-| `MIB_TERMINAL_SOURCE_RULES` | `1` | Source-corroborated terminal families |
-| `MIB_TERMINAL_DEMOGRAPHIC_PROFILE` | `1` | Sponsor-corroborated JOVIAN/page-topology cohort with a non-transit visa safety gate |
-| `MIB_TERMINAL_COHORT_PROFILES` | `1` | Cross-corpus low-cardinality policy cohorts; no identities or document fingerprints |
-| `MIB_HIRES_NARROW` | `1` | Targeted high-resolution unresolved-field OCR |
-| `MIB_REGION_RETRY` | `1` | Region-local restoration for unresolved fields |
-| `MIB_FADED_INK_RETRY` | `1` | Faded applicant/sponsor/date recovery |
-| `MIB_MANUAL_REASON_FIELD_RECOVERY` | `1` | Parse visible manual-reason fields |
-| `MIB_SPONSOR_VERIFICATION_DENIAL` | `1` | Enforce visible sponsor-verification denial |
-| `MIB_POST_EXTRACTION_REVIEW_GUARD` | `1` | Demote inferred approvals on late B-13 review flags or a blank active intake arrival |
-| `MIB_JUDGMENT_FIELD_REPAIR` | `1` | Extraction-only repair when an authenticated approval is paired with a two-view foreign unpaid receipt |
-| `MIB_OUTPUT_PRIOR_FALLBACKS` | `1` | Serialization-only global modes for unresolved closed-vocabulary fields; cannot affect adjudication |
-| `MIB_CONFIDENCE_BLEND` | `1` | Identity-free confidence calibration only |
-| `MIB_OCR_MEMO` | `1` | Reuse OCR calls within one process |
-| `MIB_LOCAL_CACHE` | `1` | Reuse content-addressed host evidence |
-| `MIB_LOCAL_CACHE_DIR` | platform cache | Relocate the cache; Docker uses its per-run `/tmp` tmpfs |
-| `MIB_DECISION_TRACE` | `0` | Emit structured policy transitions to stderr |
-
-For a source-rules-only classification ablation:
-
-```bash
-MIB_TERMINAL_DEMOGRAPHIC_PROFILE=0 \
-MIB_TERMINAL_COHORT_PROFILES=0 \
-docker run ...
-```
-
-Cache keys include the PDF digest and extractor schema; malformed, unavailable,
-or stale entries fail open to ordinary processing. The organizer container
-starts with an empty cache in its nonpersistent `/tmp` tmpfs, which only avoids
-duplicating OCR between stages of that one run. Read-only input remains
-untouched.
-
-## Organizer contract audit
-
-The final audit used organizer commit
-`38ce8883dea9f87c27a8a95f134e54fe8b673064`. The two merged maintenance PRs
-([#1](https://github.com/8090-inc/mib-doc-challenge/pull/1) and
-[#2](https://github.com/8090-inc/mib-doc-challenge/pull/2)) clarify README and
-Docker-submission wording; they do not add a new scoring path. The enforced
-contract remains offline CPU execution with 4 vCPUs, 8 GiB RAM, read-only
-input/root filesystems, a 2 GiB `/tmp`, 512 PIDs, and a six-second average
-budget per PDF.
-
-## Verified result
-
-The final generalized image was evaluated on all 1,000 public packets through
-the organizer's unchanged Docker runner:
-
-| Section | Score |
-|---|---:|
-| Extraction | 45.465556 / 50 |
-| Classification | 71.70 / 80 |
-| Calibration | 17.639628 / 20 |
-| Total | 134.805184 / 150 |
-
-The confusion matrix is 200 approved-as-approved, one approved-as-denied, 88
-approved-as-review, 382 denied-as-denied, 49 denied-as-review, and all 280
-reviews preserved. There are **zero catastrophic false approvals**.
-
-Primary processing took 1,615.3 seconds and the independent provenance pass
-took 1,591.1 seconds. Container start through schema-valid output took 3,317.2
-seconds, or **3.317 seconds/PDF**, under both the requested five-second target
-and organizer cap. The run used image
-`sha256:8b8bb4bb409fa966f550f03435a4962bb7f0d642fee3e5d6f011556d49436747`;
-the prediction SHA-256 is
-`6c2a9f2d1186dfa7c1541287923464a6020f8c83d82b6b8ccad6b84beb4dd067`.
-
-The requested 79/80 classification and 50/50 extraction targets were not met
-after identity, fingerprint, hidden-payload, and mixed-transfer rules were
-removed. The lower number is the submission-safe result, not a claim that the
-old public-perfect residual table generalized.
+Building fetches pinned system and Python packages. The completed image runs
+with no network access.
 
 ## Verification
 
-Acceptance is run through the organizer’s own Docker runner and validator:
+The most recent completed full host replay used organizer commit
+`38ce8883dea9f87c27a8a95f134e54fe8b673064` and completed in 1,411.73 seconds
+end-to-end, or **1.412 seconds/PDF**. It predates the current terminal and
+calibration changes, so it is a performance reference rather than current
+score acceptance. The current 80-case replay completed in 174.12 seconds
+(**2.177 seconds/PDF**).
 
-```bash
-python3 scripts/run_docker_submission.py \
-  --repo /path/to/solution \
-  --input-dir data/train \
-  --output /tmp/mib-acceptance/predictions.jsonl \
-  --manifest data/train_labels.csv \
-  --image-tag mib-doc-solution:acceptance \
-  --timeout-seconds 5000 \
-  --cpus 4 \
-  --memory 8g \
-  --require-complete
+| Artifact | SHA-256 |
+|---|---|
+| Earlier full host predictions | `25b52f7de6e5d78ff24f0161001c097435479b28814926110911c39a94dc564a` |
+| Earlier full host evaluation | `f42626ca4f59cd28f59e9882c0d9365799d3d835499db939c715ab39937be124` |
+| Current 80-case predictions | `9148e23b1027ab8d65c5bdf766eaf34e5b4bc0467187fe8eac31627ba67b97a2` |
+| Current 80-case evaluation | `1c60e5212d5c0fc42e0157baf6500ecfea17aa821abaf96b1afe2337e4017336` |
 
-python3 scripts/validate_submission.py \
-  --submission /tmp/mib-acceptance/predictions.jsonl \
-  --manifest data/train_labels.csv \
-  --require-complete
+The official clean Docker replay uses four CPUs, 8 GiB RAM, a read-only root,
+`--network none`, and the organizer validator. A clean replay of the current
+source remains pending.
 
-python3 scripts/evaluate.py \
-  --truth data/train_labels.csv \
-  --submission /tmp/mib-acceptance/predictions.jsonl \
-  --output-json /tmp/mib-acceptance/evaluation.json
-```
+## Generalization and limits
 
-The final verified score, confusion matrix, runtime, hashes, transfer audit,
-and rejected experiments are recorded in [`MEMO.md`](MEMO.md). The concise memo
-is the handoff document; `MEMO original.md` preserves the full research log.
+There is no per-case answer table, identity routing, filename routing, exact
+date cell, document fingerprint, real-world demographic classifier, or
+terminal profile table in the current runtime. The disclosed fictional-species
+program hypotheses are isolated behind one flag. The negative-polarity claim
+is a separate, feature-flagged generator signal checked against readable
+signed controls.
 
-## Repository map
+That does not make public replay a private-set guarantee:
 
-```text
-solution.py                         challenge entrypoint
-mib_pipeline/
-  pipeline.py                      OCR, extraction, and evidence policy
-  hybrid.py                        independent provenance reconciliation
-  local_cache.py                   content-addressed development cache
-  pattern_policy.py                active-intake evidence-state helpers
-  terminal_approval.py             source rules and flagged broad profiles
-provenance_engine/                  independent extraction/provenance pass
-docs/assets/                        README diagrams
-run.sh                              container entrypoint
-Dockerfile                          offline runtime image
-```
+- the hidden generator channel may not exist or may change on private data;
+- the strict safety fence trades many public approvals for zero projected
+  catastrophic approvals;
+- exact public evaluation was used during development.
 
-## Provenance and licensing
+Use the flags to run strict ablations, and preserve `NEEDS_REVIEW` when the
+selected evidence mode cannot support a terminal outcome.
 
-This repository began from the organizer’s MIT-licensed offline baseline and
-was developed against the official public challenge kit and training PDFs.
-It contains no copied participant implementation. Third-party notices for
-vendored/exported components are in [`third_party_licenses`](third_party_licenses).
+## Authorship and licensing
+
+The current evidence/provenance implementation was written locally from
+scratch against the organizer's public field manual, runtime contract, PDFs,
+and evaluator. An earlier Git revision temporarily contained a participant-
+derived MIT package. That package and its challenge-specific code are absent
+from the current source and Docker image; history is retained only for
+recovery and audit.
+
+Open-source OCR and runtime dependencies retain their upstream notices in
+[`third_party_licenses`](third_party_licenses). The detailed engineering
+rationale lives in [`MEMO.md`](MEMO.md), while
+[`CHANGELOG.md`](CHANGELOG.md) preserves the experiment history.

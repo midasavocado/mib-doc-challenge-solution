@@ -8,6 +8,7 @@ ENV BLIS_NUM_THREADS=4 \
     OMP_NUM_THREADS=4 \
     OMP_THREAD_LIMIT=1 \
     OPENBLAS_NUM_THREADS=4 \
+    OC_DISABLE_DOT_ACCESS_WARNING=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     TOKENIZERS_PARALLELISM=false \
@@ -29,7 +30,6 @@ RUN python3 -m pip install \
 WORKDIR /app
 COPY run.sh solution.py /app/
 COPY mib_pipeline /app/mib_pipeline
-COPY provenance_engine /app/provenance_engine
 COPY third_party_licenses /app/third_party_licenses
 RUN chmod +x /app/run.sh
 

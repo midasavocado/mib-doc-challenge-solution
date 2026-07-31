@@ -1,12 +1,59 @@
-# MIB Document Challenge — Living Engineering Memo
+# MIB Document Challenge — Development Changelog
 
-Last updated: 2026-07-27
+This file preserves the detailed experiment history in chronological form.
+For the current architecture, measured result, and engineering rationale, see
+[`MEMO.md`](MEMO.md).
 
-This memo records the approaches we tried, the evidence behind each decision,
-and the current promotion gates. It is intentionally a living document: update
-it after every material experiment so failed ideas are not accidentally
-rediscovered and public-fit results are not confused with honest holdout
-results.
+Last updated: 2026-07-30
+
+## 2026-07-30 — clean-room engine exceeds removed engine
+
+- Froze the locally authored rewrite at **142.286828/150** on the exact public
+  1,000-PDF evaluator, above the removed engine's **142.010817/150**.
+- Recorded the honest component comparison: extraction `46.5644` vs
+  `46.7467`, classification `77.35` vs `77.42`, and calibration `18.3724` vs
+  `17.8442`.
+- Expanded the local second-reader implementation into a case-bound pixel
+  evidence audit with explicit source precedence, conflict handling, and
+  post-terminal evidence reapplication.
+- Added symmetric terminal recovery: unsupported-approval veto profiles and
+  tightly fenced review recovery profiles.
+- Narrowed the arrival-plus-waiver recovery family to require visible
+  intake/sponsor visa corroboration; this removed one catastrophic false
+  approval while retaining its supported approvals.
+- Isolated the disclosed native-text behavior in
+  `mib_pipeline/claim_signal.py`. The requested decision is treated only as a
+  negative-polarity generator signal, is skipped for visible signed findings,
+  and is independently feature-flagged.
+- Added identity-free final confidence families. Mean Brier error fell to
+  `0.0406904`, which supplied the total-score improvement over the old engine.
+- Validated 1,000 complete schema-valid output rows and measured a 1,411.73
+  second host wall time, or 1.412 seconds/PDF.
+- Rewrote the README and engineering memo to disclose both the result and the
+  remaining risks: four false approvals, public-guided cohort selection, small
+  control cells, and no claim of private-set proof.
+
+## 2026-07-30 — participant-derived package removed
+
+- Removed the complete `provenance_engine/` package and its participant-source
+  license notice from the current tree and Docker image.
+- Replaced it with a locally authored, post-processing pixel audit built from
+  the organizer field manual and public runtime contract.
+- Changed the secondary renderer to Poppler and the OCR dependency to its
+  ordinary public `RapidOCR` interface.
+- Limited the second read to unresolved core fields, unknown fees, damaged
+  short names, unresolved biometric pages, and low-confidence manual-note
+  candidates.
+- Isolated native OCR in two spawned worker processes after thread-based
+  stress tests exposed process-aborting native concurrency faults.
+- Preserved the older implementation only in Git history for recovery. No
+  score produced by it will be presented as acceptance evidence for the
+  replacement.
+
+This changelog records the approaches we tried, the evidence behind each
+decision, and the current promotion gates. Update it after every material
+experiment so failed ideas are not accidentally rediscovered and public-fit
+results are not confused with honest holdout results.
 
 ## Current verified checkpoints
 

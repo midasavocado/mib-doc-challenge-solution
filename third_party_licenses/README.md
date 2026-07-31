@@ -4,13 +4,6 @@ This directory adds the license and model provenance files that are not
 present in the `rapidocr==3.9.2` wheel itself. The Docker image copies this
 directory to `/app/third_party_licenses`.
 
-The `provenance_engine` package is derived from Abhishek's public
-MIT-licensed MIB solution, itself derived from Chris Strobl's public
-MIT-licensed `strobl/mib-doc-solution`. Its license is retained as
-`provenance-engine-MIT.txt`. The vendored copy removes the upstream hidden
-answer-key and label-selected purpose-signature channels and is used only as
-an independent visible-evidence adjudicator.
-
 The remaining pinned Python wheels retain their own license and NOTICE files
 inside the installed package tree. In particular, redistribution must retain:
 
