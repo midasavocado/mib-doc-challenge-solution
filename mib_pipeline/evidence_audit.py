@@ -1228,6 +1228,9 @@ def _audit_pdf(pdf_path: Path) -> dict[str, Any]:
             & set(candidates.get("home_world", ()))
         )
     ):
+        # Fictional registry jurisdiction policy, not an assessment of the
+        # applicant or species. The home world must be read from an active
+        # intake/registry source before the published embargo can deny.
         decision = "DENIED"
         reason = "visible_registry_embargo"
     elif (
@@ -1761,6 +1764,10 @@ def apply_evidence_adjudication(
                 set(str(prediction["risk_flags"]).split("|"))
                 & set(_REVIEW_FLAGS)
             )
+            # Wolf-1061c is a fictional ordinary-visa embargo jurisdiction,
+            # not a proxy for species trust. It matters here only in
+            # combination with at least two independently read review flags;
+            # origin alone never creates a new risk flag in this branch.
             combined_denial = (
                 len(review_flags) >= 2
                 and (

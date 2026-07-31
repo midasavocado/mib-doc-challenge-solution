@@ -4370,6 +4370,10 @@ def _apply_output_policy_guard(pdf: Path, result: dict) -> None:
             result["home_world"],
         )
     ):
+        # Fictional jurisdiction safety check, not a species or resident
+        # trust score. A source-backed ordinary-visa embargo is held for
+        # review here so the later terminal layer can apply visible-policy
+        # precedence; this fallback does not manufacture a denial.
         review_reason = "output_embargoed_home_world_requires_source_check"
     if review_reason is None:
         return
