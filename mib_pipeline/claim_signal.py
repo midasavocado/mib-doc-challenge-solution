@@ -11,10 +11,8 @@ control corpus, however, that request has a stable *negative* polarity:
   policy denial in the tuple when the visible reader already returned review.
 
 This module keeps that noisy channel structurally separate from the pixel
-evidence engine. It cannot alter extraction fields or act on a visible signed
-finding. Its one reviewer-sensitive exception is an unsigned inferred denial
-when the complete claim describes only review-class uncertainty; that narrow
-family may be routed to review, never approval.
+evidence engine. It cannot alter extraction fields, act on a visible signed
+finding, or demote a visible denial.
 """
 
 from __future__ import annotations
@@ -97,9 +95,8 @@ def apply_untrusted_negative_claim_routing(
     unsigned review to approval. When that signal contradicts a visible
     denial, the visible verdict remains authoritative and the contradiction
     is retained only for calibration. A requested approval may resolve a
-    review when its ordinary fields encode a denial witness. An unsigned
-    inferred denial may become review when the claim contains only review-risk
-    flags; signed terminal findings remain unreachable.
+    review when its ordinary fields encode a denial witness. Signed terminal
+    findings remain unreachable.
     """
 
     if not enabled("MIB_UNTRUSTED_NEGATIVE_CLAIM_ROUTING", True):
@@ -170,14 +167,22 @@ def apply_untrusted_negative_claim_routing(
                 and claimed_flags
                 and claimed_flags <= _REVIEW_RISK_FLAGS
             ):
-                # A signed decision was excluded at the top of this function.
-                # For an unsigned denial, a complete generator tuple that
-                # names only review-class uncertainty is used as a conservative
-                # abstention signal. It may remove a denial but can never
-                # manufacture an approval or a catastrophic false approval.
-                target = "NEEDS_REVIEW"
-                reason = "requested_approval_with_review_only_claim"
-                confidence = 0.84
+                # Visible evidence keeps the denial. The hidden generator
+                # claim is used only as a reliability warning because its
+                # ordinary fields describe uncertainty rather than a denial
+                # witness. This marker can change confidence, never verdict.
+                result["_untrusted_visible_decision_conflict"] = True
+                primary._trace_decision(
+                    pdf.stem,
+                    "untrusted_review_claim_visible_denial_conflict",
+                    transition="DENIED->DENIED",
+                    source=(
+                        "schema_valid_untrusted_generator_claim_with"
+                        "_review_only_fields"
+                    ),
+                    identity_features=False,
+                )
+                continue
             if (
                 policy_reason is not None
                 and current == "NEEDS_REVIEW"

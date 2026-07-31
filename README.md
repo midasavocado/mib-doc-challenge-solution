@@ -19,10 +19,10 @@ The newest measured checkpoint is a frozen 80-case control replay:
 
 | Evaluator section | Measured score |
 |---|---:|
-| Extraction | 46.7917 / 50 |
-| Classification | 79.00 / 80 |
-| Calibration | 19.8339 / 20 |
-| **Total** | **145.6256 / 150** |
+| Extraction | 47.2361 / 50 |
+| Classification | 78.125 / 80 |
+| Calibration | 19.8417 / 20 |
+| **Total** | **145.2028 / 150** |
 | Catastrophic false approvals | **0** |
 
 This is **not** a full-corpus or Docker acceptance. The 80 cases were selected
@@ -32,11 +32,12 @@ damaged-page rule. It is therefore a development replay, not an untouched
 holdout. The final artifact still requires an untouched control followed by a
 clean full Docker run.
 
-One error remains in the 80-case replay: a visible revoked-sponsor denial whose
-label is approval. The hidden negative-polarity channel contradicts that
-visible result, but the implementation keeps the visible denial and lowers its
-confidence to 0.10. No case ID, name, sponsor identity, exact date, hash, or row
-position is used to reverse it.
+Two errors remain in the 80-case replay: a visible revoked-sponsor denial whose
+label is approval and a visible stale-date denial whose label is review. The
+hidden negative-polarity channel contradicts both results, but the
+implementation keeps both visible denials and lowers their confidence to 0.10.
+No case ID, name, sponsor identity, exact date, hash, or row position is used
+to reverse either result.
 
 ## Architecture
 
@@ -189,11 +190,8 @@ The default build nevertheless uses it in two explicitly feature-flagged ways:
    independently readable signed controls, the tuple's requested decision is
    usually adversarial. A policy-clean requested denial may resolve an
    unsigned review to approval. A contradiction with an unsigned denial
-   normally only lowers confidence in the retained denial. One narrower
-   abstention path may demote an *inferred* denial to `NEEDS_REVIEW` when a
-   requested approval contains only review-class flags and no claimed denial
-   condition; it can never manufacture an approval. A requested approval may
-   also resolve an existing review to denial when the tuple's ordinary fields
+   only lowers confidence in the retained denial. A requested approval may
+   resolve an existing review to denial when the tuple's ordinary fields
    independently encode a broad field-manual denial condition.
 
 The runtime skips this classification signal for visible signed findings. It
@@ -228,7 +226,7 @@ interface; `1` enables and `0` disables a Boolean flag.
 | `MIB_POST_EXTRACTION_REVIEW_GUARD` | `1` | Demote approvals invalidated by late evidence |
 | `MIB_PIXEL_EVIDENCE_AUDIT` | `1` | Independent second pixel read |
 | `MIB_JUDGMENT_FIELD_REPAIR` | `1` | Extraction-only signed-approval repair |
-| `MIB_DECISION_CONSISTENT_RISK_PROJECTION` | `1` | Output-only MED-3 risk inference |
+| `MIB_DECISION_CONSISTENT_RISK_PROJECTION` | `1` | Output-only missing-B-13 or MED-3 risk inference |
 | `MIB_CONFIDENCE_BLEND` | `1` | Identity-free confidence bins |
 
 To disable every native hidden-text channel:
@@ -290,15 +288,15 @@ The most recent completed full host replay used organizer commit
 `38ce8883dea9f87c27a8a95f134e54fe8b673064` and completed in 1,411.73 seconds
 end-to-end, or **1.412 seconds/PDF**. It predates the current terminal and
 calibration changes, so it is a performance reference rather than current
-score acceptance. The current 80-case replay completed in 174.12 seconds
-(**2.177 seconds/PDF**).
+score acceptance. The current 80-case replay completed in 175.49 seconds
+(**2.194 seconds/PDF**).
 
 | Artifact | SHA-256 |
 |---|---|
 | Earlier full host predictions | `25b52f7de6e5d78ff24f0161001c097435479b28814926110911c39a94dc564a` |
 | Earlier full host evaluation | `f42626ca4f59cd28f59e9882c0d9365799d3d835499db939c715ab39937be124` |
-| Current 80-case predictions | `9148e23b1027ab8d65c5bdf766eaf34e5b4bc0467187fe8eac31627ba67b97a2` |
-| Current 80-case evaluation | `1c60e5212d5c0fc42e0157baf6500ecfea17aa821abaf96b1afe2337e4017336` |
+| Current 80-case predictions | `fc474486be39483356b1a7b6c1d38bc8df39e16bd4f2d05e91f68ce3d504b4f0` |
+| Current 80-case evaluation | `9ca2e8a7b0b2169e22217319d5644c52997c436cf787cb2442f778703fb829ae` |
 
 The official clean Docker replay uses four CPUs, 8 GiB RAM, a read-only root,
 `--network none`, and the organizer validator. A clean replay of the current

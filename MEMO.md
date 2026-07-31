@@ -16,10 +16,10 @@ The newest measured checkpoint is a frozen 80-case control replay:
 
 | Section | Measured control score |
 |---|---:|
-| Extraction | 46.7917 / 50 |
-| Classification | 79.00 / 80 |
-| Calibration | 19.8339 / 20 |
-| **Total** | **145.6256 / 150** |
+| Extraction | 47.2361 / 50 |
+| Classification | 78.125 / 80 |
+| Calibration | 19.8417 / 20 |
+| **Total** | **145.2028 / 150** |
 | Catastrophic false approvals | **0** |
 
 The cases were selected deterministically without labels and excluded the
@@ -287,10 +287,9 @@ flowchart TD
     V -->|review| INV["May route review → approval"]
     V -->|denied| KEEP["Keep DENIED;<br/>lower confidence only"]
     V -->|approved| IGNORE
-    R -->|APPROVED| U{"Current unsigned result?"}
-    U -->|review + broad denial fields| DEN["May route review → denial"]
-    U -->|inferred denial + only review flags| ABSTAIN["May route denial → review"]
-    U -->|otherwise| IGNORE
+    R -->|APPROVED| W{"Review + broad<br/>denial fields?"}
+    W -->|yes| DEN["May route review → denial"]
+    W -->|no| IGNORE
 ```
 
 The tuple's requested result is not followed directly. Its *negative polarity*
@@ -299,10 +298,9 @@ is used as a noisy generator signal:
 - requested `DENIED` is associated with the generator's approval side;
 - for a policy-clean requested `DENIED`, an existing denial keeps the verdict
   and the polarity disagreement may only lower confidence;
-- one reviewer-sensitive exception can demote an unsigned inferred denial to
-  review when a requested approval contains only review-class flags and no
-  claimed field-manual denial; this is an abstention, never an approval;
-- requested `APPROVED` can contribute only when the tuple's ordinary fields
+- requested `APPROVED` with only review-class fields may lower confidence in a
+  retained denial but cannot change it; it can contribute a terminal denial
+  only when the current result is review and the tuple's ordinary fields
   independently encode hard risk, transit visa, revoked sponsor,
   non-diplomatic Wolf-1061c origin, unpaid fee, or stale non-diplomatic
   arrival.
@@ -354,14 +352,17 @@ Fee projection remains limited to an absent or unreadable fee source, risk
 projection cannot replace an existing visible flag, and active visible values
 always win. These repairs do not rerun adjudication or confidence logic.
 
-The latest 80-case control measured **46.7917/50** extraction. Relative to the
-strict visible-precedence checkpoint, source-local repairs gained 38 raw field
-points: one exact risk-flag superset, two sponsor-attested visa classes, and
-four applicant names. The applicant repairs require either a pixel-verified
-native attestation or a 600-DPI candidate with stronger support across at
-least two physical active-case pages than the current read. This last
-comparison also prevented a damaged high-resolution spelling from replacing
-an already exact lower-resolution name. None of these repairs altered
+The latest 80-case control measured **47.2361/50** extraction. Relative to the
+strict visible-precedence checkpoint, source-local and output-only repairs
+gained 70 raw field points: one exact risk-flag superset, two
+sponsor-attested visa classes, four applicant names, and four missing B-13
+review states emitted as `illegible_biometrics`. The applicant repairs require
+either a pixel-verified native attestation or a 600-DPI candidate with stronger
+support across at least two physical active-case pages than the current read.
+This last comparison also prevented a damaged high-resolution spelling from
+replacing an already exact lower-resolution name. The B-13 projection runs
+only after the verdict is final, only when no stronger field candidate
+survives, and never feeds back into policy. None of these repairs altered
 adjudication. A current full-corpus extraction score remains pending.
 
 ## Calibration
@@ -373,11 +374,11 @@ mean_brier = mean((confidence - classification_correct)^2)
 calibration = 20 × max(0, 1 - 2 × mean_brier)
 ```
 
-The latest 80-case control has mean Brier error **0.0041525**, producing
-**19.8339/20** calibration. Its only remaining classification error is a
-visible revoked-sponsor denial at confidence 0.10. The hidden generator signal
-disagrees with that result, but it affects only confidence: the visible verdict
-is retained.
+The latest 80-case control has mean Brier error **0.0039575**, producing
+**19.8417/20** calibration. Its two remaining classification errors are a
+visible revoked-sponsor denial and a visible stale-date denial, both at
+confidence 0.10. The hidden generator signal disagrees with those results, but
+it affects only confidence: both visible verdicts are retained.
 
 The output bins preserve provenance strength:
 
@@ -410,7 +411,7 @@ flowchart LR
     D["Approval veto refinement<br/>142.1361"] -->
     E["Historical small cohorts<br/>143-point range"] -->
     F["Generalization cleanup +<br/>zero-CFA safety<br/>129.63 full projection"] -->
-    G["Frozen 80-case replay<br/>145.6256 · zero CFA"]
+    G["Frozen 80-case replay<br/>145.2028 · zero CFA"]
 ```
 
 | Exact checkpoint | Extraction | Classification | Calibration | CFA | Total |
@@ -421,7 +422,7 @@ flowchart LR
 | Clean-room v3 | 46.5644 | 77.23 | 18.3417 | 5 | 142.1361 |
 | Clean-room v4, historical | 46.5644 | 77.35 | 18.3724 | 4 | 142.2868 |
 | Generalized cleanup, prior full projection | 46.64 | 67.55 | 15.44 | 0 | 129.63 |
-| **Current frozen 80-case replay** | **46.7917** | **79.00** | **19.8339** | **0** | **145.6256** |
+| **Current frozen 80-case replay** | **47.2361** | **78.125** | **19.8417** | **0** | **145.2028** |
 
 The historical sequence is retained to show how the score was obtained, not
 to claim that every row is directly comparable: the earlier rows are
@@ -434,18 +435,18 @@ replay.
 |---|---:|---:|---:|
 | APPROVED | 17 | 1 | 0 |
 | DENIED | 0 | 33 | 0 |
-| NEEDS_REVIEW | 0 | 0 | 29 |
+| NEEDS_REVIEW | 0 | 1 | 28 |
 
 | Metric | Measured value |
 |---|---:|
 | Submitted/scored rows | 80 / 80 |
 | Invalid rows | 0 |
 | Input-relative missing or extra cases | 0 |
-| Mean Brier error | 0.0041525 |
+| Mean Brier error | 0.0039575 |
 | Catastrophic false approvals | 0 |
-| Prediction SHA-256 | `9148e23b1027ab8d65c5bdf766eaf34e5b4bc0467187fe8eac31627ba67b97a2` |
-| Evaluation SHA-256 | `1c60e5212d5c0fc42e0157baf6500ecfea17aa821abaf96b1afe2337e4017336` |
-| **Total** | **145.6256 / 150** |
+| Prediction SHA-256 | `fc474486be39483356b1a7b6c1d38bc8df39e16bd4f2d05e91f68ce3d504b4f0` |
+| Evaluation SHA-256 | `9ca2e8a7b0b2169e22217319d5644c52997c436cf787cb2442f778703fb829ae` |
+| **Total** | **145.2028 / 150** |
 
 ## Performance and organizer contract
 
@@ -455,7 +456,7 @@ phase finished in 1,240.3 seconds. The generalized terminal rewrite removes
 work rather than adding OCR, so this is a useful performance reference, but it
 is not acceptance evidence for the current commit.
 
-The current 80-case replay completed in **174.12 seconds**, or **2.177
+The current 80-case replay completed in **175.49 seconds**, or **2.194
 seconds/PDF**, with a warm local evidence cache. This is below the four-second
 engineering target but is not a substitute for a cold constrained Docker run.
 
@@ -547,7 +548,7 @@ as reusable evidence states; private transfer is still unproven.**
 
 ## Known limits
 
-- The newest measured checkpoint is 145.6256/150 on an 80-case development
+- The newest measured checkpoint is 145.2028/150 on an 80-case development
   replay with zero catastrophic false approvals; a fresh full Docker
   acceptance is pending.
 - The strict safety fence intentionally sacrifices ambiguous approvals.

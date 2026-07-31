@@ -5971,24 +5971,57 @@ def _apply_post_extraction_review_safeguard(
             )
 
 
+def _has_readable_biometric_panel(pdf: Path) -> bool:
+    """Return whether active-case pixels expose the B-13 risk row."""
+
+    return any(
+        _page_bound_to_active_case(pdf.stem, page)
+        and re.search(r"FORM\s+B-13|Biometric\s+Scan\s+Slip", page, re.I)
+        and re.search(r"\bObserved\s+flags?\b", page, re.I)
+        for page in _render_and_ocr(pdf)
+    )
+
+
 def _apply_decision_consistent_risk_projection(
+    pdfs: list[Path],
     predictions: dict[str, dict],
 ) -> None:
     """Project policy-consistent risk fields after adjudication is final.
 
     Eris Relay and TRAPPIST-1e are the two corpus-established registry embargo
     worlds, so a final denial from either may recover ``planetary_embargo``.
-    MED-3 separately requires a clean biohazard check; for an unsigned MED-3
-    denial with no other emitted policy witness, ``biohazard_red`` is the
-    narrow consistent output. This function runs after every adjudication
-    stage and cannot change a verdict or confidence. Signed findings are
-    excluded from the MED-3 inference because their reason may be unrelated to
-    the damaged risk panel.
+    A final review with an authorized fee, no emitted risk, and no readable
+    active-case B-13 row may report ``illegible_biometrics``: the output names
+    the missing clearance state that already forced review. MED-3 separately
+    requires a clean biohazard check; for an unsigned MED-3 denial with no
+    other emitted policy witness, ``biohazard_red`` is the narrow consistent
+    output. This function runs after every adjudication stage and cannot
+    change a verdict or confidence. Signed findings are excluded from the
+    MED-3 inference because their reason may be unrelated to the damaged risk
+    panel.
     """
 
     if not enabled("MIB_DECISION_CONSISTENT_RISK_PROJECTION", True):
         return
-    for prediction in predictions.values():
+    for pdf in pdfs:
+        prediction = predictions[pdf.stem]
+        if (
+            prediction["adjudication"] == "NEEDS_REVIEW"
+            and prediction["risk_flags"] == "none"
+            and prediction["fee_status"] in {"paid", "waived"}
+            and not _has_readable_biometric_panel(pdf)
+        ):
+            # This is extraction-only and deliberately downstream of every
+            # classifier. It cannot turn missing biometrics into a decision;
+            # it merely emits the uncertainty already represented by review.
+            prediction["risk_flags"] = "illegible_biometrics"
+            _trace_decision(
+                prediction["case_id"],
+                "decision_consistent_risk_projection",
+                source="final_review_without_readable_active_case_b13",
+                adjudication_unchanged=True,
+            )
+            continue
         if not (
             prediction["adjudication"] == "DENIED"
             and prediction["risk_flags"] == "none"
@@ -6207,12 +6240,15 @@ def main(input_dir: str, output_path: str) -> None:
     _apply_authenticated_fee_source_repair(pdfs, predictions)
     _repair_rapid_review_flag_rows(pdfs, predictions)
     _apply_post_extraction_review_safeguard(predictions)
-    _apply_decision_consistent_risk_projection(predictions)
     # Last by design: untrusted-text spelling repair cannot become a premise
     # for policy or trigger a second adjudication transition.
     _apply_payload_guided_extraction(pdfs, predictions)
     _apply_non_template_payload_reconciliation(pdfs, predictions)
     _apply_untrusted_payload_projection(pdfs, predictions)
+    # A decision-consistent guess is weaker than any accepted field candidate,
+    # so it runs only after payload reconciliation and fills only what remains
+    # unresolved. Adjudication has already finished.
+    _apply_decision_consistent_risk_projection(pdfs, predictions)
     # Exact pixel-verified source text gets final field precedence over every
     # OCR and untrusted-payload hypothesis. This remains extraction-only.
     _repair_authenticated_attestation_visas(predictions)

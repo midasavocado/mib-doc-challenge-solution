@@ -87,8 +87,8 @@ EVIDENCE_FLAGS = (
         "MIB_UNTRUSTED_NEGATIVE_CLAIM_ROUTING",
         "1",
         "Use the schema-valid hidden request only as an inverted generator "
-        "signal on unsigned outcomes; signed findings are excluded, and a "
-        "review-only claim may demote an inferred denial only to review.",
+        "signal on unsigned reviews; signed findings and existing denials "
+        "retain their verdict.",
     ),
     FeatureFlag(
         "MIB_CORROBORATED_PAYLOAD_EXTRACTION",
@@ -154,8 +154,8 @@ EVIDENCE_FLAGS = (
     FeatureFlag(
         "MIB_DECISION_CONSISTENT_RISK_PROJECTION",
         "1",
-        "Infer a missing MED-3 biohazard output only after a source-backed "
-        "denial is final; verdict unchanged.",
+        "Report a missing B-13 review state or MED-3 denial risk only after "
+        "the verdict is final; verdict unchanged.",
     ),
     FeatureFlag(
         "MIB_CONFIDENCE_BLEND",
