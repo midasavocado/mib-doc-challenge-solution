@@ -12,22 +12,29 @@ dozens of small terminal profiles. Those profiles have been removed. The
 current source instead combines general evidence rules with four explicitly
 disclosed, ablatable low-support hypotheses.
 
-The newest measured checkpoint is a frozen 80-case control replay:
+The latest completed cold constrained Docker replay covered all 1,000 packets:
 
-| Section | Measured control score |
+| Section | Measured full score |
 |---|---:|
-| Extraction | 47.2361 / 50 |
-| Classification | 78.125 / 80 |
-| Calibration | 19.8417 / 20 |
-| **Total** | **145.2028 / 150** |
+| Extraction | 45.6233 / 50 |
+| Classification | 66.11 / 80 |
+| Calibration | 16.9163 / 20 |
+| **Total** | **128.6496 / 150** |
 | Catastrophic false approvals | **0** |
 
-The cases were selected deterministically without labels and excluded the
-earlier 60-case development slice. Because one first-pass error then informed
-the damaged-page rule, this is now a development replay rather than an
-untouched holdout. A new untouched control and clean full Docker acceptance of
-this exact source remain pending. No participant challenge source is in the
-working tree or Docker image.
+That run was an intentionally conservative safety experiment, not a promoted
+score claim. It removed all five previous catastrophic false approvals, but a
+global pixel-readable-visa gate and an overbroad MED-3 gate also sent 124 true
+approvals to review. The current source rejects those two predicates. It keeps
+the fee-source, archival-authority, and explicitly-missing-B-13 source-state
+families, which retained all five safety corrections in a paired 25-case
+Docker smoke test.
+
+The earlier frozen 80-case development replay scored 145.2028/150 with zero
+catastrophic approvals. It is still useful for diagnosis, but it is neither
+full-corpus acceptance nor an untouched holdout. A new full Docker replay of
+the narrowed source remains pending. No participant challenge source is in
+the working tree or Docker image.
 
 ## Why the rewrite exists
 
@@ -236,6 +243,24 @@ ordinary-visa or registry embargo programs, preserves the diplomatic
 exception, and records the support and rationale beside the relevant source
 predicates.
 
+The terminal approval fence is intentionally species-independent. An
+untrusted native tuple may repair an emitted fee value, but it cannot by
+itself prove fee authorization for an unsigned approval. The cost is explicit:
+of 43 pre-fence approvals without an audit-visible fee source, the labels
+contain 37 approvals, 3 reviews, and all 3 of the corresponding catastrophic
+denials. The rule chooses review for that genuinely indistinguishable family
+instead of disguising the tradeoff as certainty.
+
+The MED-3 fence is source-state specific. Among all 287 labeled MED-3 packets,
+the audit marks 6 B-13 panels explicitly `missing`, and all 6 are denials.
+Broader `absent` and `unreadable` states include valid approvals and therefore
+do not trigger the fence. One additional provenance rule treats an intake
+carrying at least two of the visible `COPY`, `FILED`, and `ARCHIVE` stamps as
+historical. When that archival page is the only source for a non-diplomatic
+visa attached to a waiver, the packet remains in review. This is not a denial
+inference: even a clean B-13 answers biometric risk, not whether an old intake
+is current visa authority.
+
 ### Removed low-support profiles
 
 An earlier public replay used dozens of three- and four-feature terminal
@@ -411,7 +436,9 @@ flowchart LR
     D["Approval veto refinement<br/>142.1361"] -->
     E["Historical small cohorts<br/>143-point range"] -->
     F["Generalization cleanup +<br/>zero-CFA safety<br/>129.63 full projection"] -->
-    G["Frozen 80-case replay<br/>145.2028 · zero CFA"]
+    G["Frozen 80-case diagnostic<br/>145.2028 · zero CFA"] -->
+    H["Cold full broad fence<br/>128.6496 · zero CFA"] -->
+    I["Narrowed source-state fence<br/>full replay pending"]
 ```
 
 | Exact checkpoint | Extraction | Classification | Calibration | CFA | Total |
@@ -422,14 +449,19 @@ flowchart LR
 | Clean-room v3 | 46.5644 | 77.23 | 18.3417 | 5 | 142.1361 |
 | Clean-room v4, historical | 46.5644 | 77.35 | 18.3724 | 4 | 142.2868 |
 | Generalized cleanup, prior full projection | 46.64 | 67.55 | 15.44 | 0 | 129.63 |
-| **Current frozen 80-case replay** | **47.2361** | **78.125** | **19.8417** | **0** | **145.2028** |
+| Frozen 80-case development replay | 47.2361 | 78.125 | 19.8417 | 0 | 145.2028 |
+| Pre-fence cold full Docker replay | 46.2556 | 72.06 | 16.8243 | 5 | 135.1398 |
+| Broad-fence cold full Docker replay | 45.6233 | 66.11 | 16.9163 | 0 | 128.6496 |
 
 The historical sequence is retained to show how the score was obtained, not
-to claim that every row is directly comparable: the earlier rows are
-full-corpus scores/projections, while the final row is an 80-case development
-replay.
+to claim that every row is directly comparable. The 80-case row is a
+development diagnostic. The final two rows are exact 1,000-case constrained
+Docker replays, and the broad-fence row is explicitly rejected because the
+zero-CFA gain came with 124 collateral true-approval demotions. The current
+narrowed source-state fence has paired smoke evidence but no exact full score
+yet.
 
-## Current measured control result
+## Frozen 80-case development diagnostic
 
 | Truth ↓ / prediction → | APPROVED | DENIED | NEEDS_REVIEW |
 |---|---:|---:|---:|
@@ -450,15 +482,18 @@ replay.
 
 ## Performance and organizer contract
 
-The last full host replay completed in **1,411.73 seconds end-to-end**, including
-setup and final audit, or **1.412 seconds/PDF**. The main four-worker processing
-phase finished in 1,240.3 seconds. The generalized terminal rewrite removes
-work rather than adding OCR, so this is a useful performance reference, but it
-is not acceptance evidence for the current commit.
+The latest cold constrained full Docker replay completed in **4,070.61
+seconds**, or **4.071 seconds/PDF**, and validated all 1,000 expected rows. The
+main four-worker read completed in 1,651.5 seconds and the independent
+800-packet audit completed at 2,131.3 seconds before reconciliation and
+serialization. This is inside the five-second acceptance budget but 0.071
+seconds/PDF above the four-second stretch target.
 
-The current 80-case replay completed in **175.49 seconds**, or **2.194
-seconds/PDF**, with a warm local evidence cache. This is below the four-second
-engineering target but is not a substitute for a cold constrained Docker run.
+That timing belongs to the rejected broad safety image. The current narrowed
+rules remove checks rather than adding OCR, so they should not regress the
+critical path, but that is an inference until the next cold full replay. The
+25-case paired smoke runs used a warm external cache and are correctness
+controls, not performance claims.
 
 During the clean Docker replay, a live runtime snapshot showed 396% CPU,
 1.587 GiB of 7.734 GiB available memory, and 12 processes. The workload is
@@ -492,15 +527,18 @@ formula.
 | Artifact | Value |
 |---|---|
 | Organizer commit | `38ce8883dea9f87c27a8a95f134e54fe8b673064` |
-| Host prediction SHA-256 | `25b52f7de6e5d78ff24f0161001c097435479b28814926110911c39a94dc564a` |
-| Host evaluation SHA-256 | `f42626ca4f59cd28f59e9882c0d9365799d3d835499db939c715ab39937be124` |
-| Docker image tag | `mib-doc-solution:cleanroom-v4` |
-| Docker image ID | pending final replay |
-| Docker prediction SHA-256 | pending final replay |
-| Docker wall time | pending final replay |
+| Broad-safety code commit | `d17b3789e260ee6003d1bf9d8d31c644bc16c301` |
+| Broad-safety Docker image tag | `mib-doc-solution:submission-cfa-safety` |
+| Broad-safety Docker image ID | `19c17a0d35c698bcd6ae6d38b8c7cbf55edf502bcad7d84f52d19478bb21e58e` |
+| Broad-safety prediction SHA-256 | `40296e37807765bb63c179722e1b9b05a598f7726601e1409c23f76ee7bc05c8` |
+| Broad-safety evaluation SHA-256 | `acae436b8479bd1f0d57134bcb4da08b40a0a9b33506632458a02201e5e5cbc4` |
+| Broad-safety Docker wall time | `4,070.61 s` |
+| Current narrowed smoke image ID | `aee33cdda7e2` |
+| Current narrowed full acceptance | pending |
 
-The Docker fields are filled only after the official clean runner finishes.
-Host and container outputs must compare exactly before promotion.
+The exact broad-safety artifact is retained as audit evidence, not promoted as
+the current candidate. Host and container outputs must compare exactly before
+the narrowed source receives a final score claim.
 
 ## Overfit and compliance audit
 
@@ -548,10 +586,15 @@ as reusable evidence states; private transfer is still unproven.**
 
 ## Known limits
 
-- The newest measured checkpoint is 145.2028/150 on an 80-case development
-  replay with zero catastrophic false approvals; a fresh full Docker
-  acceptance is pending.
-- The strict safety fence intentionally sacrifices ambiguous approvals.
+- The newest exact full Docker checkpoint is the rejected broad-safety
+  128.6496/150 replay with zero catastrophic false approvals. The narrowed
+  source has paired smoke evidence but no exact full score yet.
+- The fee-source fence intentionally sacrifices ambiguous approvals: 37 of
+  the 43 pre-fence approvals without an audit-visible fee source are labeled
+  approved, while the same family contains all 3 fee-related catastrophic
+  denials.
+- The 145.2028/150 result is an 80-case development diagnostic, not current
+  full-corpus acceptance.
 - Native hidden tuples may be absent or generated differently in a private
   corpus.
 - Public exact evaluation is not an untouched holdout.

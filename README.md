@@ -15,29 +15,37 @@ profiles. Those profiles were removed rather than renamed. The current code
 uses general evidence rules plus four explicitly disclosed, ablatable
 low-support hypotheses.
 
-The newest measured checkpoint is a frozen 80-case control replay:
+The latest completed cold, constrained Docker replay processed all 1,000
+packets and validated every output row:
 
 | Evaluator section | Measured score |
 |---|---:|
-| Extraction | 47.2361 / 50 |
-| Classification | 78.125 / 80 |
-| Calibration | 19.8417 / 20 |
-| **Total** | **145.2028 / 150** |
+| Extraction | 45.6233 / 50 |
+| Classification | 66.11 / 80 |
+| Calibration | 16.9163 / 20 |
+| **Total** | **128.6496 / 150** |
 | Catastrophic false approvals | **0** |
 
-This is **not** a full-corpus or Docker acceptance. The 80 cases were selected
-deterministically without labels and excluded the earlier 60-case development
-slice, but an error from its first pass subsequently informed the general
-damaged-page rule. It is therefore a development replay, not an untouched
-holdout. The final artifact still requires an untouched control followed by a
-clean full Docker run.
+That replay was a safety experiment, not the current promoted candidate. It
+proved that the five earlier catastrophic approvals could be removed, but its
+global pixel-readable-visa and broad MED-3 gates also sent 124 true approvals
+to review. Those two blunt predicates were rejected. The current source keeps
+the zero-CFA evidence families while narrowing them to:
 
-Two errors remain in the 80-case replay: a visible revoked-sponsor denial whose
-label is approval and a visible stale-date denial whose label is review. The
-hidden negative-polarity channel contradicts both results, but the
-implementation keeps both visible denials and lowers their confidence to 0.10.
-No case ID, name, sponsor identity, exact date, hash, or row position is used
-to reverse either result.
+- no visible fee authorization on an unsigned approval;
+- an archival intake as the only non-diplomatic visa source for a waiver; and
+- an explicitly missing B-13 panel on MED-3, a 6/6 denial source state.
+
+A paired 25-case Docker smoke test contains all five former catastrophic
+approvals and 20 evenly spaced true approvals from the changed set. All five
+dangerous approvals remained `NEEDS_REVIEW`; ordinary MED-3 approvals that
+were collateral damage under the broad rule returned to `APPROVED`. A fresh
+1,000-case replay of this narrowed source remains pending, so no exact current
+full score is claimed.
+
+The earlier frozen 80-case development replay scored 145.2028/150 with zero
+catastrophic approvals. It remains a useful diagnostic, but it is not a
+full-corpus acceptance or an untouched holdout.
 
 ## Architecture
 
@@ -133,6 +141,23 @@ are denials; all 18 `Eris Relay` and 32 `TRAPPIST-1e` packets are denials whose
 reference risk includes `planetary_embargo`. Accordingly, the code describes
 these as ordinary-visa or registry embargo rules, keeps the diplomatic
 exception explicit, and comments the support beside each predicate.
+
+The final approval fence is broader and does not use species at all. A
+schema-valid hidden/native candidate may repair an emitted fee value, but it
+cannot by itself prove that an unsigned packet contains fee authorization.
+This conservative rule is intentionally disclosed: among the 43 pre-fence
+approvals without an audit-visible fee source, the labels contain 37
+approvals, 3 reviews, and the 3 catastrophic denials. It eliminates that risk
+at a real classification cost rather than pretending the ambiguity vanished.
+
+The MED-3 rule is narrower. Across all 287 labeled MED-3 packets, the audit
+finds 6 explicitly missing B-13 panels and all 6 are denials. Merely absent or
+unreadable panels also contain approvals, so those broader states do not
+trigger this fence. Finally, a visibly `COPY`/`FILED`/`ARCHIVE`-stamped intake
+is treated as historical: if it is the only source for a non-diplomatic visa
+attached to a waiver, the packet stays in review because a clean B-13
+establishes biometric safety, not current visa authority. The stamps never
+prove denial.
 
 Separately, a visible-only fallback recognizes the printed word envelopes of
 `Finding: APPROVED. Reason:` on severely defocused adjudicator notes. At the
@@ -284,23 +309,24 @@ with no network access.
 
 ## Verification
 
-The most recent completed full host replay used organizer commit
-`38ce8883dea9f87c27a8a95f134e54fe8b673064` and completed in 1,411.73 seconds
-end-to-end, or **1.412 seconds/PDF**. It predates the current terminal and
-calibration changes, so it is a performance reference rather than current
-score acceptance. The current 80-case replay completed in 175.49 seconds
-(**2.194 seconds/PDF**).
+The latest cold Docker replay used organizer commit
+`38ce8883dea9f87c27a8a95f134e54fe8b673064`, four CPUs, 8 GiB RAM, a
+read-only root, and no network. It completed in 4,070.61 seconds, or **4.071
+seconds/PDF**, and validated 1,000/1,000 rows with no missing IDs. That image
+contains the deliberately rejected broad safety fence; the narrowed source
+requires a new exact full replay.
 
 | Artifact | SHA-256 |
 |---|---|
-| Earlier full host predictions | `25b52f7de6e5d78ff24f0161001c097435479b28814926110911c39a94dc564a` |
-| Earlier full host evaluation | `f42626ca4f59cd28f59e9882c0d9365799d3d835499db939c715ab39937be124` |
+| Broad-safety Docker predictions | `40296e37807765bb63c179722e1b9b05a598f7726601e1409c23f76ee7bc05c8` |
+| Broad-safety Docker evaluation | `acae436b8479bd1f0d57134bcb4da08b40a0a9b33506632458a02201e5e5cbc4` |
 | Current 80-case predictions | `fc474486be39483356b1a7b6c1d38bc8df39e16bd4f2d05e91f68ce3d504b4f0` |
 | Current 80-case evaluation | `9ca2e8a7b0b2169e22217319d5644c52997c436cf787cb2442f778703fb829ae` |
 
 The official clean Docker replay uses four CPUs, 8 GiB RAM, a read-only root,
-`--network none`, and the organizer validator. A clean replay of the current
-source remains pending.
+`--network none`, and the organizer validator. The completed broad-safety run
+met that contract; a clean replay of the subsequently narrowed source remains
+pending.
 
 ## Generalization and limits
 

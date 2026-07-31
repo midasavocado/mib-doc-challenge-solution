@@ -117,7 +117,8 @@ EVIDENCE_FLAGS = (
     FeatureFlag(
         "MIB_STRICT_APPROVAL_SAFETY",
         "1",
-        "Demote unsigned approvals lacking affirmative risk/date evidence.",
+        "Demote unsigned approvals with unsupported fee authorization, an "
+        "explicitly missing MED-3 B-13, or an archival waiver-authority gap.",
     ),
     FeatureFlag(
         "MIB_EXPERIMENTAL_SYNTHETIC_POLICY",

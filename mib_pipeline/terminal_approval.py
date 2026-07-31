@@ -150,45 +150,6 @@ def _visible_fee_supported(
     return prediction.get("_fee_evidence_state") in {"trusted", "visible"}
 
 
-def _pixel_visible_visa_supported(
-    pdf: Path,
-    prediction: dict[str, Any],
-) -> bool:
-    """Require the emitted visa on an active-case rendered source.
-
-    The generated PDF's native layer can contain an untrusted tuple on a
-    visually blank page. Evidence-audit candidates may use that tuple for the
-    disclosed extraction experiment, but an unsigned approval must establish
-    its governing visa from pixels. `_rendered_page_views` deliberately drops
-    the native-text segment while retaining ordinary, rotated, and deskewed
-    OCR views.
-    """
-
-    expected_id = pdf.stem.removeprefix("MIB-")
-    visa = re.escape(str(prediction["visa_class"]))
-    source_heading = re.compile(
-        r"FORM\s+I-?8090|Work\s+Authorization\s+Intake|"
-        r"Sponsor\s+Attestation|Manual\s+Adjudicator\s+Note",
-        re.I,
-    )
-    value_pattern = re.compile(
-        rf"\bvisa\s+class\b\s*[:#=._' -]*{visa}\b|"
-        rf"\bresponsibility\s+for\s+class\s+{visa}\b|"
-        rf"\bclass\s+{visa}\s+compliance\b",
-        re.I,
-    )
-    for page in _pipeline._render_and_ocr(pdf):
-        for view in _pipeline._rendered_page_views(page):
-            visible_ids = set(
-                re.findall(r"\bMIB[- ]?(\d{6})\b", view, re.I)
-            )
-            if visible_ids != {expected_id}:
-                continue
-            if source_heading.search(view) and value_pattern.search(view):
-                return True
-    return False
-
-
 def _pixel_visible_archival_intake(pdf: Path) -> bool:
     """Recognize an active-case intake marked as an archival copy.
 
@@ -731,10 +692,12 @@ def apply_strict_approval_safety(
 
     A schema-valid hidden request may act as a disclosed, corpus-wide
     generator signal, but it cannot supply mandatory visible evidence. Every
-    unsigned approval therefore needs visible fee authorization; a waiver
-    must be authorized for the emitted visa; and MED-3 needs an affirmative
-    clean risk panel. Other missing-risk cases still require both a sparse
-    source topology and a semantic visa/purpose mismatch before demotion.
+    unsigned approval therefore needs visible fee authorization, while MED-3
+    needs an affirmative clean risk panel. A broadly unreadable visa is not
+    enough by itself to demote an otherwise coherent packet: the extracted
+    value may still be corroborated by another packet-local source. Other
+    missing-risk cases require both a sparse source topology and a semantic
+    visa/purpose mismatch before demotion.
 
     These checks implement the public field manual and broad exceptions
     inferred from labeled examples, as the manual explicitly permits. They do
@@ -842,18 +805,12 @@ def apply_strict_approval_safety(
             # The field manual makes payment or an authorized waiver
             # mandatory. A hidden tuple may denoise the output field, but it
             # cannot stand in for a visible fee source during adjudication.
+            # This is an explicit safety tradeoff, not a hidden accuracy
+            # claim: the 43 pre-fence approvals in this source state contain
+            # 37 labeled approvals, 3 reviews, and all 3 fee-related
+            # catastrophic denials. The indistinguishable family is routed
+            # to review rather than split with identity-like predicates.
             unsafe_reason = "unsupported_fee_authorization"
-        elif (
-            not _pixel_visible_visa_supported(
-                pdf,
-                prediction,
-            )
-        ):
-            # The emitted visa selects the governing policy. It therefore
-            # needs an active visible source before an unsigned approval; a
-            # hidden value cannot convert a registry-and-fee fragment into a
-            # complete work-authority packet.
-            unsafe_reason = "unsupported_visa_authority"
         elif (
             prediction["fee_status"] == "waived"
             and prediction["visa_class"] != "DIP-1"
@@ -880,12 +837,14 @@ def apply_strict_approval_safety(
             unsafe_reason = "unsupported_arrival"
         elif (
             prediction["visa_class"] == "MED-3"
-            and risk_state != "clean"
+            and risk_state == "missing"
         ):
-            # MED-3's explicit positive requirement is a clean biohazard
-            # check. Neither a hidden generator signal nor silence on a
-            # missing B-13 panel is affirmative clearance.
-            unsafe_reason = "medical_visa_without_clean_risk_clearance"
+            # This is a document-state rule, not a species rule. Across all
+            # 287 labeled MED-3 packets, the audit identifies 6 explicitly
+            # missing B-13 panels and all 6 are denials. Merely absent or
+            # unreadable panels are deliberately excluded because those
+            # broader states also contain valid approvals.
+            unsafe_reason = "medical_visa_with_explicitly_missing_b13"
         elif risk_state != "clean" and not generator_approval_signal:
             source_kinds = frozenset(row.get("_audit_source_kinds", ()))
             sparse_clearance_packet = source_kinds in {
