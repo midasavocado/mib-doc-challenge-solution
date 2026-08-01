@@ -21,28 +21,29 @@ The latest exact full 800-case replay measured:
 | Evaluator section | Exact development score |
 |---|---:|
 | Extraction | 47.0556 / 50 |
-| Classification | 78.4250 / 80 |
-| Calibration | 19.5705 / 20 |
-| **Total** | **145.0510 / 150** |
+| Classification | 78.5000 / 80 |
+| Calibration | 19.6009 / 20 |
+| **Total** | **145.1564 / 150** |
 | Catastrophic false approvals | **0** |
 | Valid / expected rows | **800 / 800** |
 
-The exact confusion contains 203 correct approvals, 349 correct denials, and
-227 correct reviews. The remaining 21 errors are conservative abstentions:
-20 approvals and one denial were sent to review. No denial or review was
-approved. The earlier frozen candidate was evaluated once on the 200-case
+The exact confusion contains 203 correct approvals, 350 correct denials, and
+227 correct reviews. The remaining 20 errors are conservative abstentions:
+20 approvals were sent to review. No denial or review was approved. The
+earlier frozen candidate was evaluated once on the 200-case
 validation partition: **46.8111 extraction, 72.5500 classification, 17.1061
 calibration, 136.4672 total, and 3 catastrophic false approvals**. Because that
 aggregate result was discussed, the partition is spent and is not used to
 select current changes. Complete support, controls, rejected experiments,
 split commitments, and the boundary disclosure are in [`RULES.md`](RULES.md).
 
-A second frozen-candidate replay after the Docker safety and scheduling work
-was byte-for-byte identical to this 800-row artifact. The two Docker-specific
-false approvals found on a 200-row development-only runtime slice were removed
-with general evidence invariants: categorical program predicates must be
-visible, and an authenticated 0.99 review cannot be reopened by a synthetic
-program rule.
+The preceding 145.0510 safety-baseline replay was byte-for-byte stable after
+the Docker scheduling work. This candidate differs from that artifact in one
+row: a visibly sourced technical-medical packet without B-13 clearance moves
+from review to denial. The two Docker-specific false approvals found on a
+200-row development-only runtime slice were removed with general evidence
+invariants: categorical program predicates must be visible, and an
+authenticated 0.99 review cannot be reopened by a synthetic program rule.
 
 The decision layer uses visible/source-bound evidence rules plus explicitly
 disclosed, jointly ablatable fictional-program hypotheses. It contains no
@@ -163,6 +164,7 @@ beside its predicate, and removable as one ablation with
 | `XW-2` with an authorized waiver but no sponsor source | 5/5 denials, one in every fold | Extended technical work still needs an attested sponsor assumption even when the fee is waived | Deny only with visible visa/waiver, no risk/contest/unknown-page uncertainty, and no sponsor source |
 | Barnard-c with all five ordinary source types | 4/4 approvals across three folds | Redundant five-source authority can tolerate an ancillary damaged read | May propose approval; mandatory risk, fee, arrival, and core-field checks still veto |
 | Zeta Reticuli with three-source distributed authority and complete visible fields | 3/3 approvals across three folds | Zeta's registry network can carry payment/risk authority when the whole active-case packet is visibly complete | May propose approval; LUNA `XW-2` medical consult remains review because it independently requires biometric clearance |
+| Visibly sourced `XW-1`/`XW-2` medical consult with visible fee + intake + registry but no B-13 | 4/4 unresolved packets are denials across three folds after stronger-interface controls | A visibly read paid or waived status establishes payment state, not medical biometric clearance | May deny at 0.80; visible Alpha Draconian, Andromedan, and LUNA interfaces plus the complete paid Jovian/Titan interface veto; authenticated findings, notes, audit uncertainty, contests, unknown pages, and every nonmatching topology are excluded |
 
 The rationale is a testable fictional-world hypothesis, not proof of causation.
 The Andromedan denial remains the riskiest small cohort. Program approval
@@ -374,22 +376,23 @@ with no network access.
 
 The latest generalized development replay used four workers and a warm host
 evidence cache. The complete 800-row run—including every final reconciliation
-stage—finished in **1,387 seconds**, or **1.734 seconds/PDF**. Host timing is
+stage—finished in **1,229 seconds**, or **1.536 seconds/PDF**. Host timing is
 useful engineering evidence, not a substitute for the constrained Docker
 result.
 The organizer source was refreshed first and remains at commit
-`38ce8883dea9f87c27a8a95f134e54fe8b673064`.
+`f480e6d614fec24853411bfe8cf9b462a388a616`.
 
 | Artifact | SHA-256 |
 |---|---|
-| Generalized 800 development predictions | `63802b19e30e2089e7f271d6649b8b73d6187c39a9d8eb7d5a175280a0fc3ebb` |
-| Generalized 800 development evaluation | `99b470e9fb2dcfb1614d6288370d4cff9c746938878e9897ee22476d8048edfb` |
+| Generalized 800 development predictions | `79b33a17f0fce1b01e18b430ed5cd60526a8d7198033d6e03f96c067f851060d` |
+| Generalized 800 development evaluation | `09199d270eb1b25ba46865aef9e3aa06a074180eee30dfec2d68dbd64e6f4291` |
 | Current Docker development-slice predictions | `09c96315afee5ead5f09174ad3d0eccdd0b17e85f529771f9b978c5dbda85da0` |
 | Current Docker development-slice evaluation | `21cd97a05f7696df7f44eb07aa44ff9c998397c15f4c2a67ebff09feab63d42c` |
 | Broad-safety Docker predictions | `40296e37807765bb63c179722e1b9b05a598f7726601e1409c23f76ee7bc05c8` |
 | Broad-safety Docker evaluation | `acae436b8479bd1f0d57134bcb4da08b40a0a9b33506632458a02201e5e5cbc4` |
 
-The clean Docker replay uses four CPUs, 8 GiB RAM, a read-only root,
+The most recent constrained Docker replay of the preceding source uses four
+CPUs, 8 GiB RAM, a read-only root,
 `--network none`, `no-new-privileges`, and the organizer validator. On a fixed
 200-packet slice drawn only from the permitted development 800, the current
 image scored **142.5201/150**: 46.7778 extraction, 77.20 classification,
@@ -425,7 +428,7 @@ That does not make public replay a private-set guarantee:
 - private/admin scoring may remove hidden-only fields from the extraction
   maximum, so public output-only gains need not transfer as score;
 - several complete fictional-program cohorts are small;
-- the exact 145.0510 score is development evidence, not a fresh validation;
+- the exact 145.1564 score is development evidence, not a fresh validation;
 - the historical 145.7151 score used rules removed by the generalization audit.
 
 Use the flags to run strict ablations, and preserve `NEEDS_REVIEW` when the

@@ -2492,29 +2492,52 @@ def _sparse_source_resolution(
         )
 
     # Proposal plus program-level veto. XW is technical work authority, not a
-    # substitute for medical clearance: a paid medical-consult packet whose
-    # intake and registry are readable but whose B-13 is absent therefore
-    # proposes denial. LUNA_SECURID and ALPHA_DRACONIAN are the independently
-    # observed alternate-interface programs, so they retain review instead of
-    # being forced through a biological biometric rule. After that veto the
-    # public proposal cohort is 3 denials / 0 approvals / 0 reviews; the
-    # rendered signed controls remain positive-utility. This is a fictional
-    # visa-program rule, never an applicant, sponsor, date, or case lookup.
-    alternate_medical_interface = prediction["species_code"] in {
-        "ALPHA_DRACONIAN",
-        "LUNA_SECURID",
-    }
+    # substitute for medical clearance: a paid/waived medical-consult packet
+    # whose intake and registry are readable but whose B-13 is absent therefore
+    # proposes denial. LUNA_SECURID, ALPHA_DRACONIAN, and the separately
+    # validated Andromedan registry treaty are alternate-interface programs,
+    # so they retain review for their later program rule instead of being
+    # forced through a biological biometric rule. After that veto the
+    # staged development cohort is 4 denials / 0 approvals / 0 reviews across
+    # three folds; explicit visible-interface vetoes exclude the validated
+    # Titan gas-form and Andromedan treaty programs before this fallback can
+    # fire. Rendered signed findings and every audit-uncertainty state retain
+    # absolute precedence. This is a fictional visa-program rule, never an
+    # applicant, sponsor, date, or case lookup.
+    visible_alternate_medical_interface = (
+        prediction["species_code"]
+        in {"ALPHA_DRACONIAN", "ANDROMEDAN", "LUNA_SECURID"}
+        and visible_fact("species_code", prediction["species_code"])
+    )
+    jovian_paid_titan_interface = (
+        prediction["species_code"] == "JOVIAN_GASFORM"
+        and visible_fact("species_code", "JOVIAN_GASFORM")
+        and prediction["home_world"] == "Titan Freeport"
+        and visible_fact("home_world", "Titan Freeport")
+        and fee == "paid"
+        and _source_complete_alternate_authority(pdf, prediction, row)
+    )
+    alternate_medical_interface = (
+        visible_alternate_medical_interface or jovian_paid_titan_interface
+    )
     technical_medical_without_clearance = (
         enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
         and visa in {"XW-1", "XW-2"}
+        and visible_fact("visa_class", visa)
         and purpose == "medical consult"
-        and fee == "paid"
+        and visible_fact("declared_purpose", purpose)
+        and fee in {"paid", "waived"}
+        and _visible_fee_supported(prediction, row)
         and not alternate_medical_interface
         and not flags
         and risk_state == "absent"
         and {"fee", "intake", "registry"} <= source_kinds
         and "biometric" not in source_kinds
+        and "note" not in source_kinds
         and row.get("_audit_decision") is None
+        and row.get("_audit_reason") is None
+        and not row.get("_audit_contested")
+        and int(row.get("_audit_active_unknown_pages", 0)) == 0
     )
     if technical_medical_without_clearance:
         return (

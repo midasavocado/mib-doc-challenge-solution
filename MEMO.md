@@ -18,15 +18,15 @@ deterministic 800-case development partition is:
 | Section | Exact development score |
 |---|---:|
 | Extraction | 47.0556 / 50 |
-| Classification | 78.4250 / 80 |
-| Calibration | 19.5705 / 20 |
-| **Total** | **145.0510 / 150** |
+| Classification | 78.5000 / 80 |
+| Calibration | 19.6009 / 20 |
+| **Total** | **145.1564 / 150** |
 | Catastrophic false approvals | **0** |
 | Valid / expected rows | **800 / 800** |
 
-The confusion contains 203 correct approvals, 349 correct denials, and 227
-correct reviews. The only 21 mistakes are conservative abstentions: 20 true
-approvals and one true denial remain review. No denial or review is approved.
+The confusion contains 203 correct approvals, 350 correct denials, and 227
+correct reviews. The only 20 mistakes are conservative abstentions: 20 true
+approvals remain review. No denial or review is approved.
 
 An earlier 143.1247 artifact was the first exact result after a rules audit closed a recovered-approval
 evidence bypass and removed several two-row categorical policies. The earlier
@@ -264,6 +264,7 @@ Representative mechanisms are:
 | MED-3 reactor packet with intake+registry only | 2 of 2 denials across two development folds | Medical authority plus no fee, sponsor, or biometric channel cannot authorize reactor work | Deny only when both program facts are visibly sourced and no decision, contest, unknown page, or alternate channel exists |
 | Barnard-c with all five source types | 4 of 4 approvals across three folds | Redundant five-source authority tolerates one ancillary read failure | Approve; mandatory risk and fee faults veto |
 | Zeta Reticuli with three source types and complete visible fields | 3 of 3 approvals across folds 0, 1, and 4 | A distributed registry interface can carry payment/risk authority when the whole active-case packet is visible | Approve only after the common safety contract; the fold-3 LUNA `XW-2` medical control stays review |
+| Visibly sourced `XW-1`/`XW-2` medical consult with visible fee + intake + registry but no B-13 | 4 of 4 unresolved packets are denials across three folds after interface controls | Technical work authority and a visibly read paid or waived status do not replace medical biometric clearance | Deny at 0.80; visible Alpha Draconian, Andromedan, and LUNA interfaces plus the complete paid Jovian/Titan interface veto; authenticated findings, notes, audit uncertainty, contests, and unknown pages stay outside the fallback |
 | `XW-2` diplomatic registry packet without biometrics | 2 review, 1 approval across two folds | Technical authority does not automatically supply diplomatic identity clearance | Preserve review; cannot create denial or approval |
 
 These explanations are hypotheses chosen because they make semantic sense in
@@ -459,7 +460,7 @@ calibration = 20 × max(0, 1 - 2 × mean_brier)
 ```
 
 The exact generalized 800-case development run has mean Brier error
-**0.010738125**, producing **19.570475/20** calibration. Confidence is assigned
+**0.00997775**, producing **19.600890/20** calibration. Confidence is assigned
 only at the final output boundary, after verdict and extraction premises are
 frozen. No confidence value can feed back into adjudication or extraction.
 
@@ -507,7 +508,7 @@ flowchart LR
     H["Cold full broad fence<br/>128.6496 · rejected"] -->
     I["Prospective 800 checkpoint<br/>145.7151 · superseded"] -->
     J["Generalized safety baseline<br/>143.1247 · zero CFA"] -->
-    K["Current exact 800<br/>145.0510 · zero CFA"]
+    K["Current exact 800<br/>145.1564 · zero CFA"]
 ```
 
 | Exact checkpoint | Extraction | Classification | Calibration | CFA | Total |
@@ -524,7 +525,7 @@ flowchart LR
 | Prospective 800 checkpoint, superseded | 47.0319 | 79.1375 | 19.5456 | 0 | **145.7151** |
 | Generalized safety baseline | 46.9653 | 77.3250 | 18.8344 | 0 | **143.1247** |
 | Previous exact 800 development | 46.9431 | 77.9000 | 19.4429 | 0 | **144.2859** |
-| Current exact 800 development | 47.0556 | 78.4250 | 19.5705 | 0 | **145.0510** |
+| Current exact 800 development | 47.0556 | 78.5000 | 19.6009 | 0 | **145.1564** |
 
 The historical sequence is retained to show how the score was obtained, not
 to claim that every row is directly comparable. The 80-case row is an older
@@ -539,7 +540,7 @@ the current exact development result under the prospective 800/200 protocol.
 | Truth ↓ / prediction → | APPROVED | DENIED | NEEDS_REVIEW |
 |---|---:|---:|---:|
 | APPROVED | 203 | 0 | 20 |
-| DENIED | 0 | 349 | 1 |
+| DENIED | 0 | 350 | 0 |
 | NEEDS_REVIEW | 0 | 0 | 227 |
 
 | Metric | Measured value |
@@ -547,11 +548,11 @@ the current exact development result under the prospective 800/200 protocol.
 | Submitted/scored rows | 800 / 800 |
 | Invalid rows | 0 |
 | Input-relative missing or extra cases | 0 |
-| Mean Brier error | 0.010738125 |
+| Mean Brier error | 0.00997775 |
 | Catastrophic false approvals | 0 |
-| Prediction SHA-256 | `63802b19e30e2089e7f271d6649b8b73d6187c39a9d8eb7d5a175280a0fc3ebb` |
-| Evaluation SHA-256 | `99b470e9fb2dcfb1614d6288370d4cff9c746938878e9897ee22476d8048edfb` |
-| **Total** | **145.0510 / 150** |
+| Prediction SHA-256 | `79b33a17f0fce1b01e18b430ed5cd60526a8d7198033d6e03f96c067f851060d` |
+| Evaluation SHA-256 | `09199d270eb1b25ba46865aef9e3aa06a074180eee30dfec2d68dbd64e6f4291` |
+| **Total** | **145.1564 / 150** |
 
 The exact artifact contains 800 valid rows, no duplicates, no extra or missing
 cases, and no invalid confidence or fee values. The spent 200 was not inspected
@@ -560,7 +561,7 @@ or rescored while developing this candidate.
 ## Performance and organizer contract
 
 The latest generalized 800-case development replay completed end to end in
-**1,387 seconds** with four workers and a warm host evidence cache, or **1.734
+**1,229 seconds** with four workers and a warm host evidence cache, or **1.536
 seconds/PDF**.
 
 The current source reuses the audit's immutable pixel-page cache for the late
@@ -595,7 +596,7 @@ The official runner builds and executes with:
 - required completeness validation.
 
 The organizer source was refreshed before acceptance and remains at commit
-`38ce8883dea9f87c27a8a95f134e54fe8b673064`.
+`f480e6d614fec24853411bfe8cf9b462a388a616`.
 
 The two merged organizer maintenance PRs were inspected directly:
 
@@ -611,17 +612,17 @@ formula.
 
 | Artifact | Value |
 |---|---|
-| Organizer commit | `38ce8883dea9f87c27a8a95f134e54fe8b673064` |
+| Organizer commit | `f480e6d614fec24853411bfe8cf9b462a388a616` |
 | Broad-safety code commit | `d17b3789e260ee6003d1bf9d8d31c644bc16c301` |
 | Broad-safety Docker image tag | `mib-doc-solution:submission-cfa-safety` |
 | Broad-safety Docker image ID | `19c17a0d35c698bcd6ae6d38b8c7cbf55edf502bcad7d84f52d19478bb21e58e` |
 | Broad-safety prediction SHA-256 | `40296e37807765bb63c179722e1b9b05a598f7726601e1409c23f76ee7bc05c8` |
 | Broad-safety evaluation SHA-256 | `acae436b8479bd1f0d57134bcb4da08b40a0a9b33506632458a02201e5e5cbc4` |
 | Broad-safety Docker wall time | `4,070.61 s` |
-| Generalized 800 prediction SHA-256 | `63802b19e30e2089e7f271d6649b8b73d6187c39a9d8eb7d5a175280a0fc3ebb` |
-| Generalized 800 evaluation SHA-256 | `99b470e9fb2dcfb1614d6288370d4cff9c746938878e9897ee22476d8048edfb` |
-| Generalized 800 exact score | `145.05103055555554 / 150` |
-| Generalized 800 observed host interval | `1,387 s / 1.734 s per PDF` |
+| Generalized 800 prediction SHA-256 | `79b33a17f0fce1b01e18b430ed5cd60526a8d7198033d6e03f96c067f851060d` |
+| Generalized 800 evaluation SHA-256 | `09199d270eb1b25ba46865aef9e3aa06a074180eee30dfec2d68dbd64e6f4291` |
+| Generalized 800 exact score | `145.15644555555556 / 150` |
+| Generalized 800 observed host interval | `1,229 s / 1.536 s per PDF` |
 | Docker development-slice prediction SHA-256 | `09c96315afee5ead5f09174ad3d0eccdd0b17e85f529771f9b978c5dbda85da0` |
 | Docker development-slice evaluation SHA-256 | `21cd97a05f7696df7f44eb07aa44ff9c998397c15f4c2a67ebff09feab63d42c` |
 | Docker development-slice score | `142.52009777777778 / 150` |
@@ -711,7 +712,7 @@ trained model is blocked by the internal-fold-plus-spent-validation contract in
 
 ## Known limits
 
-- The 145.0510/150 score is exact on the fixed 800 development packets, not
+- The 145.1564/150 score is exact on the fixed 800 development packets, not
   the spent 200-case validation and not a private-corpus guarantee. The higher
   145.7151 checkpoint is historical and used rules removed by the audit.
 - The preceding candidate has exact warm-host timing. Its representative

@@ -184,6 +184,7 @@ hand-picked changed-case list.
 | Policy-clean negative generator polarity | A complete hidden tuple that requests denial but encodes no policy denial is an inverted generator proposal. The default profile treats it as alternate authority after signed-finding, positive visible-denial, and emitted-risk vetoes; it is not visible evidence | 25/25 approvals across all five development folds and 37/37 independent controls; feature-flagged and disabled by `visible_evidence_only` |
 | Sirius avian medical/transit waiver ineligibility | A visibly sourced `SIRIUS_AVIAN` program under visible `MED-3`/`TRANSIT-7` and an authorized visible waiver is ineligible for that waiver interface | 4 denials, 0 others; four folds |
 | XW-2 waiver without sponsor assumption | A visibly sourced XW-2 waiver still lacks the program's sponsor authority when no sponsor source exists; risk, contest, unknown-page, and flag uncertainty veto the rule | 5 denials, 0 others; one in every fold |
+| Technical medical clearance failure with paid or waived fee | Visibly sourced `XW-1`/`XW-2` work authority and medical-consult purpose do not replace biometric clearance merely because a paid/waived status is visible; fee + intake + registry must be present and B-13 absent | 4 denials, 0 others across three folds; authenticated findings, notes, audit reasons, contests, unknown pages, and visible Alpha Draconian/Andromedan/LUNA or complete paid Jovian/Titan interfaces veto; recovers 1 review |
 
 The one-packet revoked-sponsor exception was rejected: despite a plausible
 source-precedence story, it lacked recurring support and the ordinary visible
@@ -343,17 +344,17 @@ produced 800 valid rows with no missing, extra, duplicate, or invalid records:
 | Exact development result | Score |
 |---|---:|
 | Extraction | 47.055556 / 50 |
-| Classification | 78.425000 / 80 |
-| Calibration | 19.570475 / 20 |
-| **Total** | **145.051031 / 150** |
+| Classification | 78.500000 / 80 |
+| Calibration | 19.600890 / 20 |
+| **Total** | **145.156446 / 150** |
 | Catastrophic false approvals | **0** |
 
-The confusion is 203 correct approvals, 20 approvals preserved as review, 349
-correct denials, 1 denial preserved as review, and 227 correct reviews. No
-review or denial was approved. Prediction SHA-256 is
-`63802b19e30e2089e7f271d6649b8b73d6187c39a9d8eb7d5a175280a0fc3ebb`;
+The confusion is 203 correct approvals, 20 approvals preserved as review, 350
+correct denials, and 227 correct reviews. No review or denial was approved.
+Prediction SHA-256 is
+`79b33a17f0fce1b01e18b430ed5cd60526a8d7198033d6e03f96c067f851060d`;
 evaluation SHA-256 is
-`99b470e9fb2dcfb1614d6288370d4cff9c746938878e9897ee22476d8048edfb`.
+`09199d270eb1b25ba46865aef9e3aa06a074180eee30dfec2d68dbd64e6f4291`.
 The spent 200 was not used to explain or tune any of these outcomes.
 
 ### Superseded calibration-only projection
@@ -552,7 +553,7 @@ experimental rows are jointly removable with
 | Gliese sponsor clearance | A Gliese-581g registry plus intake still requires a current sponsor attestation | Experimental denial at calibrated 0.80 when the sponsor source is absent; accepted fee, supported arrival, no note, and no risk flag are required |
 | Registry-native diplomatic interface | JOVIAN_GASFORM and VENUSIAN_MYCELIAL DIP-1 waiver packets can use an agreeing registry chain instead of conventional B-13 | Experimental approval; the same complete-chain vetoes apply |
 | TRIANGULAN waiver treaty | A visible waived fee and complete intake-based core packet can establish a visa-neutral fictional treaty waiver | Experimental approval; no risk, contest, decision, unknown page, or unsupported field is tolerated |
-| Technical medical mission | XW technical authority plus medical-consult purpose does not replace required biometric clearance | Deny only for the repeated complete paid-or-waived source topology with no alternate-interface exception; otherwise retain review |
+| Technical medical mission | Visibly sourced XW technical authority plus visibly sourced medical-consult purpose does not replace required biometric clearance, and a visibly read waived status changes payment status rather than medical eligibility | Deny only for the repeated paid-or-waived fee+intake+registry backbone with no visible Alpha Draconian, Andromedan, LUNA, or complete paid Jovian/Titan alternate interface; authenticated findings, notes, audit uncertainty, contests, unknown pages, and every other topology retain review |
 | Explicitly missing MED-3 B-13 | The active biometric form explicitly marks its panel missing | Deny under the inferred edge policy; mere absence or unreadability is excluded |
 | MED-3 compound clearance conflict | Unreadable biological clearance and an independent sponsor conflict jointly fail two mandatory controls | Deny; either single fault alone stays review |
 | MED-3 transit mismatch | Transit purpose cannot satisfy a medical authorization when no biometric source exists | Low-confidence denial; visible/signed evidence still outranks it |

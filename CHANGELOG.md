@@ -6,6 +6,35 @@ For the current architecture, measured result, and engineering rationale, see
 
 Last updated: 2026-08-01
 
+## 2026-08-01 — visible technical-medical rule reaches 145.1564
+
+- Extended the existing XW technical-medical clearance rule from a visibly
+  paid fee to a visibly paid-or-waived status. A payment state does not replace
+  the missing B-13 clearance required for medical work under technical
+  authority.
+- The rule requires visible visa, purpose, and fee premises; fee + intake +
+  registry sources; no biometric or note; no audit decision/reason, contest,
+  unknown page, or risk flag; and explicit visible alternate-interface vetoes.
+  Its complete unresolved development cohort is 4 denials / 0 others across
+  three folds.
+- Rejected and removed a broader damaged-attachment approval experiment after
+  the independent lawyer audit found that it widened a shared authority helper
+  and could admit an unreadable fee or manual-finding page. The accepted diff
+  changes no approval path.
+- Exact 800-row replay: **47.055556 extraction**, **78.500000
+  classification**, **19.600890 calibration**, and **145.156446 total**, with
+  **0 catastrophic false approvals**. The only output change from the prior
+  artifact is one true denial moving from review to denial.
+- Full replay runtime: **1,229 seconds / 1.536 seconds per PDF** with four
+  workers and a warm host evidence cache.
+- Prediction SHA-256:
+  `79b33a17f0fce1b01e18b430ed5cd60526a8d7198033d6e03f96c067f851060d`.
+  Evaluation SHA-256:
+  `09199d270eb1b25ba46865aef9e3aa06a074180eee30dfec2d68dbd64e6f4291`.
+- Organizer source was rechecked at
+  `f480e6d614fec24853411bfe8cf9b462a388a616`. The spent 200 partition was not
+  inspected, rescored, or used to select this change.
+
 ## 2026-08-01 — exact generalized development score reaches 145.0510
 
 - Replayed the frozen source on all 800 permitted development packets:
