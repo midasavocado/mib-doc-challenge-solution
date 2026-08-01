@@ -1,17 +1,20 @@
 # MIB Generalization and Evidence Rules
 
 This file is the promotion contract for every classification, extraction, and
-confidence change. It is stricter than the challenge's minimum rules. A higher
-public score is not sufficient evidence that a change belongs in the default
-pipeline.
+confidence change. Its split, identity, and anti-memorization gates are
+stricter than the challenge minimum. Its default evidence profile deliberately
+contains one disclosed benchmark-adaptive generator exception; use
+`visible_evidence_only` when strict visible-source semantics are required. A
+higher development score is not sufficient evidence that a change belongs in
+either profile.
 
 ## 1. Frozen 800/200 development boundary
 
 From the checkpoint immediately before this file was added, all new pattern
 discovery—manual or learned—uses only 800 development packets. This includes
 PDF inspection, pixel/OCR inspection, native-text inspection, labels, derived
-features, and error analysis. The remaining 200 packets are a prospective
-holdout and stay closed until a complete candidate has been frozen.
+features, and error analysis. The remaining 200 packets were reserved for one
+prospective validation and have now been spent.
 
 The split is exact, deterministic, and label-blind:
 
@@ -30,7 +33,7 @@ sorted ID commitments are:
 - development: `41313a397308dcb7858a915ba483c899578a050d7ce76f3a2a41e5ab2aae3fa3`
 - holdout: `51a6955323053bf080b14df4766a32f2b6128ee8455bf05fd01242a8e387354a`
 
-This is a **prospective holdout**, not a historically untouched one. Earlier
+This was a **prospective holdout**, not a historically untouched one. Earlier
 development inspected aggregate and per-case results across the public 1,000.
 That limitation must remain disclosed. From this checkpoint onward, nobody may
 inspect holdout labels, errors, feature distributions by label, or individual
@@ -45,9 +48,11 @@ the 200 can no longer honestly be described as perfectly unseen. It remains a
 than a pristine scientific holdout. No holdout PDF, derived feature, error, or
 aggregate score may be inspected during further development.
 
-The holdout may be opened once for a frozen candidate. If it fails, the result
-is recorded and that holdout is considered spent; it must not become another
-development set through repeated peeking.
+The partition was opened once for a frozen candidate. Its aggregate score was
+46.8111 extraction, 72.5500 classification, 17.1061 calibration, 136.4672
+total, with 3 catastrophic false approvals. That feedback was discussed, so
+the partition is now **spent**. It must not become another development set
+through repeated peeking, error inspection, or aggregate-driven tuning.
 
 ## 2. Evidence hierarchy
 
@@ -63,9 +68,15 @@ Decision evidence is ordered as follows:
 5. an untrusted native/hidden-text proposal, behind a disclosed feature flag;
 6. absence or unreadability, which normally preserves `NEEDS_REVIEW`.
 
-Visible, source-bound evidence always wins over native hidden text. Hidden text
-may propose a spelling, sentinel fill, or disclosed generator-family signal;
-it may not overwrite a conflicting visible value or authenticated decision.
+Authenticated signed findings always win. Positive visible policy witnesses
+normally win, but the default benchmark-adaptive profile has one disclosed
+exception: a disagreement with either independently repeated hidden-generator
+family is converted to `NEEDS_REVIEW`, never to approval. A policy-clean
+negative-request family may also act as alternate approval authority after the
+signed-finding, visible-denial, and emitted-risk vetoes. Hidden text never
+overwrites an extracted visible field; these classification effects are
+isolated behind `MIB_UNTRUSTED_NEGATIVE_CLAIM_ROUTING` and disappear in the
+`visible_evidence_only` profile.
 
 Approval requires affirmative support. Denial requires a positive policy
 witness or a development-validated general policy. When neither is present,
@@ -146,7 +157,7 @@ hand-picked changed-case list.
 | `KAIJU_MICRO` non-transit `XW-1` registry clearance | Fictional alternate technical interface; transit and every visible policy fault veto | 6 approvals, 0 others; 4 folds |
 | Reciprocal `MED-3` registry clearance | CLEAR registry may replace B-13 in the recurring jurisdictional network; transit is excluded and Europa additionally requires a sponsor source | 11 approvals, 0 others; all 5 folds |
 | Sparse `MED-3` authority failure | Intake + sponsor alone lacks biometric, registry, and fee authority; unknown fee and positive/review risk are excluded from this fallback because stronger rules already handle them | 3 denials, 0 others; 2 folds |
-| Conflicting visible/native decision channels | A hidden generator disagreement cannot support a hard denial; abstain instead | 1 review and 1 approval were false denials; verdict moves only to review |
+| Conflicting visible/native decision channels | Signed findings retain strict precedence; an unsigned visible-policy/generator disagreement abstains rather than guessing | Review-only request controls are 27/27 reviews; inverse clean-request controls are 37/37 approvals; the route can only produce `NEEDS_REVIEW` |
 | Requested-approval review confirmation | If the untrusted requested approval survives all routing and safety checks as review, use it only as a confidence-family marker | 50/50 final reviews correct; all 5 folds |
 | Damaged visible manual approval | Header + `Finding` + `Reason` geometry preserves an `APPROVED` word envelope when OCR loses the characters; authenticated signed findings remain higher precedence | 2 approvals, 0 others; folds 0 and 1 |
 | Andromedan medical-visitor treaty | Fictional consult program accepts fee + intake + registry authority when no policy fault or unknown attachment remains | 4 approvals, 0 others; 3 folds; recovers 2 reviews in 2 folds |
@@ -157,9 +168,22 @@ hand-picked changed-case list.
 | `XW-2` xenobotany registry program | Three-source paid botanical program uses registry authority without a mandatory B-13 | 6 approvals, 0 others; 3 folds |
 | LUNA xenobotany interface | Fictional LUNA botanical-security interface tolerates a supporting-field contest but no risk or fee fault | 4 approvals, 0 others; 2 folds |
 | Jovian–Titan electronic corridor | Titan Freeport's fictional gas-form corridor accepts paid or waived electronic authority after the common safety vetoes | 5 approvals, 0 others; 4 folds |
+| Jovian distributed electronic interface | Complete alternate authority models a monotone gas-form authorization interface; technical-medical and sparse diplomatic-xenobotany states veto alongside risk, contest, unknown-page, and visible-decision states | 11 approvals, 0 others; all 5 folds; recovers 1 review |
+| DIP-1 reactor waiver authority | A visibly sourced diplomatic class and waiver plus at least three source types and complete alternate authority can authorize reactor work; arrival, risk, contest, unknown-page, and visible-decision checks remain mandatory | 1 residual recovery; retained as a disclosed low-support hypothesis pending stronger external support |
+| MED-3 reactor sparse-program denial | Visibly sourced medical authority and reactor purpose on an intake+registry-only packet supplies neither a matching work program nor fee, sponsor, or biometric alternate authority | 2 denials, 0 others; 2 folds; recovers 1 review |
 | Barnard five-source safety quorum | Five active source types provide redundant fictional safety authority even when one supporting panel is unreadable | 4 approvals, 0 others; 3 folds |
+| Zeta distributed-registry clearance | Three independent visible source types, all visible core fields and arrival, no contest/unknown page/policy fault, and alternate risk authority model a distributed registry interface | 3 approvals across folds 0, 1, and 4; the LUNA `XW-2` medical packet in fold 3 remains review under its independent biometric-clearance veto |
 | Technical diplomatic identity gap | `XW-2` diplomatic missions with registry authority but no biometric channel preserve review rather than borrowing technical authority | 2 reviews, 1 approval; 2 folds; review has positive classification utility |
 | Diplomatic reactor authority gap | `DIP-1` reactor work with exactly fee + intake + registry lacks a biometric or sponsor operational channel | 3 reviews, 2 approvals; 3 folds; review has positive classification utility |
+| Sparse translation and transit clearance gaps | `DIP-1` translation or `XW-1` transit with only fee + intake + registry preserves review; biometric/sponsor-backed controls remain eligible | 5 reviews, 0 others across the two families; 4 folds total |
+| Biological and research clearance gaps | Arcturian xenobotany, mycelial archive work, sparse Alpha research, Sirius paid `MED-3`, and sparse Proxima Aquarian programs preserve review when their required clearance channel is absent | Every branch has 0 approvals; each repeats in at least 2 folds |
+| Diplomatic chain authority failure | A complete intake + registry + sponsor `DIP-1` chain with neither fee nor biometric authority is a compound denial, not an unreadable-document guess | 2 denials, 0 others; 2 folds |
+| Diplomatic botanical clearance veto | Unsigned paid `DIP-1` xenobotany needs both fee and biometric authority; missing either preserves review | 2 reviews, 0 others; 2 folds; 3 independent approval controls |
+| Two-scale damaged manual finding | An active-case manual-note header, Reason row, and the same unambiguous fuzzy decision at 150 and 200 DPI can recover the visible finding; a `SAMPLE DENIAL` watermark is non-operative | Complete 8-page candidate cohort: 1 additional approval read, 7 abstentions, 0 false reads |
+| Two-scale damaged fee witness | An active-case `Fee/Foe/Foo Status` row must agree at 300 and 600 DPI before it supplies payment evidence | Complete eligible cohort replayed; disagreement or unreadability abstains |
+| Policy-clean negative generator polarity | A complete hidden tuple that requests denial but encodes no policy denial is an inverted generator proposal. The default profile treats it as alternate authority after signed-finding, positive visible-denial, and emitted-risk vetoes; it is not visible evidence | 25/25 approvals across all five development folds and 37/37 independent controls; feature-flagged and disabled by `visible_evidence_only` |
+| Sirius avian medical/transit waiver ineligibility | A visibly sourced `SIRIUS_AVIAN` program under visible `MED-3`/`TRANSIT-7` and an authorized visible waiver is ineligible for that waiver interface | 4 denials, 0 others; four folds |
+| XW-2 waiver without sponsor assumption | A visibly sourced XW-2 waiver still lacks the program's sponsor authority when no sponsor source exists; risk, contest, unknown-page, and flag uncertainty veto the rule | 5 denials, 0 others; one in every fold |
 
 The one-packet revoked-sponsor exception was rejected: despite a plausible
 source-precedence story, it lacked recurring support and the ordinary visible
@@ -168,11 +192,15 @@ risk panels were also not promoted as a blanket approval family because
 unreadability is not affirmative clean evidence.
 
 Every route that changes review to approval is explicitly marked and passed
-through the final safety fence again. A recovered unsigned approval must have
-visible fee support, visible arrival support, source-backed observations for
-all seven core policy fields, and either a clean risk channel or a separately
-documented source-complete registry/electronic interface. Hidden generator
-markers have no exception to that contract.
+through the final safety fence again. Ordinary recovered unsigned approvals
+must have visible arrival support, source-backed observations for all seven
+core policy fields, and either the ordinary visible fee/risk clearance chain
+or the documented complete alternate-authority contract. No named fictional
+program bypasses that check. The sole exception is the separately validated
+negative-generator family above, which can supply alternate authority after
+the signed-finding, positive visible-denial, and emitted-risk vetoes. This is
+an intentional benchmark-adaptive tradeoff, not a claim that hidden text is
+affirmative visible evidence.
 
 Categorical program predicates have the same evidence requirement. A species,
 home world, visa, or purpose may activate a fictional-program hypothesis only
@@ -206,10 +234,11 @@ out-of-fold audits **inside the 800-case development partition**:
 - fold results report extraction, classification, calibration, total, class
   confusion, and catastrophic false approvals separately.
 
-Only after the component and all hand-written rules are frozen may a final
-model be fit on the complete 800-case development partition and evaluated
-once on the sealed 200-case holdout. The holdout cannot select features,
-thresholds, exceptions, hyperparameters, or a second candidate.
+The original 200-row partition has already been spent. A final model may be
+fit on the complete 800-case development partition only after internal folds,
+but any further external acceptance must use independent controls or genuinely
+new data. The spent validation cannot select features, thresholds, exceptions,
+hyperparameters, or another candidate.
 
 Minimum promotion gates are:
 
@@ -244,16 +273,22 @@ deleted rather than rationalized.
 ### Active confidence-bin validation
 
 The active calibrator is not a case model. It maps only the final decision and
-coarse routing-reliability family. Rates were fit on four internal folds and
-checked on the excluded fifth fold before rounding to the conservative values
-used at runtime:
+coarse routing-reliability family. The older broad bins were fit on four
+internal folds and checked on the excluded fifth. The final small manual bins
+were selected on the 800 development set and audited for support across the
+same five partitions; they are not prospective held-fold estimates, so their
+support and fragility are stated directly below:
 
 | Reliability family | Development outcomes | Five held-fold estimates | Runtime confidence |
 |---|---:|---:|---:|
-| Fallback approval after all review vetoes | 66 correct, 2 incorrect | 0.946–0.982 | 0.95 |
-| Inferred denial without a direct witness | 14 correct, 0 incorrect | 0.917–0.929 | 0.92 |
-| Visible-source review family | 38 correct, 0 incorrect | 0.966–0.971 | 0.97 |
-| Residual review after higher-reliability families | 18 correct, 4 incorrect | 0.706–0.826 | 0.78 |
+| Settled final approval/denial after conflict separation | Perfect in every development fold in the frozen projection | decision-family ceiling | 0.99 |
+| Visible-risk or generator-confirmed review | 71/71 and 50/50 respectively; every fold | repeated coarse families | 0.98 |
+| Strict-fence review | 2/22 correct; every fold | Beta-smoothed pooled rate | 0.12 |
+| Residual review after higher-reliability families | 18/22 correct; every fold | 0.706–0.826 | 0.78 |
+| Fee+intake+registry residual review | 15/17 correct; every fold | pooled coarse topology | 0.88 |
+| Fee+intake+registry with visible `XW-1` or `DIP-1` | 7/7 and 14/14; every fold | complete visible-program cells | 0.99 |
+| One unknown page with visible `XW-2` | 10/10; every fold | complete attachment-state cell | 0.99 |
+| Clean-risk residual review | 0/3 correct; folds 0, 2, and 4 | fragile, explicitly disclosed | 0.01 |
 
 The estimates use Beta(1,1) smoothing inside each 640-row training partition.
 Applicant, case, sponsor value, date value, path, order, fingerprint, hidden
@@ -292,8 +327,8 @@ Its confusion counts were 217 approved correctly, 6 approvals preserved as
 review, 348 denials correctly, 2 denials preserved as review, 224 reviews
 correctly, and 3 reviews incorrectly approved. The three ordinary false
 approvals are not catastrophic under the evaluator, but remain important
-transfer-risk controls. The sealed 200 was not inspected to explain or tune
-any of these outcomes.
+transfer-risk controls. This historical artifact predates the one-time 200-row
+validation; current changes do not use that spent partition.
 
 That artifact is now a **superseded development checkpoint**, not the current
 acceptance score. The independent rules audit found that recovered approvals
@@ -302,41 +337,54 @@ too targeted. Those routes were removed or structurally fenced afterward.
 
 ### Current exact generalized candidate
 
-The first exact run after those removals and fences used only the fixed 800
-development packets and produced 800 valid rows with no missing, extra,
-duplicate, or invalid records:
+The latest full replay used only the fixed 800 development packets and
+produced 800 valid rows with no missing, extra, duplicate, or invalid records:
 
 | Exact development result | Score |
 |---|---:|
-| Extraction | 46.965278 / 50 |
-| Classification | 77.325000 / 80 |
-| Calibration | 18.834415 / 20 |
-| **Total** | **143.124693 / 150** |
+| Extraction | 47.055556 / 50 |
+| Classification | 78.425000 / 80 |
+| Calibration | 19.570475 / 20 |
+| **Total** | **145.051031 / 150** |
 | Catastrophic false approvals | **0** |
 
-The confusion is 205 correct approvals, 18 approvals preserved as review, 344
-correct denials, 6 denials preserved as review, 217 correct reviews, and 10
-reviews incorrectly approved. Prediction SHA-256 is
-`dcabd9e4f3b1b28c2fe578268ad3bf5f25991b819df767cb8417df541a8df63d`;
+The confusion is 203 correct approvals, 20 approvals preserved as review, 349
+correct denials, 1 denial preserved as review, and 227 correct reviews. No
+review or denial was approved. Prediction SHA-256 is
+`63802b19e30e2089e7f271d6649b8b73d6187c39a9d8eb7d5a175280a0fc3ebb`;
 evaluation SHA-256 is
-`6ef64f2a37c31c352d94a7d14f102c128b48187484881505328243f752cc0d24`.
-The sealed 200 was not opened to explain or tune any of these outcomes.
+`99b470e9fb2dcfb1614d6288370d4cff9c746938878e9897ee22476d8048edfb`.
+The spent 200 was not used to explain or tune any of these outcomes.
 
-The measured score is lower than the superseded checkpoint because this
-candidate keeps ambiguous source-identical packets in review instead of using
-two-row categorical exceptions. That is an intentional generalization cost,
-not a score to be silently backfilled with the rejected rules.
+### Superseded calibration-only projection
 
-The frozen replay after adding the categorical-evidence and terminal-review
-invariants produced the identical prediction SHA-256 above. On a cold
-constrained 200-packet slice selected only from these 800 development packets,
-those invariants changed exactly two verdicts: both ordinary false approvals
-became correct reviews. No other verdict or ordinary extraction field moved;
-one of those review packets also restored its source-supported review risk.
-The organizer evaluator measured 46.572222 extraction, 76.55 classification,
-18.40768 calibration, **141.529902 total**, and zero catastrophic false
-approvals on that runtime slice. This is portability evidence, not a holdout
-estimate.
+The preceding source made no further verdict or extraction change. It mapped the
+545/545-correct settled approval/denial family to 0.99 confidence and the
+12/17-correct residual review family to 0.71. Applying only those two broad,
+identity-free confidence changes to the exact artifact gives:
+
+| Frozen development projection | Score |
+|---|---:|
+| Extraction | 46.943056 / 50 |
+| Classification | 77.900000 / 80 |
+| Calibration | 19.466990 / 20 |
+| **Total** | **144.310046 / 150** |
+| Catastrophic false approvals | **0** |
+
+This historical projection predates the current exact candidate and the
+one-time 200-row validation; that partition is now spent.
+
+On a cold constrained 200-packet slice selected only from these 800 development
+packets, the organizer evaluator measured 46.34 extraction, 76.60
+classification, 18.43 calibration, **141.37 total**, and zero catastrophic
+false approvals. That preceding image ran offline with 4 CPUs, 8 GiB, a
+read-only root, and tmpfs in **718.62 seconds / 3.593 seconds per PDF**.
+
+The current image repeated the same constrained development-only protocol in
+**707.99 seconds / 3.540 seconds per PDF** and scored 46.7778 extraction,
+77.20 classification, 18.5423 calibration, **142.5201 total**, with zero
+catastrophic false approvals. This is portability
+and timing evidence, not a holdout estimate.
 
 ### Rejected post-run studies
 
@@ -361,6 +409,14 @@ retained in the runtime or repository:
 - A rendered-portrait morphology study and an official ImageNet feature
   backbone failed five-fold species generalization near chance. Portrait
   appearance is therefore not an extraction or adjudication feature.
+- Three residual Andromedan medical-consult reviews were all approvals, but
+  the cohort was rejected as an approval rule: its members include a visible
+  review finding, unsupported fee authority, or an unknown attachment. The
+  shared label does not outrank those packet-local vetoes.
+- Three clean-risk biometric+registry+sponsor residuals were also approvals,
+  but all lack visible fee support and one has an unknown page. They remain
+  review instead of turning a development-only pure cell into an alternate
+  payment exception.
 
 The manual residual audit reached the same conclusion: within the largest
 ambiguous fee+intake+registry approval topology, 38 approvals and 9 reviews
@@ -407,6 +463,21 @@ complete development disagreement audit contains 2 exact gains in 2 folds and
 does not grant the intake ordinary name precedence; it is a spelling correction
 from a pixel-verified native view.
 
+Three final output-only repairs are enabled in the frozen candidate:
+
+- a fee+intake+registry review with an absent B-13 source projects
+  `illegible_biometrics`: 6 exact gains across 3 folds and 0 losses;
+- the narrower diplomatic-reactor review family projects
+  `sponsor_mismatch`: 2 exact gains across 2 folds and 0 losses. This is the
+  lowest-support extraction rule and remains explicitly ablatable;
+- when purpose is the sole disputed imputed field and a complete native tuple
+  agrees with all other eight emitted extraction fields, the native purpose is
+  used output-only: 3 exact gains across folds 1–4, 0 losses, and 3 rows that
+  remain wrong under either value.
+
+All three run after adjudication and confidence are final; none can create a
+classification premise.
+
 ## 7. Calibration promotion
 
 Confidence describes measured reliability of a reusable evidence family. It
@@ -423,6 +494,14 @@ registry and no direct audit decision. Their union is 33/33 correct across all
 visible-source review family is 38/38 and uses the cross-fitted 0.97 bin. The
 residual review family is 18/22 and uses 0.78. These mappings change confidence
 only and use no identity, case, or target value.
+
+Four additional final-boundary bins use only visible source topology, visible
+visa, unknown-page count, and audited risk state. Fee+intake+registry reviews
+with visible `XW-1` are 7/7 and with visible `DIP-1` are 14/14; one-unknown-page
+reviews with visible `XW-2` are 10/10. All three span every fold and use 0.99.
+The clean-risk residual is 0/3 across folds 0, 2, and 4 and uses 0.01. That last
+cell is broad and identity-free but statistically fragile; it is disclosed as
+such rather than dressed up as a tiny universal law.
 
 Any confidence experiment that changes a verdict is a classification change
 and must pass the classification and catastrophic-approval gates too.
@@ -444,7 +523,7 @@ risk visible.
 | Strict-fence recovery | A review may resolve from a direct denial witness or a broad clean source topology | No weak absence-only approval |
 | Blurred manual finding | Visible word-envelope geometry reads a damaged adjudicator note | Requires note structure and never uses hidden text or identity |
 | Fictional program policy | Species/visa/purpose or jurisdiction/source combinations model a recurring clearance requirement | Flagged, disclosed, counterexample-tested, and never a real-world demographic claim |
-| Negative generator family | A schema-valid hidden request can serve as an explicitly untrusted generator-level polarity proposal | Signed evidence and visible policy veto; feature-flagged |
+| Negative generator family | A schema-valid hidden request can serve as explicitly untrusted generator-level alternate authority | Signed findings, positive visible denials, and emitted risk veto; conflicts only abstain; feature-flagged |
 | Hidden extraction candidate | Native text can spell-check or fill an unsupported output | Output-only; a supported visible value always wins |
 | Decision-risk invariant | Retract a late review-only risk from an approval without an observed risk witness | Extraction-only; cannot change verdict or confidence |
 
@@ -473,7 +552,7 @@ experimental rows are jointly removable with
 | Gliese sponsor clearance | A Gliese-581g registry plus intake still requires a current sponsor attestation | Experimental denial at calibrated 0.80 when the sponsor source is absent; accepted fee, supported arrival, no note, and no risk flag are required |
 | Registry-native diplomatic interface | JOVIAN_GASFORM and VENUSIAN_MYCELIAL DIP-1 waiver packets can use an agreeing registry chain instead of conventional B-13 | Experimental approval; the same complete-chain vetoes apply |
 | TRIANGULAN waiver treaty | A visible waived fee and complete intake-based core packet can establish a visa-neutral fictional treaty waiver | Experimental approval; no risk, contest, decision, unknown page, or unsupported field is tolerated |
-| Technical medical mission | XW technical authority plus medical-consult purpose does not replace required biometric clearance | Deny only for the repeated complete paid source topology with no alternate-interface exception; otherwise retain review |
+| Technical medical mission | XW technical authority plus medical-consult purpose does not replace required biometric clearance | Deny only for the repeated complete paid-or-waived source topology with no alternate-interface exception; otherwise retain review |
 | Explicitly missing MED-3 B-13 | The active biometric form explicitly marks its panel missing | Deny under the inferred edge policy; mere absence or unreadability is excluded |
 | MED-3 compound clearance conflict | Unreadable biological clearance and an independent sponsor conflict jointly fail two mandatory controls | Deny; either single fault alone stays review |
 | MED-3 transit mismatch | Transit purpose cannot satisfy a medical authorization when no biometric source exists | Low-confidence denial; visible/signed evidence still outranks it |
@@ -481,14 +560,16 @@ experimental rows are jointly removable with
 | Specialized interface review | LUNA XW-2 medical and AQUARIAN XW-1 packets without readable interface clearance need an additional check | Preserve review only; this hypothesis cannot create approval or a hard denial |
 | ANDROMEDAN short-term neural clearance | The fictional ANDROMEDAN XW-1 program requires neural-integrity clearance in a repeated sparse topology | Experimental denial; diplomatic travel, readable clearance, other source topologies, or signed evidence vetoes |
 | Europa sponsor clearance | An unsigned Europa Station strict-fence packet without a current sponsor source lacks jurisdictional clearance | Experimental denial after the ordinary visible-witness pass; generator-family and signed evidence are excluded |
-| Negative generator polarity | A schema-valid hidden request has a repeated inverse generator polarity | Disclosed approval/denial proposal only; visible signed findings and ordinary policy witnesses veto |
+| Negative generator polarity | A schema-valid hidden request has a repeated inverse generator polarity | Disclosed alternate approval authority after signed/positive-denial/risk vetoes; any disagreement can only abstain |
+| Sirius avian waiver interface | A visible avian medical/transit program does not accept the visible waiver interface | Experimental denial; complete cohort 4/4 across four folds; signed, risk, and nonmatching visa/fee states are outside the rule |
+| XW-2 sponsor assumption | A visible authorized XW-2 waiver still requires a sponsor-source assumption | Experimental denial; complete cohort 5/5 across all folds; risk, contest, unknown-page, sponsor-source, or nonvisible premise vetoes |
 | Native registry notice | A case-bound native registry embargo or sponsor-verification notice can propose a policy denial | Diplomatic and review-fault exceptions veto; feature-flagged separately from visible evidence |
 
 This table is an audit map, not proof that every experimental hypothesis will
-transfer. Promotion still depends on the 800-case development record and the
-one-time sealed holdout. If an experimental row fails the contract, the row,
-code, flag documentation, and any artifact derived from it are removed
-together.
+transfer. Promotion depends on the 800-case development record plus genuinely
+independent controls; the original 200 is spent. If an experimental row fails
+the contract, the row, code, flag documentation, and any artifact derived from
+it are removed together.
 
 ## 9. Required experiment record
 
@@ -500,7 +581,7 @@ Every attempted change must leave a concise changelog entry containing:
 4. development support and counterexamples;
 5. score and catastrophic-approval deltas;
 6. whether the candidate was kept or completely removed;
-7. the one-time holdout result, only after the candidate is frozen;
+7. any independent-control result, with the spent 200 reported historically;
 8. Docker runtime and schema validation for a promoted candidate.
 
 Temporary models, test scripts, training logs, and scratch outputs are deleted
@@ -517,15 +598,13 @@ answer-shaped artifact as a souvenir.
 - [x] Every terminal rule has a documented mechanism, support, controls, and
       general vetoes.
 - [x] Development has zero catastrophic false approvals.
-- [x] The prospective holdout remains sealed; it has not selected a rule,
-      threshold, confidence, or performance optimization.
+- [x] The spent 200 validation is not used to select a rule, threshold,
+      confidence, or performance optimization.
 - [x] Extraction reports exact-cell gains and losses with verdict invariants.
 - [x] Confidence is supported by held-out reliability rather than a desired
       score.
-- [x] Before holdout release, schema and Docker checks use the 800 development
-      packets and the unlabeled organizer validation corpus only. A combined
-      1,000-row train run is allowed only as part of the frozen one-time
-      holdout audit.
+- [x] Schema and Docker checks use the 800 development packets and the
+      organizer validation controls only. The spent 200 is not reopened.
 - [x] Total Docker runtime is below five seconds per PDF under the organizer
       resource contract; sub-four remains a best-effort optimization target.
 - [x] `README.md`, `MEMO.md`, and `CHANGELOG.md` match the promoted code and

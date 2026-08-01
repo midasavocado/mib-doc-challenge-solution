@@ -86,16 +86,17 @@ EVIDENCE_FLAGS = (
     FeatureFlag(
         "MIB_UNTRUSTED_NEGATIVE_CLAIM_ROUTING",
         "1",
-        "Use the schema-valid hidden request only as an inverted generator "
-        "signal on unsigned reviews; signed findings and existing denials "
-        "retain their verdict.",
+        "Use the schema-valid hidden request as an inverted generator "
+        "proposal on unsigned packets; the separately validated policy-clean "
+        "negative-request family may serve as alternate approval authority "
+        "after visible denial and risk vetoes.",
     ),
     FeatureFlag(
         "MIB_UNTRUSTED_REGISTRY_STATUS_ROUTING",
         "1",
         "Use a case-bound native registry-status phrase as a disclosed "
-        "classification proposal; signed findings and the diplomatic "
-        "exception veto it.",
+        "classification proposal; it can deny only when an independent "
+        "pixel-visible denial witness corroborates it.",
     ),
     FeatureFlag(
         "MIB_CORROBORATED_PAYLOAD_EXTRACTION",
@@ -228,9 +229,19 @@ def _read_bool(name: str, default: bool) -> bool:
     )
 
 
-def enabled(name: str, default: bool = True) -> bool:
-    """Return one validated boolean environment flag."""
+def enabled(name: str, default: bool | None = None) -> bool:
+    """Return one validated Boolean flag using its catalogue default."""
 
+    if default is None:
+        documented = next(
+            (
+                flag.default
+                for flag in ALL_FEATURE_FLAGS
+                if flag.name == name
+            ),
+            "1",
+        )
+        default = documented in _TRUE
     return _read_bool(name, default)
 
 

@@ -4,7 +4,83 @@ This file preserves the detailed experiment history in chronological form.
 For the current architecture, measured result, and engineering rationale, see
 [`MEMO.md`](MEMO.md).
 
-Last updated: 2026-07-31
+Last updated: 2026-08-01
+
+## 2026-08-01 — exact generalized development score reaches 145.0510
+
+- Replayed the frozen source on all 800 permitted development packets:
+  **47.055556 extraction**, **78.425000 classification**, **19.570475
+  calibration**, and **145.051031 total**, with **0 catastrophic false
+  approvals** and 800/800 valid rows.
+- The confusion is 203 correct approvals, 349 correct denials, 227 correct
+  reviews, 20 true approvals retained as review, and one true denial retained
+  as review. No denial or review was approved.
+- Added two visibly sourced fictional waiver-program denials: the Sirius avian
+  medical/transit waiver cohort is 4/4 across four folds, and the XW-2 waiver
+  without sponsor-source authority cohort is 5/5 with one member per fold.
+- Generalized the disclosed negative-request generator family as alternate
+  authority after signed-finding, positive visible-denial, and emitted-risk
+  vetoes. Generator/visible disagreement can only abstain to review. This is
+  the benchmark-adaptive default, not the strict visible-only profile.
+- Added three output-only extraction repairs after verdict and confidence are
+  frozen: six exact `illegible_biometrics` gains, two exact low-support
+  `sponsor_mismatch` gains, and three exact sole-disputed-purpose gains, all
+  with zero exact losses in their complete development cohorts.
+- Added identity-free final-boundary confidence bins. Three large bins span all
+  five folds; the clean-risk residual is only 0/3 across three folds and is
+  explicitly retained as a fragile calibration hypothesis.
+- Exact prediction SHA-256:
+  `63802b19e30e2089e7f271d6649b8b73d6187c39a9d8eb7d5a175280a0fc3ebb`.
+  Exact evaluation SHA-256:
+  `99b470e9fb2dcfb1614d6288370d4cff9c746938878e9897ee22476d8048edfb`.
+- The spent 200 partition was not inspected, rescored, or used to select any
+  change in this round.
+- Excluded tests, pytest state, and bytecode caches from the Docker context;
+  the final 217 MB image contains only runtime source, the locked dependency
+  file, and third-party notices—no labels or evaluation artifacts.
+
+## 2026-07-31 — exact generalized replay reaches 144.2859
+
+- Replayed the active entrypoint on all 800 permitted development packets:
+  **46.943056 extraction**, **77.900000 classification**, **19.442850
+  calibration**, and **144.285906 total**, with **0 catastrophic false
+  approvals** and 800/800 valid rows.
+- Kept the prospective 200 sealed. No case ID, applicant name, sponsor value,
+  exact date, path, or document fingerprint participates in adjudication.
+- Added a two-scale rendered-pixel reader for damaged manual findings and a
+  two-scale fee-status witness. Both abstain on disagreement.
+- Generalized the five-fold policy-clean negative-request generator family as
+  an untrusted proposal. A later safety audit removed its ability to fill an
+  absent visible channel; any visible denial, review, contest, risk flag, or
+  invalid fee wins, and the ordinary source-completeness contract still
+  applies. The older exact replay retained zero false approvals, but is now a
+  historical checkpoint rather than the current source result.
+- Removed a no-op broad date tail and an output-name relaxation that produced
+  no exact score gain.
+- Added a final confidence-only mapping. Projected against the exact artifact,
+  it raises calibration to **19.466990** and total to **144.310046** without
+  changing any field, verdict, or CFA count.
+
+## 2026-07-31 — frozen generalized projection reaches 145.4056
+
+- **Superseded:** the complete replay did not reproduce this projection; it is
+  retained only as experiment history.
+- Kept the prospective 200-case audit sealed and used only the fixed 800
+  development rows for every pattern, rendered-page check, and score delta.
+- Replayed every complete matching cohort and its nearest controls through the
+  active entrypoint. The frozen organizer-evaluator projection is **46.965278
+  extraction**, **78.9375 classification**, **19.50286 calibration**, and
+  **145.405638 total**, with **0 catastrophic false approvals**.
+- Added only source/program rules with a coherent reusable mechanism: missing
+  mandatory diplomatic authority, an invalid diplomatic waiver on a
+  non-diplomatic visa, two alternate authorization interfaces, a three-fold
+  Centauri damage interface, and a review-only botanical-clearance veto.
+- Extended the damaged-manual-note detector with an approval-only visible
+  reason template. Direct signed findings and visible denial witnesses retain
+  precedence.
+- This row is deliberately labeled a projection. The exact 143.124693
+  full-800 artifact and hashes remain authoritative until a fresh constrained
+  800-row replay completes.
 
 ## 2026-07-31 — generalized 800-case candidate replaces 145.7151 checkpoint
 

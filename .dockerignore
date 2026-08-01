@@ -2,6 +2,10 @@
 .gitignore
 __pycache__
 *.py[cod]
+**/__pycache__/
+**/*.py[cod]
+.pytest_cache/
+tests/
 predictions.jsonl
 evaluation.json
 case-scores.jsonl

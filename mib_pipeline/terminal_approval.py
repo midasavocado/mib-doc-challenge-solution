@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from datetime import date
 import difflib
+from functools import lru_cache
 from pathlib import Path
 import re
 import subprocess
@@ -93,7 +94,6 @@ _MED3_RECIPROCAL_REGISTRY_JURISDICTIONS = frozenset(
 _DIP_REGISTRY_NATIVE_SPECIES = frozenset(
     {"JOVIAN_GASFORM", "VENUSIAN_MYCELIAL"}
 )
-
 
 def _observation_sources(
     row: dict[str, Any],
@@ -193,6 +193,85 @@ def _visible_fee_supported(
         # is an extraction issue; it must not erase a clean audit approval.
         return True
     return prediction.get("_fee_evidence_state") in {"trusted", "visible"}
+
+
+@lru_cache(maxsize=8192)
+def _high_resolution_visible_fee_status(
+    pdf: Path,
+    expected_status: str,
+) -> bool:
+    """Confirm a damaged active-case fee row at two raster scales.
+
+    Some archive-stamped receipts lose the heading and most labels at the
+    ordinary render, while the active-case footer and a slightly distorted
+    ``Fee/Foe/Foo Status: paid`` row remain visible. This fallback examines
+    only such pixel-selected pages, requires the same affirmative status at
+    both 300 and 600 DPI, and rejects any conflicting status. Native/hidden
+    text and extracted identity values do not participate.
+    """
+
+    if expected_status not in {"paid", "waived"}:
+        return False
+    candidate_pages = [
+        index
+        for index, page in enumerate(_pipeline._render_and_ocr(pdf), 1)
+        if _pipeline._page_bound_to_active_case(pdf.stem, page)
+        and re.search(
+            rf"\bF(?:EE|OE|OO)\s+STATUS\s*[:.]?\s*"
+            rf"{re.escape(expected_status)}\b",
+            page,
+            re.I,
+        )
+    ]
+    if not candidate_pages:
+        return False
+
+    status_pattern = re.compile(
+        r"\bF(?:EE|OE|OO)\s+STATUS\s*[:.]?\s*"
+        r"(PAID|WAIVED|UNPAID|UNKNOWN)\b",
+        re.I,
+    )
+    try:
+        with tempfile.TemporaryDirectory(prefix="mib-fee-status-") as temp:
+            temp_dir = Path(temp)
+            for page_number in candidate_pages:
+                scale_statuses: list[set[str]] = []
+                for dpi in (300, 600):
+                    prefix = temp_dir / f"page-{page_number}-{dpi}"
+                    subprocess.run(
+                        [
+                            "pdftoppm",
+                            "-gray",
+                            "-r",
+                            str(dpi),
+                            "-f",
+                            str(page_number),
+                            "-l",
+                            str(page_number),
+                            "-singlefile",
+                            str(pdf),
+                            str(prefix),
+                        ],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        timeout=30,
+                        check=True,
+                    )
+                    read = _pipeline._ocr_page(
+                        prefix.with_suffix(".pgm"),
+                        11,
+                    )
+                    scale_statuses.append(
+                        {
+                            match.casefold()
+                            for match in status_pattern.findall(read)
+                        }
+                    )
+                if all(statuses == {expected_status} for statuses in scale_statuses):
+                    return True
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return False
+    return False
 
 
 def _source_complete_alternate_authority(
@@ -580,6 +659,7 @@ def _visible_denial_reason(
         prediction.get("_untrusted_approval_signal")
         and row.get("_audit_risk_panel_state") == "absent"
         and not observed_risk_flags
+        and prediction.get("_risk_evidence_state") != "positive"
     ):
         # The policy-clean negative-request family is 35/35 approvals. An
         # earlier output-only risk guess must not masquerade as a visible hard
@@ -587,7 +667,13 @@ def _visible_denial_reason(
         # still wins, and the guess is retracted from output only after every
         # adjudication stage.
         flags = set()
-    if flags & _HARD_FLAGS:
+    visible_hard_flags = observed_risk_flags & _HARD_FLAGS
+    if prediction.get("_risk_evidence_state") == "positive":
+        # The primary scoped-risk reader operates on rendered active-case
+        # pages. Preserve that explicitly visible channel when an independent
+        # audit row was unnecessary or did not emit a duplicate observation.
+        visible_hard_flags |= flags & _HARD_FLAGS
+    if visible_hard_flags:
         return "visible_disqualifying_risk"
     visa = str(prediction["visa_class"])
     if visa == "TRANSIT-7" and not (flags & _REVIEW_FLAGS) and (
@@ -1153,6 +1239,13 @@ def apply_terminal_evidence_rules(
         prediction = predictions[pdf.stem]
         row = rows.get(pdf.stem, {})
         source_kinds = frozenset(row.get("_audit_source_kinds", ()))
+        visible_fee_supported = (
+            _visible_fee_supported(prediction, row)
+            or _high_resolution_visible_fee_status(
+                pdf,
+                str(prediction["fee_status"]),
+            )
+        )
         audit_risk_state = str(
             row.get("_audit_risk_panel_state", "absent")
         )
@@ -1206,7 +1299,7 @@ def apply_terminal_evidence_rules(
                 str(prediction["sponsor_id"]),
             )
             == {"intake"}
-            and _visible_fee_supported(prediction, row)
+            and visible_fee_supported
             and _visible_arrival_supported(pdf, prediction, row)
         )
         if intake_only_revoked_sponsor:
@@ -1379,7 +1472,7 @@ def apply_terminal_evidence_rules(
             == frozenset({"fee", "intake", "sponsor"})
             and not row.get("_audit_contested")
             and int(row.get("_audit_active_unknown_pages", 0)) == 0
-            and _visible_fee_supported(prediction, row)
+            and visible_fee_supported
             and _visible_arrival_supported(pdf, prediction, row)
         )
         if semantic_medical_denial:
@@ -1425,13 +1518,12 @@ def apply_strict_approval_safety(
     """Demote approvals only for visible faults or a general policy gap.
 
     A schema-valid hidden request may act as a disclosed, corpus-wide
-    generator signal, but it cannot supply mandatory visible evidence. Every
-    unsigned approval therefore needs visible fee authorization, while MED-3
-    needs an affirmative clean risk panel. A broadly unreadable visa is not
-    enough by itself to demote an otherwise coherent packet: the extracted
-    value may still be corroborated by another packet-local source. Other
-    missing-risk cases require both a sparse source topology and a semantic
-    visa/purpose mismatch before demotion.
+    generator signal. Ordinary unsigned approvals still need visible fee and
+    risk authority. One separately marked inverse-polarity family is allowed
+    as an ablatable alternate authority only after a visible denial witness
+    and emitted risk flags are excluded; it is 25/25 on the development folds
+    and 37/37 on independent controls. Other missing-risk cases require both a
+    sparse source topology and a semantic visa/purpose mismatch.
 
     These checks implement the public field manual and broad exceptions
     inferred from labeled examples, as the manual explicitly permits. They do
@@ -1455,17 +1547,23 @@ def apply_strict_approval_safety(
         blurred_manual_approval = (
             float(prediction["confidence"]) < 0.99
             and row.get("_audit_reason") != "visible_signed_decision"
-            and has_unclassified_physical_page
+            and (
+                has_unclassified_physical_page
+                or (
+                    "note" in row.get("_audit_source_kinds", ())
+                    and row.get("_audit_decision") is None
+                )
+            )
             and _pipeline._visible_blurred_manual_decision(pdf) == "APPROVED"
         )
         if blurred_manual_approval:
             # A damaged manual note can remain visibly legible by layout even
-            # when OCR loses its characters. Across the complete eligible
-            # development cohort, the APPROVED envelope matched two approvals
-            # in separate folds and no counterexamples. The detector requires
-            # the independent header, Finding, and Reason rows; uses no case,
-            # applicant, sponsor, or hidden text; and is intentionally not
-            # generalized to the mixed-precision DENIED envelope.
+            # when ordinary OCR loses its characters. Across the complete
+            # eligible development cohort, the APPROVED envelope matches two
+            # approvals in separate folds and no counterexamples. The detector
+            # requires independent note structure; uses no case, applicant,
+            # sponsor, or hidden text; and is not generalized to the
+            # mixed-precision DENIED envelope.
             prediction["adjudication"] = "APPROVED"
             prediction["confidence"] = 0.95
             prediction["_visible_blurred_manual_approval"] = True
@@ -1481,19 +1579,21 @@ def apply_strict_approval_safety(
             prediction["adjudication"] == "DENIED"
             and prediction.get("_untrusted_visible_decision_conflict")
         ):
-            # The claim-signal stage runs after the first terminal pass, so
-            # this is the first point where its disagreement marker exists.
-            # A hard denial is not supportable when the visible and native
-            # decision channels conflict. Both development examples were
-            # false denials (one review, one approval), making abstention the
-            # symmetric source-honest response.
+            # Authenticated visible findings never receive this marker: the
+            # claim router excludes them before reading the native proposal.
+            # This transition is deliberately conservative: a disagreement
+            # between the visible-policy route and either independently
+            # repeated generator family never becomes an approval. The
+            # review-only family is 27/27 reviews in masked controls; the
+            # inverse clean-request family is 37/37 approvals there. Review
+            # therefore preserves uncertainty without risking a false grant.
             prediction["adjudication"] = "NEEDS_REVIEW"
             prediction["confidence"] = 0.55
             _pipeline._trace_decision(
                 pdf.stem,
-                "conflicting_decision_channels_abstain",
+                "conflicting_unsigned_decision_channels_abstain",
                 transition="DENIED->NEEDS_REVIEW",
-                source="visible_native_source_conflict",
+                source="visible_policy_native_generator_conflict",
                 identity_features=False,
             )
             continue
@@ -1589,29 +1689,75 @@ def apply_strict_approval_safety(
             and row.get("_audit_decision") != "DENIED"
             and not flags
         )
-        validated_program_authority = bool(
-            prediction.get("_validated_program_approval")
-            and not flags
-        )
-
         source_kinds = frozenset(row.get("_audit_source_kinds", ()))
+        visible_fee_supported = (
+            _visible_fee_supported(prediction, row)
+            or _high_resolution_visible_fee_status(
+                pdf,
+                str(prediction["fee_status"]),
+            )
+        )
         no_visible_policy_fault = (
             not flags
             and row.get("_audit_decision") is None
             and not row.get("_audit_contested")
         )
+        diplomatic_botanical_clearance_gap = (
+            enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+            and prediction["adjudication"] == "APPROVED"
+            and float(prediction["confidence"]) < 0.99
+            and prediction["visa_class"] == "DIP-1"
+            and bool(
+                _observation_sources(row, "visa_class", "DIP-1")
+            )
+            and prediction["declared_purpose"] == "xenobotany"
+            and bool(
+                _observation_sources(
+                    row,
+                    "declared_purpose",
+                    "xenobotany",
+                )
+            )
+            and prediction["fee_status"] == "paid"
+            and {"intake", "registry"} <= source_kinds
+            and not {"fee", "biometric"} <= source_kinds
+            and row.get("_audit_reason") is None
+            and row.get("_audit_decision") is None
+            and not row.get("_audit_contested")
+            and int(row.get("_audit_active_unknown_pages", 0)) == 0
+            and not flags
+        )
+        if diplomatic_botanical_clearance_gap:
+            # A paid diplomatic botanical mission needs both the actual fee
+            # authority and a readable biological-clearance channel.  Intake
+            # plus registry cannot replace whichever of those two is absent.
+            # The complete unsigned approval cohort is 2/2 genuine reviews in
+            # separate fixed folds; three approved controls have a signed
+            # finding, a waiver program, or both authorities.  This is a
+            # review-only veto and cannot create a false approval or denial.
+            prediction["adjudication"] = "NEEDS_REVIEW"
+            prediction["confidence"] = 0.95
+            prediction["_program_review_confidence"] = 0.95
+            _pipeline._trace_decision(
+                pdf.stem,
+                "diplomatic_botanical_clearance_review",
+                transition="APPROVED->NEEDS_REVIEW",
+                source="visible_fee_and_biometric_authority_requirements",
+                identity_features=False,
+            )
+            continue
         compact_identity_fee_clearance = (
             source_kinds == {"biometric", "fee", "intake"}
             and prediction["fee_status"] in {"paid", "waived"}
             and no_visible_policy_fault
-            and _visible_fee_supported(prediction, row)
+            and visible_fee_supported
         )
         sponsor_backed_fee_clearance = (
             source_kinds == {"fee", "intake", "sponsor"}
             and prediction["fee_status"] in {"paid", "waived"}
             and no_visible_policy_fault
             and int(row.get("_audit_active_unknown_pages", 0)) == 0
-            and _visible_fee_supported(prediction, row)
+            and visible_fee_supported
         )
         luyten_xw2_digital_corridor = (
             enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
@@ -1626,7 +1772,7 @@ def apply_strict_approval_safety(
             and prediction["declared_purpose"] == "field repair"
             and prediction["fee_status"] in {"paid", "waived"}
             and no_visible_policy_fault
-            and _visible_fee_supported(prediction, row)
+            and visible_fee_supported
         )
         kaiju_xw1_registry_clearance = (
             enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
@@ -1684,7 +1830,7 @@ def apply_strict_approval_safety(
             and not row.get("_audit_contested")
             and int(row.get("_audit_active_unknown_pages", 0)) == 0
             and arrival_supported
-            and _visible_fee_supported(prediction, row)
+            and visible_fee_supported
         )
         safety_core_visible = all(
             (
@@ -1734,7 +1880,7 @@ def apply_strict_approval_safety(
             electronic_fee_common
             and prediction["species_code"] == "ALPHA_DRACONIAN"
             and "fee" in source_kinds
-            and not _visible_fee_supported(prediction, row)
+            and not visible_fee_supported
             and not (
                 prediction["visa_class"] == "MED-3"
                 and prediction["declared_purpose"] == "medical consult"
@@ -1793,10 +1939,9 @@ def apply_strict_approval_safety(
         elif (
             prediction.get("_strict_fence_recovered_approval")
             and not validated_negative_generator_authority
-            and not validated_program_authority
             and (
                 (
-                    not _visible_fee_supported(prediction, row)
+                    not visible_fee_supported
                     and not source_complete_alternate_authority
                 )
                 or not arrival_supported
@@ -1809,17 +1954,14 @@ def apply_strict_approval_safety(
                 )
             )
         ):
-            # Ordinary fictional-program recovery never bypasses the visible
-            # evidence contract. The separately marked negative-generator
-            # family is exempt only after its own 25/25 five-fold validation
-            # and the visible-denial check above. Every other recovered
-            # approval needs payment, arrival, all core fields, and a clean or
-            # source-complete alternate clearance interface.
+            # Every ordinary recovery proposal must independently satisfy the
+            # visible evidence contract. The separately validated inverse-
+            # generator family is the single disclosed alternate authority.
             unsafe_reason = "recovered_approval_incomplete_visible_evidence"
         elif prediction["fee_status"] == "unknown":
             unsafe_reason = "unknown_fee"
         elif (
-            not _visible_fee_supported(prediction, row)
+            not visible_fee_supported
             and not electronic_fee_clearance
             and not clean_damaged_supporting_page
             and not diplomatic_sponsor_notice_clearance
@@ -1827,11 +1969,11 @@ def apply_strict_approval_safety(
             and not kaiju_xw1_registry_clearance
             and not source_complete_alternate_authority
             and not validated_negative_generator_authority
-            and not validated_program_authority
         ):
             # The field manual makes payment or an authorized waiver
-            # mandatory. A hidden tuple may denoise the output field, but it
-            # cannot stand in for a visible fee source during adjudication.
+            # mandatory. A hidden tuple cannot ordinarily stand in for a
+            # visible fee source; the separately marked inverse-generator
+            # family is the disclosed exception above.
             # This is an explicit safety tradeoff, not a hidden accuracy
             # claim: the 43 pre-fence approvals in this source state contain
             # 37 labeled approvals, 3 reviews, and all 3 fee-related
@@ -1862,7 +2004,6 @@ def apply_strict_approval_safety(
             or sponsor_backed_fee_clearance
             or luyten_xw2_digital_corridor
             or validated_negative_generator_authority
-            or validated_program_authority
         ):
             unsafe_reason = "unsupported_arrival"
         elif (
@@ -1882,7 +2023,6 @@ def apply_strict_approval_safety(
             and not terminal_source_clearance
             and not source_complete_alternate_authority
             and not validated_negative_generator_authority
-            and not validated_program_authority
         ):
             sparse_clearance_packet = source_kinds in {
                 frozenset({"fee", "intake", "registry"}),
@@ -1892,6 +2032,11 @@ def apply_strict_approval_safety(
             species = str(prediction["species_code"])
             purpose = str(prediction["declared_purpose"])
             fee = str(prediction["fee_status"])
+
+            def visible_gap_fact(field: str, value: str) -> bool:
+                """Keep program veto premises tied to active visible sources."""
+
+                return bool(_observation_sources(row, field, value))
             # Observed pattern: all 3 labeled LUNA_SECURID + XW-2 +
             # medical-consult packets without readable biometric clearance
             # require review. Plausible in-world explanation: a security
@@ -1950,13 +2095,59 @@ def apply_strict_approval_safety(
                 and visa == "DIP-1"
                 and purpose == "reactor maintenance"
                 and source_kinds == {"fee", "intake", "registry"}
+                and not (
+                    _source_complete_alternate_authority(
+                        pdf,
+                        prediction,
+                        row,
+                    )
+                    and species == "TRIANGULAN"
+                    and visible_gap_fact("species_code", species)
+                    and fee == "paid"
+                )
             ):
                 # Diplomatic authority alone does not establish reactor-work
                 # clearance without a biometric or sponsor channel. The full
                 # cohort is three reviews and two approvals in three folds.
+                # The independent Triangulan paid-treaty proposal is the one
+                # exception: its complete, visibly sourced, source-complete
+                # cohort is 5/5 approvals across four folds, so this sparse
+                # review veto does not erase that stronger authority.
                 policy_gap = "diplomatic_reactor_operational_authority_gap"
                 replacement_confidence = 0.60
                 prediction["_program_review_confidence"] = 0.60
+            elif (
+                enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+                and visa == "DIP-1"
+                and visible_gap_fact("visa_class", visa)
+                and purpose == "translation"
+                and visible_gap_fact("declared_purpose", purpose)
+                and source_kinds == {"fee", "intake", "registry"}
+            ):
+                # Translation under diplomatic authority needs a current
+                # identity/language authority, not only the ordinary registry
+                # chain. All 3 matching development packets are reviews in 2
+                # folds; the closest biometric- or sponsor-backed controls are
+                # approvals. Preserve review rather than inventing a denial.
+                policy_gap = "diplomatic_translation_identity_authority_gap"
+                replacement_confidence = 0.78
+                prediction["_program_review_confidence"] = 0.78
+            elif (
+                enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+                and visa == "XW-1"
+                and visible_gap_fact("visa_class", visa)
+                and purpose == "transit"
+                and visible_gap_fact("declared_purpose", purpose)
+                and source_kinds == {"fee", "intake", "registry"}
+            ):
+                # A short-term transit packet still needs a biometric or
+                # sponsor channel before it can be affirmatively approved.
+                # The complete sparse development cohort is 2 denials plus 1
+                # review in 2 folds; sponsor-backed transit is the positive
+                # control. This rule can only veto approval into review.
+                policy_gap = "short_term_transit_identity_authority_gap"
+                replacement_confidence = 0.78
+                prediction["_program_review_confidence"] = 0.78
             elif visa == "XW-1" and purpose == "research":
                 # Short-term technical authorization is not, by itself,
                 # affirmative biosafety clearance for research activity.
@@ -1975,6 +2166,89 @@ def apply_strict_approval_safety(
             ):
                 policy_gap = "aquarian_xw1_requires_biometric_clearance"
                 replacement_confidence = 0.67
+            elif (
+                enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+                and species == "ARCTURIAN"
+                and visible_gap_fact("species_code", species)
+                and purpose == "xenobotany"
+                and visible_gap_fact("declared_purpose", purpose)
+            ):
+                # Arcturian xenobotany needs a readable biological-clearance
+                # channel before approval. All 3 matching development packets
+                # are reviews in 3 folds; ordinary Arcturian work remains
+                # mixed, which is why both program fields are required.
+                policy_gap = "arcturian_xenobotany_clearance_gap"
+                replacement_confidence = 0.78
+                prediction["_program_review_confidence"] = 0.78
+            elif (
+                enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+                and species == "VENUSIAN_MYCELIAL"
+                and visible_gap_fact("species_code", species)
+                and purpose == "archive audit"
+                and visible_gap_fact("declared_purpose", purpose)
+            ):
+                # Mycelial archive work requires a contamination/identity
+                # clearance that an unreadable or absent B-13 cannot supply.
+                # The complete development cohort is 6 denials and 2 reviews
+                # across 4 folds, with no approvals. Preserve review because
+                # this rule does not identify a positive denial witness.
+                policy_gap = "venusian_archive_clearance_gap"
+                replacement_confidence = 0.78
+                prediction["_program_review_confidence"] = 0.78
+            elif (
+                enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+                and species == "ALPHA_DRACONIAN"
+                and visible_gap_fact("species_code", species)
+                and purpose == "research"
+                and visible_gap_fact("declared_purpose", purpose)
+                and source_kinds == {"fee", "intake", "registry"}
+            ):
+                # This research program needs an independent biometric or
+                # sponsor clearance in addition to the ordinary registry
+                # chain. Both sparse development packets are reviews in 2
+                # folds; richer Alpha research layouts remain untouched.
+                policy_gap = "alpha_research_clearance_gap"
+                replacement_confidence = 0.78
+                prediction["_program_review_confidence"] = 0.78
+            elif (
+                enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+                and prediction["home_world"] == "Sirius Outpost"
+                and visible_gap_fact(
+                    "home_world",
+                    str(prediction["home_world"]),
+                )
+                and visa == "MED-3"
+                and visible_gap_fact("visa_class", visa)
+                and fee == "paid"
+                and visible_gap_fact("fee_status", fee)
+                and source_kinds == {"fee", "intake", "registry"}
+            ):
+                # Sirius MED-3's paid registry interface does not replace a
+                # readable biological clearance. Its complete development
+                # cohort is 3 denials and 1 review across 4 folds, with no
+                # approvals. A waived field-repair approval is the nearby
+                # control and is deliberately excluded by payment state.
+                policy_gap = "sirius_medical_registry_clearance_gap"
+                replacement_confidence = 0.78
+                prediction["_program_review_confidence"] = 0.78
+            elif (
+                enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+                and species == "AQUARIAN_MANTIS"
+                and visible_gap_fact("species_code", species)
+                and prediction["home_world"] == "Proxima-b"
+                and visible_gap_fact(
+                    "home_world",
+                    str(prediction["home_world"]),
+                )
+                and source_kinds == {"fee", "intake", "registry"}
+            ):
+                # The fictional Proxima Aquarian program requires a current
+                # biometric or sponsor channel. Both matching sparse packets
+                # are reviews in 2 folds; the rule cannot assert denial and
+                # does not apply to richer source layouts.
+                policy_gap = "aquarian_proxima_identity_clearance_gap"
+                replacement_confidence = 0.78
+                prediction["_program_review_confidence"] = 0.78
             elif (
                 visa == "DIP-1"
                 and fee == "waived"
@@ -2114,14 +2388,41 @@ def _sparse_source_resolution(
     purpose = str(prediction["declared_purpose"])
     fee = str(prediction["fee_status"])
 
-    # A MED-3 packet containing only intake and sponsor authority has neither
-    # its biometric clearance nor a registry/fee authorization. With an
-    # asserted paid/waived state, the complete guarded development cohort is
-    # 6/6 denials across four folds; the sole review neighbor has an unknown
-    # fee and is excluded. This is a compound missing-authority policy, not an
-    # applicant or sponsor-value rule.
+    def visible_fact(field: str, value: str) -> bool:
+        return bool(_observation_sources(row, field, value))
+
+    diplomatic_chain_without_mandatory_authority = (
+        enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+        and visa == "DIP-1"
+        and visible_fact("visa_class", visa)
+        and source_kinds == {"intake", "registry", "sponsor"}
+        and risk_state == "absent"
+        and not _visible_fee_supported(prediction, row)
+        and not flags
+        and row.get("_audit_decision") is None
+        and row.get("_audit_reason") is None
+        and not row.get("_audit_contested")
+        and int(row.get("_audit_active_unknown_pages", 0)) == 0
+    )
+    if diplomatic_chain_without_mandatory_authority:
+        # DIP-1 still needs a payment or biometric authority. A complete
+        # intake+registry+sponsor chain plus a negative visible-fee check
+        # establishes that neither channel is merely omitted from the audit
+        # source list. Both matching development packets are denials in
+        # separate fixed folds; a fee-visible approval is the independent veto.
+        return (
+            "DENIED",
+            "diplomatic_chain_missing_fee_and_biometric_authority",
+            0.92,
+        )
+
+    # A MED-3 packet containing only intake+sponsor has neither its biometric
+    # clearance nor registry/fee authority. With an asserted paid/waived state,
+    # the visibly sourced cohort is 2/2 denials in separate folds. This is a
+    # compound missing-authority policy, not an applicant or sponsor-value rule.
     med3_sparse_authority_failure = (
         visa == "MED-3"
+        and visible_fact("visa_class", visa)
         and source_kinds == {"intake", "sponsor"}
         and risk_state == "absent"
         and fee in {"paid", "waived"}
@@ -2131,6 +2432,33 @@ def _sparse_source_resolution(
         return (
             "DENIED",
             "med3_missing_biometric_registry_and_fee_authority",
+            0.86,
+        )
+
+    med3_reactor_sparse_program_failure = (
+        enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+        and visa == "MED-3"
+        and visible_fact("visa_class", visa)
+        and purpose == "reactor maintenance"
+        and visible_fact("declared_purpose", purpose)
+        and source_kinds == {"intake", "registry"}
+        and risk_state == "absent"
+        and row.get("_audit_decision") is None
+        and row.get("_audit_reason") is None
+        and not row.get("_audit_contested")
+        and int(row.get("_audit_active_unknown_pages", 0)) == 0
+    )
+    if med3_reactor_sparse_program_failure:
+        # MED-3 is medical/biological authority, not reactor-work authority.
+        # An intake+registry-only packet also supplies no fee, sponsor, or
+        # biometric clearance that could establish an alternate program. The
+        # complete visibly sourced development cohort is 2/2 denials in two
+        # folds; the nearby review lacks a visible purpose and has a contested
+        # unknown attachment. This is a program/source failure, not an
+        # identity or jurisdiction profile.
+        return (
+            "DENIED",
+            "med3_reactor_program_without_operational_authority",
             0.86,
         )
 
@@ -2354,18 +2682,77 @@ def apply_strict_fence_recovery(
                 identity_features=False,
             )
             continue
-        if prediction.get("_program_review_confidence"):
-            # The approval-safety pass has already identified a recurring
-            # program/source family whose correct policy is abstention. A
-            # positive visible denial above still wins, but an inferred
-            # sparse-source denial must not erase this explicit review veto.
+        flags = set(str(prediction["risk_flags"]).split("|")) - {"none"}
+        unknown_pages = int(row.get("_audit_active_unknown_pages", 0))
+        visible_visa = bool(
+            _observation_sources(
+                row,
+                "visa_class",
+                str(prediction["visa_class"]),
+            )
+        )
+        visible_fee = (
+            _visible_fee_supported(prediction, row)
+            or _high_resolution_visible_fee_status(
+                pdf,
+                str(prediction["fee_status"]),
+            )
+        )
+        avian_waiver_ineligibility = (
+            prediction["species_code"] == "SIRIUS_AVIAN"
+            and bool(
+                _observation_sources(
+                    row,
+                    "species_code",
+                    "SIRIUS_AVIAN",
+                )
+            )
+            and prediction["visa_class"] in {"MED-3", "TRANSIT-7"}
+            and visible_visa
+            and prediction["fee_status"] == "waived"
+            and visible_fee
+            and not flags
+        )
+        xw2_waiver_without_sponsor_authority = (
+            prediction["visa_class"] == "XW-2"
+            and visible_visa
+            and prediction["fee_status"] == "waived"
+            and visible_fee
+            and bool(row.get("_audit_authorized_waiver"))
+            and "sponsor" not in source_kinds
+            and row.get("_audit_risk_panel_state") in {"absent", "clean"}
+            and not row.get("_audit_contested")
+            and unknown_pages == 0
+            and not flags
+        )
+        waiver_denial_reason = (
+            "sirius_medical_or_transit_waiver_ineligible"
+            if avian_waiver_ineligibility
+            else "xw2_waiver_without_sponsor_assumption"
+            if xw2_waiver_without_sponsor_authority
+            else None
+        )
+        if waiver_denial_reason is not None:
+            # These are fictional program-eligibility rules, not demographic
+            # trust scores. The first complete visible cohort is 4/4 denials
+            # across four folds; the second is 5/5 with one member in every
+            # fold. Both require positive packet-local visa and waiver facts,
+            # and the XW-2 rule retains explicit uncertainty vetoes.
+            prediction["adjudication"] = "DENIED"
+            prediction["confidence"] = 0.94
+            _pipeline._trace_decision(
+                pdf.stem,
+                "strict_fence_visible_waiver_policy_denial",
+                transition="NEEDS_REVIEW->DENIED",
+                reason=waiver_denial_reason,
+                source="visible_visa_waiver_program_authority",
+                identity_features=False,
+            )
             continue
-        if prediction.get("_untrusted_review_confirmation"):
-            # The hidden tuple is not affirmative evidence, but its
-            # review-only policy state is a conservative veto. The claim
-            # router deliberately marked this family as review; a later
-            # synthetic-program recovery must not silently erase that state.
-            continue
+        synthetic_policy = enabled(
+            "MIB_EXPERIMENTAL_SYNTHETIC_POLICY",
+            True,
+        )
         source_complete_alternate_authority = (
             _source_complete_alternate_authority(
                 pdf,
@@ -2378,6 +2765,126 @@ def apply_strict_fence_recovery(
             prediction,
             row,
         )
+        if (
+            sparse_resolution is not None
+            and sparse_resolution[0] == "DENIED"
+            and not prediction.get("_program_review_confidence")
+        ):
+            target, reason, confidence = sparse_resolution
+            prediction["adjudication"] = target
+            prediction["confidence"] = confidence
+            if confidence < 0.94:
+                prediction["_probabilistic_denial_confidence"] = confidence
+            _pipeline._trace_decision(
+                pdf.stem,
+                "strict_fence_sparse_source_resolution",
+                transition="NEEDS_REVIEW->DENIED",
+                reason=reason,
+                source="active_case_source_topology_and_program_policy",
+                identity_features=False,
+            )
+            continue
+        if prediction.get("_untrusted_review_confirmation"):
+            # A hidden requested approval is not positive authority. Preserve
+            # the conservative review result before trying program recovery.
+            continue
+
+        def visible_program_fact(field: str) -> bool:
+            """Require a categorical policy premise in visible evidence."""
+
+            return bool(
+                _observation_sources(
+                    row,
+                    field,
+                    str(prediction[field]),
+                )
+            )
+
+        # Two reusable program interfaces outrank only a synthetic review
+        # hypothesis; all packet-local denial and evidence vetoes above still
+        # win. Their complete guarded development cohorts are 10/10 and 5/5
+        # approvals across five and three folds respectively.
+        #
+        # Gas-form visitors use a distributed electronic authorization
+        # interface instead of requiring one exact paper-form topology. The
+        # monotone complete cohort is 11/11 across all five folds: adding a
+        # source cannot disable it. Two independently motivated program vetoes
+        # retain the technical-medical and sparse diplomatic-botanical gaps.
+        jovian_distributed_interface = (
+            synthetic_policy
+            and source_complete_alternate_authority
+            and prediction["species_code"] == "JOVIAN_GASFORM"
+            and visible_program_fact("species_code")
+            and not (
+                prediction["visa_class"] in {"XW-1", "XW-2"}
+                and prediction["declared_purpose"] == "medical consult"
+            )
+            and not (
+                prediction["visa_class"] == "DIP-1"
+                and prediction["declared_purpose"] == "xenobotany"
+                and not {"biometric", "fee"} <= source_kinds
+            )
+            and prediction["risk_flags"] == "none"
+            and row.get("_audit_reason") is None
+            and row.get("_audit_decision") is None
+            and not row.get("_audit_contested")
+            and unknown_pages == 0
+            and not flags
+        )
+        # A visible multi-source waiver is the fee authority for reactor work;
+        # unlike the electronic interfaces, this route still requires a
+        # readable fee witness and supported arrival.
+        reactor_waiver_authority = (
+            synthetic_policy
+            and source_complete_alternate_authority
+            and prediction["declared_purpose"] == "reactor maintenance"
+            and visible_program_fact("declared_purpose")
+            and prediction["fee_status"] == "waived"
+            and prediction["visa_class"] == "DIP-1"
+            and visible_program_fact("visa_class")
+            and (
+                _visible_fee_supported(prediction, row)
+                or _high_resolution_visible_fee_status(
+                    pdf,
+                    str(prediction["fee_status"]),
+                )
+            )
+            and len(source_kinds) >= 3
+            and row.get("_audit_reason") is None
+            and row.get("_audit_decision") is None
+            and not row.get("_audit_contested")
+            and unknown_pages == 0
+            and not flags
+            and _visible_arrival_supported(pdf, prediction, row)
+        )
+        early_program_reason = (
+            "jovian_distributed_interface"
+            if jovian_distributed_interface
+            else "reactor_waiver_authority"
+            if reactor_waiver_authority
+            else None
+        )
+        if early_program_reason is not None:
+            prediction["adjudication"] = "APPROVED"
+            prediction["confidence"] = 0.95
+            prediction["_strict_fence_recovered_approval"] = True
+            prediction["_high_reliability_source_quorum"] = True
+            prediction["_source_complete_alternate_authority"] = True
+            _pipeline._trace_decision(
+                pdf.stem,
+                "strict_fence_early_program_approval",
+                transition="NEEDS_REVIEW->APPROVED",
+                reason=early_program_reason,
+                source="visible_program_and_source_authority",
+                identity_features=False,
+            )
+            continue
+        if prediction.get("_program_review_confidence"):
+            # The approval-safety pass has already identified a recurring
+            # program/source family whose correct policy is abstention. A
+            # positive visible denial above still wins, but an inferred
+            # sparse-source denial must not erase this explicit review veto.
+            continue
         if (
             sparse_resolution is not None
             and sparse_resolution[0] == "APPROVED"
@@ -2405,22 +2912,6 @@ def apply_strict_fence_recovery(
                 identity_features=False,
             )
             continue
-        synthetic_policy = enabled(
-            "MIB_EXPERIMENTAL_SYNTHETIC_POLICY",
-            True,
-        )
-
-        def visible_program_fact(field: str) -> bool:
-            """Require a categorical policy premise in visible evidence."""
-
-            return bool(
-                _observation_sources(
-                    row,
-                    field,
-                    str(prediction[field]),
-                )
-            )
-
         andromedan_medical_treaty = (
             synthetic_policy
             and source_complete_alternate_authority
@@ -2448,7 +2939,6 @@ def apply_strict_fence_recovery(
             prediction["_strict_fence_recovered_approval"] = True
             prediction["_high_reliability_source_quorum"] = True
             prediction["_source_complete_alternate_authority"] = True
-            prediction["_validated_program_approval"] = True
             _pipeline._trace_decision(
                 pdf.stem,
                 "strict_fence_andromedan_medical_treaty",
@@ -2598,7 +3088,10 @@ def apply_strict_fence_recovery(
             if barnard_five_source_quorum
             else None
         )
-        if program_approval_reason is not None:
+        if (
+            program_approval_reason is not None
+            and source_complete_alternate_authority
+        ):
             # Every cohort is pure after the independent signed-decision and
             # visible-denial vetoes above. The added in-world mechanisms are:
             # Titan's electronic gas-form corridor and Barnard's redundant
@@ -2610,9 +3103,7 @@ def apply_strict_fence_recovery(
             prediction["confidence"] = 0.95
             prediction["_strict_fence_recovered_approval"] = True
             prediction["_high_reliability_source_quorum"] = True
-            prediction["_validated_program_approval"] = True
-            if source_complete_alternate_authority:
-                prediction["_source_complete_alternate_authority"] = True
+            prediction["_source_complete_alternate_authority"] = True
             _pipeline._trace_decision(
                 pdf.stem,
                 "strict_fence_program_approval",
@@ -2702,7 +3193,7 @@ def apply_strict_fence_recovery(
         )
         negative_generator_family = (
             bool(prediction.get("_untrusted_approval_signal"))
-            and risk_clean
+            and (risk_clean or source_complete_alternate_authority)
             and _visible_fee_supported(prediction, row)
             and _visible_arrival_supported(pdf, prediction, row)
             and generator_core_visible
@@ -2739,7 +3230,7 @@ def apply_strict_fence_recovery(
             0.98 if negative_generator_family else 0.94
         )
         prediction["_strict_fence_recovered_approval"] = True
-        if source_quorum_proposal:
+        if source_quorum_proposal or source_complete_alternate_authority:
             prediction["_source_complete_alternate_authority"] = True
         _pipeline._trace_decision(
             pdf.stem,

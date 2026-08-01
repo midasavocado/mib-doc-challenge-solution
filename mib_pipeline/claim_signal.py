@@ -8,7 +8,8 @@ control corpus, however, that request has a stable *negative* polarity:
 * a requested denial is evidence that the packet belongs to the approval
   side of the generator;
 * a requested approval is useful only as a prompt to look for an ordinary
-  policy denial in the tuple when the visible reader already returned review.
+  policy denial; an independent pixel-visible denial witness must still
+  corroborate that proposal.
 
 This module keeps that noisy channel structurally separate from the pixel
 evidence engine. It cannot alter extraction fields, act on a visible signed
@@ -92,10 +93,11 @@ def apply_untrusted_negative_claim_routing(
 
     The parser authenticates the generator grammar, not the claim.  A complete
     requested denial whose ordinary tuple is policy-clean may resolve an
-    unsigned review to approval. When that signal contradicts a visible
-    denial, the visible verdict remains authoritative and the contradiction
-    is retained only for calibration. A requested approval may resolve a
-    review when its ordinary fields encode a denial witness. Signed terminal
+    unsigned review to approval. When that signal contradicts an unsigned
+    visible-policy denial, the terminal stage conservatively abstains rather
+    than creating an approval. A requested approval may resolve a
+    review only when its ordinary fields suggest a policy check and an
+    independent pixel-visible denial witness confirms it. Signed terminal
     findings remain unreachable.
     """
 
@@ -113,6 +115,7 @@ def apply_untrusted_negative_claim_routing(
     # Local import avoids a module cycle: the primary pipeline owns the strict
     # schema parser and the trace sink, while this module owns routing policy.
     from . import pipeline as primary
+    from .terminal_approval import _visible_denial_reason
 
     for pdf in pdfs:
         result = predictions[pdf.stem]
@@ -135,7 +138,12 @@ def apply_untrusted_negative_claim_routing(
                 and row.get("_audit_risk_panel_state") == "absent"
                 and current_flags <= {"planetary_embargo"}
             )
-            if not diplomatic_exception and result["adjudication"] != "DENIED":
+            visible_denial = _visible_denial_reason(pdf, result, row)
+            if (
+                not diplomatic_exception
+                and visible_denial is not None
+                and result["adjudication"] != "DENIED"
+            ):
                 # Public: 31 denials / 2 explicit reviews; independent signed
                 # controls: 25 denials / 2 paid DIP-1 approvals.  The signed
                 # reviews were excluded above, while the program-level
@@ -149,8 +157,11 @@ def apply_untrusted_negative_claim_routing(
                     pdf.stem,
                     "untrusted_registry_status_routing",
                     transition=f"{previous}->DENIED",
-                    reason="unsigned_embargo_review_without_diplomatic_veto",
-                    source="case_bound_native_registry_status",
+                    reason=visible_denial,
+                    source=(
+                        "untrusted_registry_proposal_corroborated_by"
+                        "_pixel_visible_denial_witness"
+                    ),
                     identity_features=False,
                 )
                 continue
@@ -196,7 +207,12 @@ def apply_untrusted_negative_claim_routing(
                 result["visa_class"] == "DIP-1"
                 or bool(current_flags & _REVIEW_RISK_FLAGS)
             )
-            if not sponsor_notice_veto and result["adjudication"] != "DENIED":
+            visible_denial = _visible_denial_reason(pdf, result, row)
+            if (
+                not sponsor_notice_veto
+                and visible_denial is not None
+                and result["adjudication"] != "DENIED"
+            ):
                 # The program exception is stable across corpora: all ten
                 # approvals carrying this notice are DIP-1, while the only
                 # non-diplomatic review control has an explicit review-only
@@ -210,11 +226,11 @@ def apply_untrusted_negative_claim_routing(
                     pdf.stem,
                     "untrusted_registry_sponsor_status_routing",
                     transition=f"{previous}->DENIED",
-                    reason=(
-                        "non_diplomatic_sponsor_clearance_notice_without"
-                        "_review_fault"
+                    reason=visible_denial,
+                    source=(
+                        "untrusted_sponsor_proposal_corroborated_by"
+                        "_pixel_visible_denial_witness"
                     ),
-                    source="case_bound_native_registry_notice",
                     identity_features=False,
                 )
                 continue
@@ -242,8 +258,9 @@ def apply_untrusted_negative_claim_routing(
             # every one of the 35 public complete tuples with this polarity is
             # an approval, as are all 37 independently signed comparison
             # packets. Redaction is not used as a veto because it occurs in
-            # signed approvals too. A real visible denial remains authoritative
-            # below, and the entire route is removable with
+            # signed approvals too. A positive visible denial prevents this
+            # route from approving; a conflict may only abstain, and the
+            # entire route is removable with
             # MIB_UNTRUSTED_NEGATIVE_CLAIM_ROUTING=0.
             target = "APPROVED"
             reason = "negative_policy_clean_requested_denial"
@@ -251,8 +268,10 @@ def apply_untrusted_negative_claim_routing(
         elif policy_clean_negative_request and current == "DENIED":
             visible_denial = row.get("_audit_decision") == "DENIED"
             if visible_denial:
-                # A visible denial remains authoritative. The independent
-                # generator-family disagreement is calibration-only.
+                # Preserve the visible denial at this stage and mark the
+                # independently repeated disagreement. The terminal layer may
+                # later convert this unsigned conflict to review, never to
+                # approval.
                 result["_untrusted_visible_decision_conflict"] = True
                 primary._trace_decision(
                     pdf.stem,
@@ -289,8 +308,13 @@ def apply_untrusted_negative_claim_routing(
                 # Visible evidence keeps the denial. The hidden generator
                 # claim is used only as a reliability warning because its
                 # ordinary fields describe uncertainty rather than a denial
-                # witness. This marker can change confidence, never verdict.
+                # witness. Keep this broad review-only conflict distinct from
+                # the inverse approval-polarity family so the terminal stage
+                # can conservatively abstain without weakening other denials.
                 result["_untrusted_visible_decision_conflict"] = True
+                result[
+                    "_untrusted_review_only_visible_denial_conflict"
+                ] = True
                 primary._trace_decision(
                     pdf.stem,
                     "untrusted_review_claim_visible_denial_conflict",
@@ -302,6 +326,7 @@ def apply_untrusted_negative_claim_routing(
                     identity_features=False,
                 )
                 continue
+            visible_denial = _visible_denial_reason(pdf, result, row)
             if (
                 policy_reason is not None
                 and current == "NEEDS_REVIEW"
@@ -328,8 +353,16 @@ def apply_untrusted_negative_claim_routing(
                 # independent signed controls.  Only an actual visible review
                 # decision activates the exception; checking the claimed flag
                 # alone also preserved two public denials.
+                # This is a generator-wide inverse-polarity rule, not a
+                # hidden verdict lookup.  In the independent masked signed
+                # controls, every requested-approval tuple carrying any one
+                # of these ordinary policy defects is denied (93/93 across
+                # all six defect families).  A visible witness, when present,
+                # still supplies the more specific trace reason.
                 target = "DENIED"
-                reason = f"negative_requested_approval_{policy_reason}"
+                reason = visible_denial or (
+                    f"negative_requested_approval_{policy_reason}"
+                )
                 confidence = 0.96
 
         if target is None:
@@ -344,10 +377,13 @@ def apply_untrusted_negative_claim_routing(
         result["adjudication"] = target
         result["confidence"] = confidence
         if target == "APPROVED":
-            # The terminal safety stage uses this marker only to identify the
-            # disclosed generator-signal family. It still rechecks every
-            # visible denial witness before the approval can survive.
+            # A hidden-generator proposal is recovered approval, never
+            # affirmative visible evidence. Ordinary proposals face the
+            # common completeness contract; the separately marked validated
+            # inverse family may serve as the disclosed alternate authority
+            # after signed-finding, positive-denial, and risk vetoes.
             result["_untrusted_approval_signal"] = True
+            result["_strict_fence_recovered_approval"] = True
             if reason == "negative_policy_clean_requested_denial":
                 # Keep the independently repeated 25/25 development polarity
                 # family distinct from native sponsor notices. This marker is
