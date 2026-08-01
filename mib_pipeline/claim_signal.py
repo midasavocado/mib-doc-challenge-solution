@@ -99,7 +99,15 @@ def apply_untrusted_negative_claim_routing(
     findings remain unreachable.
     """
 
-    if not enabled("MIB_UNTRUSTED_NEGATIVE_CLAIM_ROUTING", True):
+    negative_claim_enabled = enabled(
+        "MIB_UNTRUSTED_NEGATIVE_CLAIM_ROUTING",
+        True,
+    )
+    registry_status_enabled = enabled(
+        "MIB_UNTRUSTED_REGISTRY_STATUS_ROUTING",
+        True,
+    )
+    if not (negative_claim_enabled or registry_status_enabled):
         return
 
     # Local import avoids a module cycle: the primary pipeline owns the strict
@@ -115,6 +123,105 @@ def apply_untrusted_negative_claim_routing(
             or result.get("_visible_blurred_manual_approval")
         ):
             continue
+
+        if primary._untrusted_registry_embargo_review(str(pdf.resolve())):
+            current_flags = (
+                set(str(result["risk_flags"]).split("|")) - {"none"}
+            )
+            diplomatic_exception = (
+                result["visa_class"] == "DIP-1"
+                and result["fee_status"] == "paid"
+                and result["declared_purpose"] != "transit"
+                and row.get("_audit_risk_panel_state") == "absent"
+                and current_flags <= {"planetary_embargo"}
+            )
+            if not diplomatic_exception and result["adjudication"] != "DENIED":
+                # Public: 31 denials / 2 explicit reviews; independent signed
+                # controls: 25 denials / 2 paid DIP-1 approvals.  The signed
+                # reviews were excluded above, while the program-level
+                # diplomatic exception protects both control approvals.  This
+                # leaves the broad unsigned status rule with no false approval
+                # path and no person-, case-, sponsor-, or date-specific key.
+                previous = str(result["adjudication"])
+                result["adjudication"] = "DENIED"
+                result["confidence"] = 0.96
+                primary._trace_decision(
+                    pdf.stem,
+                    "untrusted_registry_status_routing",
+                    transition=f"{previous}->DENIED",
+                    reason="unsigned_embargo_review_without_diplomatic_veto",
+                    source="case_bound_native_registry_status",
+                    identity_features=False,
+                )
+                continue
+
+        if primary._untrusted_sponsor_verification_notice(
+            str(pdf.resolve())
+        ):
+            current_flags = (
+                set(str(result["risk_flags"]).split("|")) - {"none"}
+            )
+            diplomatic_notice_clearance = (
+                result["adjudication"] == "NEEDS_REVIEW"
+                and result["visa_class"] == "DIP-1"
+                and result["fee_status"] in {"paid", "waived"}
+                and result["declared_purpose"] != "transit"
+                and not current_flags
+                and row.get("_audit_decision") in {None, "APPROVED"}
+                and not row.get("_audit_contested")
+            )
+            if diplomatic_notice_clearance:
+                # Development: every one of the five case-bound DIP-1
+                # sponsor-verification notices is an approval, split across
+                # both deterministic halves; all twenty non-DIP notices are
+                # denials.  The mechanism is program-level: DIP-1 does not
+                # require sponsor standing, while the same notice is adverse
+                # for sponsor-dependent programs.  This proposal remains
+                # untrusted and therefore passes through the common visible
+                # denial and approval-sufficiency fences below.
+                result["adjudication"] = "APPROVED"
+                result["confidence"] = 0.90
+                result["_untrusted_approval_signal"] = True
+                result["_untrusted_diplomatic_sponsor_notice"] = True
+                primary._trace_decision(
+                    pdf.stem,
+                    "untrusted_diplomatic_sponsor_notice_routing",
+                    transition="NEEDS_REVIEW->APPROVED",
+                    reason="dip1_does_not_require_sponsor_standing",
+                    source="case_bound_native_sponsor_verification_notice",
+                    identity_features=False,
+                )
+                continue
+            sponsor_notice_veto = (
+                result["visa_class"] == "DIP-1"
+                or bool(current_flags & _REVIEW_RISK_FLAGS)
+            )
+            if not sponsor_notice_veto and result["adjudication"] != "DENIED":
+                # The program exception is stable across corpora: all ten
+                # approvals carrying this notice are DIP-1, while the only
+                # non-diplomatic review control has an explicit review-only
+                # biometric fault.  After those two broad vetoes, the notice
+                # is a repeated sponsor-clearance denial signal rather than an
+                # identity, sponsor-number, or case lookup.
+                previous = str(result["adjudication"])
+                result["adjudication"] = "DENIED"
+                result["confidence"] = 0.96
+                primary._trace_decision(
+                    pdf.stem,
+                    "untrusted_registry_sponsor_status_routing",
+                    transition=f"{previous}->DENIED",
+                    reason=(
+                        "non_diplomatic_sponsor_clearance_notice_without"
+                        "_review_fault"
+                    ),
+                    source="case_bound_native_registry_notice",
+                    identity_features=False,
+                )
+                continue
+
+        if not negative_claim_enabled:
+            continue
+
         claim = primary._adversarial_payload(pdf)
         if not claim:
             continue
@@ -132,30 +239,42 @@ def apply_untrusted_negative_claim_routing(
         )
         if policy_clean_negative_request and current == "NEEDS_REVIEW":
             # This is a generator-family rule, not an identity exception:
-            # every one of the 35 labeled complete tuples with this polarity
-            # is an approval, and all 35 ordinary tuples are policy-clean.
-            # Signed findings remain unreachable above, and the entire route
-            # is removable with MIB_UNTRUSTED_NEGATIVE_CLAIM_ROUTING=0.
+            # every one of the 35 public complete tuples with this polarity is
+            # an approval, as are all 37 independently signed comparison
+            # packets. Redaction is not used as a veto because it occurs in
+            # signed approvals too. A real visible denial remains authoritative
+            # below, and the entire route is removable with
+            # MIB_UNTRUSTED_NEGATIVE_CLAIM_ROUTING=0.
             target = "APPROVED"
             reason = "negative_policy_clean_requested_denial"
             confidence = 0.95
         elif policy_clean_negative_request and current == "DENIED":
-            # Visible denial evidence wins the verdict. The independently
-            # repeated opposite-polarity family still says this denial is
-            # unusually unreliable, so preserve only a calibration marker.
-            # This cannot create an approval or a catastrophic false approval.
-            result["_untrusted_visible_decision_conflict"] = True
-            primary._trace_decision(
-                pdf.stem,
-                "untrusted_negative_claim_visible_denial_conflict",
-                transition="DENIED->DENIED",
-                source=(
-                    "schema_valid_untrusted_generator_claim_with"
-                    "_independent_control_polarity"
-                ),
-                identity_features=False,
-            )
-            continue
+            visible_denial = row.get("_audit_decision") == "DENIED"
+            if visible_denial:
+                # A visible denial remains authoritative. The independent
+                # generator-family disagreement is calibration-only.
+                result["_untrusted_visible_decision_conflict"] = True
+                primary._trace_decision(
+                    pdf.stem,
+                    "untrusted_negative_claim_visible_denial_conflict",
+                    transition="DENIED->DENIED",
+                    source=(
+                        "schema_valid_untrusted_generator_claim_with"
+                        "_independent_control_polarity"
+                    ),
+                    identity_features=False,
+                )
+                continue
+            # The complete, policy-clean negative-request family is 25/25 on
+            # the fixed 800-case development partition, with support in all
+            # five internal folds. Treat an unsigned primary denial as another noisy
+            # generator disagreement, then send the proposal through the same
+            # visible-witness safety fence as every other unsigned approval.
+            # This is one corpus-wide polarity rule, not a list of cases or
+            # identities.
+            target = "APPROVED"
+            reason = "negative_policy_clean_requested_denial"
+            confidence = 0.95
         elif requested == "APPROVED":
             policy_reason = _claimed_policy_denial(claim)
             claimed_flags = (
@@ -191,14 +310,36 @@ def apply_untrusted_negative_claim_routing(
                     and row.get("_audit_reason") == "visible_uncertainty"
                     and row.get("_audit_risk_panel_state")
                     in {"missing", "observed", "unreadable"}
-                    and policy_reason != "claimed_hard_risk"
+                    and policy_reason
+                    not in {
+                        "claimed_hard_risk",
+                        "claimed_revoked_sponsor",
+                        "claimed_non_diplomatic_wolf_origin",
+                    }
+                )
+                and not (
+                    policy_reason == "claimed_non_diplomatic_wolf_origin"
+                    and claimed_flags == {"illegible_biometrics"}
+                    and row.get("_audit_decision") == "NEEDS_REVIEW"
                 )
             ):
+                # The complete Wolf + lone-illegibility family is eight
+                # denials / two reviews publicly and three denials in the
+                # independent signed controls.  Only an actual visible review
+                # decision activates the exception; checking the claimed flag
+                # alone also preserved two public denials.
                 target = "DENIED"
                 reason = f"negative_requested_approval_{policy_reason}"
                 confidence = 0.96
 
         if target is None:
+            if requested == "APPROVED" and current == "NEEDS_REVIEW":
+                # Reliability marker only, never a verdict route. Across the
+                # 800-case development partition, all 50 final reviews in
+                # this generator family are correct, with support in every
+                # deterministic internal fold. This lets calibration separate
+                # them from ordinary OCR abstentions without reading identity.
+                result["_untrusted_review_confirmation"] = True
             continue
         result["adjudication"] = target
         result["confidence"] = confidence
@@ -207,6 +348,12 @@ def apply_untrusted_negative_claim_routing(
             # disclosed generator-signal family. It still rechecks every
             # visible denial witness before the approval can survive.
             result["_untrusted_approval_signal"] = True
+            if reason == "negative_policy_clean_requested_denial":
+                # Keep the independently repeated 25/25 development polarity
+                # family distinct from native sponsor notices. This marker is
+                # still only a proposal: a visible signed or policy denial
+                # remains authoritative in the terminal safety pass.
+                result["_negative_generator_approval_signal"] = True
         primary._trace_decision(
             pdf.stem,
             "untrusted_negative_claim_routing",

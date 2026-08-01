@@ -4,7 +4,116 @@ This file preserves the detailed experiment history in chronological form.
 For the current architecture, measured result, and engineering rationale, see
 [`MEMO.md`](MEMO.md).
 
-Last updated: 2026-07-30
+Last updated: 2026-07-31
+
+## 2026-07-31 — generalized 800-case candidate replaces 145.7151 checkpoint
+
+- Kept the prospective 200-case audit partition sealed. Every manual review,
+  rendered-page inspection, calibration study, and learned experiment in this
+  round used only the fixed 800 development packets.
+- Removed or fenced the small categorical routes identified by the rules
+  audit. The exact replacement candidate scored **46.965278 extraction**,
+  **77.325 classification**, **18.834415 calibration**, and **143.124693
+  total**, with **0 catastrophic false approvals** and 800/800 valid rows.
+- Recorded prediction SHA-256
+  `dcabd9e4f3b1b28c2fe578268ad3bf5f25991b819df767cb8417df541a8df63d`
+  and evaluation SHA-256
+  `6ef64f2a37c31c352d94a7d14f102c128b48187484881505328243f752cc0d24`.
+- Rejected an identity-free logistic confidence model, a route-provenance
+  smoother, a conservative review resolver, logistic/forest extraction
+  imputers, and rendered-portrait features. Each failed five internal 640/160
+  folds or produced no stable net gain; no model or temporary artifact was
+  retained.
+- Measured **1,322.50 seconds / 1.653 seconds per PDF** for the complete warm
+  host run. The primary pass took 1,003.5 seconds; the 319-second tail exposed
+  duplicate B-13 RapidOCR work.
+- Reused the independent audit's immutable pixel-page cache in the late
+  multi-flag repair instead of rasterizing and recognizing the same B-13 a
+  second time. Limited BLAS/OpenMP backends to one thread per packet worker to
+  avoid four-by-four CPU oversubscription.
+- Replayed the frozen 800-row candidate after the runtime and evidence
+  invariants. Predictions remained byte-for-byte identical, while warm-host
+  runtime improved to **1,243.59 seconds / 1.554 seconds per PDF**.
+- A cold Docker slice exposed two Linux-OCR false approvals hidden by the warm
+  host cache. Added two general guards: every categorical synthetic-program
+  predicate must have an exact visible observation, and a 0.99 review cannot
+  be reopened by the weak-recovery stage. On the fixed 200-row development
+  runtime slice, exactly those two verdicts moved to correct reviews. The
+  organizer evaluator measured **46.572222 extraction**, **76.55
+  classification**, **18.40768 calibration**, **141.529902 total**, and **0
+  catastrophic false approvals**.
+- The first constrained safety replay completed in **886.61 seconds / 4.433
+  seconds per PDF** under four CPUs, 8 GiB RAM, no network, read-only root, and
+  the organizer validator. The final optimized image repeated it in **760.34
+  seconds / 3.802 seconds per PDF** and produced byte-identical predictions.
+  Prediction/evaluation SHA-256 values are
+  `17b462ae683ffd935f2527244161089df21c0b66ac195203865d4f11e681e5a6`
+  and `379f119961aa3b7ce0b2555ec3568b4bf750800c1a200dec9da03269f467f2c0`.
+- Scoped 400-DPI sponsor/visa arbitration to relevant labeled pages and ran
+  independent June/August glyph checks four-at-a-time. The latter reproduced
+  the same three intermediate repairs across all 14 eligible development
+  packets in **17.88 seconds**; no verdict or confidence can change in either
+  output-only stage.
+
+## 2026-07-31 — frozen 800-case candidate reaches 145.7151
+
+- Restricted all new manual inspection, pattern discovery, extraction work,
+  and confidence fitting to the deterministic 800-case development partition.
+  The 200-case prospective holdout remained sealed. The split commitments and
+  one accidental small label-print contamination disclosure are in
+  `RULES.md`.
+- Replaced error-shaped terminal exceptions with reusable source-topology and
+  fictional-program hypotheses. Every active proposal records its full
+  development cohort, closest controls, fold coverage, safety vetoes, and a
+  plausible in-world authorization mechanism. No case ID, applicant identity,
+  filename, order, hash, fingerprint, or answer table reaches adjudication.
+- Added broad approval quorums for complete biometric/registry/sponsor chains
+  and recurring fictional clearance interfaces. Added symmetric review or
+  denial rules for missing program authority, waiver incompatibility, and
+  compound unreadable mandatory evidence. All remain jointly ablatable with
+  `MIB_EXPERIMENTAL_SYNTHETIC_POLICY=0`.
+- Rejected a tempting paid MED-3 research approval because its apparent
+  support depended on a batch-imputed visa rather than affirmative visible
+  evidence. The rule and experiment code were removed.
+- Fit identity-free reliability families under five exact 640/160 internal
+  folds with Beta(1,1) smoothing. The cross-fitted aggregate projected
+  **145.6502/150**, including **79.2125 classification**, **19.5475
+  calibration**, and **0 CFA**.
+- Froze and ran the exact 800-case candidate. The organizer evaluator measured
+  **47.031944 extraction**, **79.1375 classification**, **19.545635
+  calibration**, **145.715079 total**, and **0 catastrophic false approvals**.
+  The organizer validator accepted all 800 expected rows with no missing,
+  extra, duplicate, or invalid records.
+- Recorded prediction SHA-256
+  `12e0c06884bd9cb6a2c3c93c6665f12670ecc67e8d4ecf17c60124ea28c2674e`
+  and evaluation SHA-256
+  `cd28daa4416f14c8a210bceecfbb0eba7ed2f1071019508b59a19e34c5aada68`.
+- Measured approximately 1,504 seconds / 1.88 seconds per PDF on the warm host
+  path. A stack sample identified the sequential high-resolution
+  sponsor/visa arbitration pass as the remaining concrete runtime bottleneck;
+  constrained Docker acceptance for this frozen source remains pending.
+
+## 2026-07-31 — full-fit forest rejected under the 800/200 rule
+
+- Built an identifier-free candidate-trained forest as an exploratory ceiling.
+  It projected 146.43/150 on the same public rows used for fitting.
+- Ran the required five deterministic train-800/test-200 folds before
+  promotion. Combined held-out classification was only **72.20/80** at 88.4%
+  accuracy with **7 catastrophic false approvals**; fold scores were 14.08,
+  15.08, 14.61, 14.48, and 13.95 out of 16.
+- Rejected and deleted the forest, runtime hook, model artifact, feature flag,
+  trainer, and model card. No full-fit learned adjudicator remains in the
+  active source or Docker image.
+- Added `RULES.md` and then froze a prospective 800-case development / 200-case
+  holdout boundary. Future learned models use five 640/160 folds inside the
+  development partition before one frozen 800/200 audit; manual discovery is
+  likewise restricted to the 800. Every pattern must satisfy generality,
+  counterexample, identity-exclusion, and catastrophic-approval gates before
+  promotion.
+- Retained one independent extraction invariant: a final approval with no
+  pixel-observed positive risk row cannot emit an unsupported inferred review
+  flag. Without the rejected model it repairs 12 public cells with zero
+  regressions and cannot change adjudication or confidence.
 
 ## 2026-07-30 — clean-room engine exceeds removed engine
 

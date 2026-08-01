@@ -91,6 +91,13 @@ EVIDENCE_FLAGS = (
         "retain their verdict.",
     ),
     FeatureFlag(
+        "MIB_UNTRUSTED_REGISTRY_STATUS_ROUTING",
+        "1",
+        "Use a case-bound native registry-status phrase as a disclosed "
+        "classification proposal; signed findings and the diplomatic "
+        "exception veto it.",
+    ),
+    FeatureFlag(
         "MIB_CORROBORATED_PAYLOAD_EXTRACTION",
         "1",
         "Use a schema-valid hidden tuple only to select or denoise a value "
@@ -105,8 +112,15 @@ EVIDENCE_FLAGS = (
     FeatureFlag(
         "MIB_UNTRUSTED_PAYLOAD_PROJECTION",
         "1",
-        "Allow audited non-template hidden fields to fill unsupported "
-        "outputs; never replaces active visible evidence or changes policy.",
+        "Use a complete non-template hidden tuple as a final output-only "
+        "denoiser; published sample values stay blocked and policy is "
+        "structurally unreachable.",
+    ),
+    FeatureFlag(
+        "MIB_UNTRUSTED_NATIVE_OUTPUT_READER",
+        "1",
+        "Read a case-bound raw B-13 or registry name only at the final "
+        "output boundary; intake text, policy, and confidence are excluded.",
     ),
     # Terminal classification boundary.
     FeatureFlag(
@@ -115,10 +129,23 @@ EVIDENCE_FLAGS = (
         "Enable the general multisource approval quorum.",
     ),
     FeatureFlag(
+        "MIB_HIGH_RES_CLEAN_RISK",
+        "1",
+        "Confirm a damaged B-13 clean-risk row from two high-resolution "
+        "active-case pixel reads before applying the ordinary source quorum.",
+    ),
+    FeatureFlag(
         "MIB_STRICT_APPROVAL_SAFETY",
         "1",
         "Demote unsigned approvals with unsupported fee authorization, an "
         "explicitly missing MED-3 B-13, or an archival waiver-authority gap.",
+    ),
+    FeatureFlag(
+        "MIB_STRICT_FENCE_RECOVERY",
+        "1",
+        "Recover a strict-fence review only from a repeated negative claim, "
+        "a sponsor-plus-registry coverage quorum, or a clean low-risk "
+        "purpose; an independent jurisdictional sponsor veto runs first.",
     ),
     FeatureFlag(
         "MIB_EXPERIMENTAL_SYNTHETIC_POLICY",
@@ -172,12 +199,15 @@ ALL_FEATURE_FLAGS = OPERATIONAL_FLAGS + EVIDENCE_FLAGS
 EVIDENCE_PROFILES = {
     "visible_evidence_only": {
         "MIB_UNTRUSTED_NEGATIVE_CLAIM_ROUTING": "0",
+        "MIB_UNTRUSTED_REGISTRY_STATUS_ROUTING": "0",
         "MIB_CORROBORATED_PAYLOAD_EXTRACTION": "0",
         "MIB_NON_TEMPLATE_PAYLOAD_RECONCILIATION": "0",
         "MIB_UNTRUSTED_PAYLOAD_PROJECTION": "0",
+        "MIB_UNTRUSTED_NATIVE_OUTPUT_READER": "0",
     },
     "experimental_signals_off": {
         "MIB_UNTRUSTED_NEGATIVE_CLAIM_ROUTING": "0",
+        "MIB_UNTRUSTED_REGISTRY_STATUS_ROUTING": "0",
         "MIB_EXPERIMENTAL_SYNTHETIC_POLICY": "0",
     },
 }
@@ -209,9 +239,11 @@ def runtime_mode() -> str:
 
     payload_flags = (
         "MIB_UNTRUSTED_NEGATIVE_CLAIM_ROUTING",
+        "MIB_UNTRUSTED_REGISTRY_STATUS_ROUTING",
         "MIB_CORROBORATED_PAYLOAD_EXTRACTION",
         "MIB_NON_TEMPLATE_PAYLOAD_RECONCILIATION",
         "MIB_UNTRUSTED_PAYLOAD_PROJECTION",
+        "MIB_UNTRUSTED_NATIVE_OUTPUT_READER",
     )
     if any(enabled(name, True) for name in payload_flags):
         return "visible-evidence+disclosed-untrusted-signal"

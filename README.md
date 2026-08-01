@@ -8,44 +8,49 @@ packets into one schema-valid JSONL record per case.
 `4 CPU workers` · `No network at inference` · `Deterministic policy` ·
 `Docker-ready` · `Feature-flagged evidence boundaries`
 
+Development and promotion are governed by the stricter
+[`RULES.md`](RULES.md) contract. New manual patterns use only a frozen 800-row
+development set; learned components additionally require five internal
+640/160 folds inside those 800 rows, followed by one frozen 800/200 audit.
+
 ## Current result status
 
-The previous 143-point full-corpus replay depended on dozens of small terminal
-profiles. Those profiles were removed rather than renamed. The current code
-uses general evidence rules plus four explicitly disclosed, ablatable
-low-support hypotheses.
+The current generalized 800-case development candidate measured:
 
-The latest completed cold, constrained Docker replay processed all 1,000
-packets and validated every output row:
-
-| Evaluator section | Measured score |
+| Evaluator section | Exact development score |
 |---|---:|
-| Extraction | 45.6233 / 50 |
-| Classification | 66.11 / 80 |
-| Calibration | 16.9163 / 20 |
-| **Total** | **128.6496 / 150** |
+| Extraction | 46.9653 / 50 |
+| Classification | 77.3250 / 80 |
+| Calibration | 18.8344 / 20 |
+| **Total** | **143.1247 / 150** |
 | Catastrophic false approvals | **0** |
+| Valid / expected rows | **800 / 800** |
 
-That replay was a safety experiment, not the current promoted candidate. It
-proved that the five earlier catastrophic approvals could be removed, but its
-global pixel-readable-visa and broad MED-3 gates also sent 124 true approvals
-to review. Those two blunt predicates were rejected. The current source keeps
-the zero-CFA evidence families while narrowing them to:
+This is the first exact run after a rules audit removed a recovered-approval
+evidence bypass and several two-row program cells. The earlier 145.7151 result
+is preserved as a superseded historical checkpoint, not presented as the
+current score. The deterministic 200-case prospective holdout remains sealed.
+Complete support, controls, rejected experiments, split commitments, and one
+known boundary-contamination disclosure are in [`RULES.md`](RULES.md).
 
-- no visible fee authorization on an unsigned approval;
-- an archival intake as the only non-diplomatic visa source for a waiver; and
-- an explicitly missing B-13 panel on MED-3, a 6/6 denial source state.
+A second frozen-candidate replay after the Docker safety and scheduling work
+was byte-for-byte identical to this 800-row artifact. The two Docker-specific
+false approvals found on a 200-row development-only runtime slice were removed
+with general evidence invariants: categorical program predicates must be
+visible, and an authenticated 0.99 review cannot be reopened by a synthetic
+program rule.
 
-A paired 25-case Docker smoke test contains all five former catastrophic
-approvals and 20 evenly spaced true approvals from the changed set. All five
-dangerous approvals remained `NEEDS_REVIEW`; ordinary MED-3 approvals that
-were collateral damage under the broad rule returned to `APPROVED`. A fresh
-1,000-case replay of this narrowed source remains pending, so no exact current
-full score is claimed.
+The decision layer uses visible/source-bound evidence rules plus explicitly
+disclosed, jointly ablatable fictional-program hypotheses. It contains no
+case-ID, filename, applicant-name, row-order, hash, image-fingerprint, or
+answer-table adjudication feature. Low-support hypotheses remain disclosed as
+transfer risks rather than being promoted into universal facts.
 
-The earlier frozen 80-case development replay scored 145.2028/150 with zero
-catastrophic approvals. It remains a useful diagnostic, but it is not a
-full-corpus acceptance or an untouched holdout.
+For historical context, a rejected broad safety fence scored 128.6496 on a
+cold constrained 1,000-PDF Docker replay. It removed five catastrophic false
+approvals but incorrectly demoted 124 true approvals, so that fence is not the
+current policy. The historical result remains in [`CHANGELOG.md`](CHANGELOG.md)
+instead of being presented as the current score.
 
 ## Architecture
 
@@ -76,6 +81,11 @@ The main extractor and the new pixel audit are deliberately independent. A
 second read can fill an unresolved field or surface a direct policy witness,
 but it cannot overwrite a supported value merely because another OCR model
 disagrees.
+
+After the verdict is final, one cross-field invariant removes an unsupported
+late risk guess from an approval when the pixel audit observed no positive risk
+row. An approved record cannot simultaneously claim an inferred review-only
+risk. This extraction-only repair changes neither adjudication nor confidence.
 
 | Component | Responsibility |
 |---|---|
@@ -108,20 +118,20 @@ on a registry, sponsor, or signed-note source. A visibly blank or explicitly
 unreadable cell cannot. This rule covers dozens of packets and never reads an
 identity or exact-date value as a class signal.
 
-The terminal module contains one general evidence-quorum rule plus four
-explicitly experimental program/structure clearance hypotheses. The
-general rule checks source coverage, fee authorization, arrival support,
-risk-panel state, conflicts, unknown pages, and published policy conditions.
-Neither path uses case IDs, applicant names, sponsor fingerprints, exact
-dates, file hashes, row order, or a public-label lookup table.
+The terminal module contains general evidence quorums plus a disclosed
+experimental fictional-program layer. Every unsigned recovery is passed
+through the same final contract: visible fee support, visible arrival support,
+source-backed core fields, and clean risk authority or a separately documented
+source-complete alternate interface. Neither layer uses case IDs, applicant
+names, sponsor fingerprints, exact dates, file hashes, row order, or a
+public-label lookup table.
 
 ### Experimental program and damaged-page policies
 
 The species-sensitive rules do **not** mean “this species is bad.” Each models
-a possible program-specific clearance requirement suggested by the labeled
-corpus. A fourth rule distinguishes a physically present but unreadable extra
-page from a genuinely missing page. Support is small, so every rule is
-disclosed, commented beside its predicate, and removable as one ablation with
+a possible program-specific clearance requirement suggested by the 800-case
+development corpus. Support is small, so every rule is disclosed, commented
+beside its predicate, and removable as one ablation with
 `MIB_EXPERIMENTAL_SYNTHETIC_POLICY=0`.
 
 | Scope | Observed labeled pattern | Plausible in-world policy hypothesis | Action |
@@ -129,11 +139,13 @@ disclosed, commented beside its predicate, and removable as one ablation with
 | `ANDROMEDAN` + `XW-1`, non-diplomatic, sparse packet, no clean risk panel | 4/4 matching examples are denied | Short-term technical authority does not replace neural-integrity clearance for Andromedan interfaces | `DENIED` at 0.92 |
 | `LUNA_SECURID` + `XW-2` + medical consult, no readable risk panel | 3/3 matching examples require review | Security chassis need a medical compatibility/biometric check under technical authority | Preserve `NEEDS_REVIEW` at 0.84 |
 | `AQUARIAN_MANTIS` + `XW-1`, no readable risk panel | 4 reviews and 2 denials; no approvals | This species/visa program may require a specialized biometric clearance | Preserve `NEEDS_REVIEW` at 0.67 |
-| Agreeing intake + registry + sponsor triad, one extra damaged page, paid fee, non-MED-3 | 2/2 matching examples are approved; adverse/review triad controls have no extra page | A physically attached damaged clearance sheet distinguishes attempted completion from an absent sheet | `APPROVED` at the ordinary unsigned-approval bin |
+| Jovian gas form at Titan Freeport with fee authority | 5/5 approvals across four folds | Titan operates an electronic gas-form corridor | May propose approval, but the universal recovered-approval evidence contract still applies |
+| Barnard-c with all five ordinary source types | 4/4 approvals across three folds | Redundant five-source authority can tolerate an ancillary damaged read | May propose approval; mandatory risk, fee, arrival, and core-field checks still veto |
 
 The rationale is a testable fictional-world hypothesis, not proof of causation.
-The Andromedan rule is the riskiest because it makes a terminal denial from
-four examples; the other two only prevent an unsupported approval.
+The Andromedan denial remains the riskiest small cohort. Program approval
+predicates are proposals only; the final source-completeness fence is not
+ablatable and runs after recovery.
 
 Home-world checks are a separate fictional jurisdiction policy, not a species
 or applicant trust score. All 51 labeled non-diplomatic `Wolf-1061c` packets
@@ -240,12 +252,16 @@ interface; `1` enables and `0` disables a Boolean flag.
 | Flag | Default | Purpose |
 |---|---:|---|
 | `MIB_UNTRUSTED_NEGATIVE_CLAIM_ROUTING` | `1` | Disclosed negative-polarity generator signal |
+| `MIB_UNTRUSTED_REGISTRY_STATUS_ROUTING` | `1` | Disclosed native registry-status proposal |
 | `MIB_CORROBORATED_PAYLOAD_EXTRACTION` | `1` | Pixel-corroborated hidden-field candidate |
 | `MIB_NON_TEMPLATE_PAYLOAD_RECONCILIATION` | `1` | Narrow output-only disagreement repair |
 | `MIB_UNTRUSTED_PAYLOAD_PROJECTION` | `1` | Output-only repair from audited non-template hidden values |
+| `MIB_UNTRUSTED_NATIVE_OUTPUT_READER` | `1` | Final output-only B-13/registry field reader |
 | `MIB_TERMINAL_SOURCE_RULES` | `1` | General visible multisource approval quorum |
-| `MIB_STRICT_APPROVAL_SAFETY` | `1` | Demote unsigned approvals lacking risk/date evidence |
-| `MIB_EXPERIMENTAL_SYNTHETIC_POLICY` | `1` | Apply the four disclosed low-support program/structure hypotheses |
+| `MIB_HIGH_RES_CLEAN_RISK` | `1` | Confirm a damaged clean B-13 from two active-case pixel reads |
+| `MIB_STRICT_APPROVAL_SAFETY` | `1` | Demote unsigned approvals with unsupported fee, explicit MED-3 panel, or archival-authority faults |
+| `MIB_STRICT_FENCE_RECOVERY` | `1` | Recover fenced reviews only from disclosed source/program families after independent vetoes |
+| `MIB_EXPERIMENTAL_SYNTHETIC_POLICY` | `1` | Apply the disclosed low-support program/structure hypotheses |
 | `MIB_MANUAL_REASON_FIELD_RECOVERY` | `1` | Parse visible manual-reason fields |
 | `MIB_SPONSOR_VERIFICATION_DENIAL` | `1` | Enforce visible sponsor-verification denial |
 | `MIB_POST_EXTRACTION_REVIEW_GUARD` | `1` | Demote approvals invalidated by late evidence |
@@ -258,13 +274,20 @@ To disable every native hidden-text channel:
 
 ```bash
 export MIB_UNTRUSTED_NEGATIVE_CLAIM_ROUTING=0
+export MIB_UNTRUSTED_REGISTRY_STATUS_ROUTING=0
 export MIB_CORROBORATED_PAYLOAD_EXTRACTION=0
 export MIB_NON_TEMPLATE_PAYLOAD_RECONCILIATION=0
 export MIB_UNTRUSTED_PAYLOAD_PROJECTION=0
+export MIB_UNTRUSTED_NATIVE_OUTPUT_READER=0
 ```
 
 The same mapping is available as
 `EVIDENCE_PROFILES["visible_evidence_only"]` for wrappers and audits.
+
+| Preset | What it disables |
+|---|---|
+| `visible_evidence_only` | Every native/hidden-text classification and extraction channel |
+| `experimental_signals_off` | Both untrusted classification proposals plus all low-support fictional-program rules; output-only hidden extraction remains available |
 
 ### Operational flags
 
@@ -309,24 +332,35 @@ with no network access.
 
 ## Verification
 
-The latest cold Docker replay used organizer commit
-`38ce8883dea9f87c27a8a95f134e54fe8b673064`, four CPUs, 8 GiB RAM, a
-read-only root, and no network. It completed in 4,070.61 seconds, or **4.071
-seconds/PDF**, and validated 1,000/1,000 rows with no missing IDs. That image
-contains the deliberately rejected broad safety fence; the narrowed source
-requires a new exact full replay.
+The frozen generalized development replay used four workers and a warm host
+evidence cache. It completed in **1,243.59 seconds**, or **1.554 seconds/PDF**.
+The primary pass took 989.8 seconds. The current source also runs the unchanged
+source-local June/August glyph votes concurrently; an isolated replay of all
+14 eligible development packets produced the identical three intermediate
+repairs in 17.88 seconds. Host timing is useful engineering evidence, not a
+substitute for the constrained Docker result.
+The organizer source was refreshed first and remains at commit
+`38ce8883dea9f87c27a8a95f134e54fe8b673064`.
 
 | Artifact | SHA-256 |
 |---|---|
+| Generalized 800 development predictions | `dcabd9e4f3b1b28c2fe578268ad3bf5f25991b819df767cb8417df541a8df63d` |
+| Generalized 800 development evaluation | `6ef64f2a37c31c352d94a7d14f102c128b48187484881505328243f752cc0d24` |
+| Generalized Docker development-slice predictions | `17b462ae683ffd935f2527244161089df21c0b66ac195203865d4f11e681e5a6` |
+| Generalized Docker development-slice evaluation | `379f119961aa3b7ce0b2555ec3568b4bf750800c1a200dec9da03269f467f2c0` |
 | Broad-safety Docker predictions | `40296e37807765bb63c179722e1b9b05a598f7726601e1409c23f76ee7bc05c8` |
 | Broad-safety Docker evaluation | `acae436b8479bd1f0d57134bcb4da08b40a0a9b33506632458a02201e5e5cbc4` |
-| Current 80-case predictions | `fc474486be39483356b1a7b6c1d38bc8df39e16bd4f2d05e91f68ce3d504b4f0` |
-| Current 80-case evaluation | `9ca2e8a7b0b2169e22217319d5644c52997c436cf787cb2442f778703fb829ae` |
 
-The official clean Docker replay uses four CPUs, 8 GiB RAM, a read-only root,
-`--network none`, and the organizer validator. The completed broad-safety run
-met that contract; a clean replay of the subsequently narrowed source remains
-pending.
+The clean Docker replay uses four CPUs, 8 GiB RAM, a read-only root,
+`--network none`, `no-new-privileges`, and the organizer validator. On a fixed
+200-packet slice drawn only from the permitted development 800, the generalized
+image scored **141.53/150**: 46.57 extraction, 76.55 classification, 18.41
+calibration, and zero catastrophic false approvals. The final optimized image
+completed the cold replay in **760.34 seconds / 3.802 seconds per PDF**, below
+the four-second headroom target and the organizer's six-second limit. Its
+predictions were byte-identical to the preceding 886.61-second safety replay,
+so the speedup did not trade away output stability. The sealed 200 was not
+mounted or read.
 
 ## Generalization and limits
 
@@ -337,12 +371,22 @@ program hypotheses are isolated behind one flag. The negative-polarity claim
 is a separate, feature-flagged generator signal checked against readable
 signed controls.
 
+Species and home-world values are used only where the synthetic benchmark
+behaves as though it has a recurring program or jurisdiction policy. Surviving
+examples include Titan's electronic gas-form corridor and Barnard-c's
+redundant five-source quorum. Nearby source comments and
+[`RULES.md`](RULES.md) state the fictional mechanism, complete development
+cohort, fold coverage, and independent vetoes. They are not claims about real
+people or a generic “species trust score.” A categorical value can activate
+one of these program hypotheses only when the pixel audit observed that value;
+an imputed or hidden-only category is extraction data, not policy evidence.
+
 That does not make public replay a private-set guarantee:
 
 - the hidden generator channel may not exist or may change on private data;
-- the strict safety fence trades many public approvals for zero projected
-  catastrophic approvals;
-- exact public evaluation was used during development.
+- several complete fictional-program cohorts are small;
+- the exact 143.1247 score is development evidence, not the sealed holdout;
+- the historical 145.7151 score used rules removed by the generalization audit.
 
 Use the flags to run strict ablations, and preserve `NEEDS_REVIEW` when the
 selected evidence mode cannot support a terminal outcome.

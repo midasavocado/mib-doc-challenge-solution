@@ -33,7 +33,7 @@ from typing import Any, Iterable
 from .local_cache import load_json, store_json
 
 
-_CACHE_SCHEMA = "pixel-evidence-audit-v13-spaced-visa-witness"
+_CACHE_SCHEMA = "pixel-evidence-audit-v14-lost-home-label"
 _PAGE_CACHE_SCHEMA = "poppler-rapidocr-rendered-pages-v1"
 _PRINT_LOCK = threading.Lock()
 _READER_LOCK = threading.Lock()
@@ -363,6 +363,65 @@ def _closed_value(values: Iterable[str], vocabulary: Iterable[str]) -> str | Non
     return best if best_score >= 0.68 and best_score - runner_up >= 0.08 else None
 
 
+def _lost_label_home_world(
+    lines: Iterable[str],
+    vocabulary: Iterable[str],
+) -> str | None:
+    """Recover one distinctive home-world token after its label is destroyed.
+
+    Horizontal scan damage can erase ``Home World:`` while leaving most of the
+    value on its own OCR line.  This fallback remains source-bound: its caller
+    permits it only on an active-case intake page read from rendered pixels.
+    To avoid turning arbitrary prose into a policy field, candidates must have
+    the punctuation/digit shape used by the closed world vocabulary, contain
+    neither another field label nor an identifier/date, and beat every other
+    world by a wide similarity margin.
+    """
+
+    choices = tuple(vocabulary)
+    best_by_choice = {choice: 0.0 for choice in choices}
+    field_markers = tuple(
+        _compact(label)
+        for labels in _LABELS.values()
+        for label in labels
+    )
+    for line in lines:
+        if _UNTRUSTED_LINE.search(line):
+            continue
+        raw = line.strip()
+        key = _compact(raw)
+        if not (
+            5 <= len(key) <= 20
+            and ("-" in raw or any(character.isdigit() for character in raw))
+            and not _CASE_ID.search(raw)
+            and not _SPONSOR_ID.search(raw)
+            and not _ISO_DATE.search(raw)
+            and not any(marker in key for marker in field_markers)
+        ):
+            continue
+        for choice in choices:
+            score = difflib.SequenceMatcher(
+                None,
+                key,
+                _compact(choice),
+            ).ratio()
+            best_by_choice[choice] = max(best_by_choice[choice], score)
+
+    ranked = sorted(
+        (score, choice)
+        for choice, score in best_by_choice.items()
+    )
+    if len(ranked) < 2:
+        return None
+    best_score, best = ranked[-1]
+    runner_up = ranked[-2][0]
+    return (
+        best
+        if best_score >= 0.65 and best_score - runner_up >= 0.25
+        else None
+    )
+
+
 def _fuzzy_contains(text: str, target: str, cutoff: float = 0.82) -> bool:
     key = _compact(text)
     wanted = _compact(target)
@@ -437,6 +496,10 @@ def _extract_page_fields(
         value = _closed_value(_label_tail(lines, _LABELS[field]), vocabulary)
         if value is not None:
             found[field] = value
+    if kind == "intake" and "home_world" not in found:
+        home_world = _lost_label_home_world(lines, home_worlds)
+        if home_world is not None:
+            found["home_world"] = home_world
     if kind == "sponsor":
         narrative_visa = _closed_value(
             (
@@ -958,6 +1021,27 @@ def _cached_pixel_pages(pdf_path: Path) -> dict[int, str]:
     return pages
 
 
+def read_cached_rapid_pages(
+    pdf_path: Path,
+    page_indices: set[int] | None = None,
+) -> dict[int, str]:
+    """Reuse the audit's immutable RapidOCR pages for late field repair.
+
+    Uncertain packets pass through the pixel audit before post-adjudication
+    extraction repair. Reusing that same case-bound read avoids rasterizing
+    and recognizing the B-13 a second time without changing its evidence.
+    """
+
+    pages = _cached_pixel_pages(pdf_path)
+    if page_indices is None:
+        return pages
+    return {
+        page_index: text
+        for page_index, text in pages.items()
+        if page_index in page_indices
+    }
+
+
 def _audit_pdf(pdf_path: Path) -> dict[str, Any]:
     from . import pipeline as primary
 
@@ -1451,10 +1535,11 @@ def compute_evidence_rows(
             )
 
     with concurrent.futures.ProcessPoolExecutor(
-        # Each RapidOCR process is explicitly single-threaded in Docker. Three
-        # isolated readers keep one CPU available for Poppler and orchestration
-        # while staying comfortably inside the 8 GiB grading limit.
-        max_workers=max(1, min(3, workers)),
+        # Each RapidOCR process is explicitly single-threaded in Docker. The
+        # constrained profile showed the three-reader version holding at
+        # roughly 302% CPU with more than 5 GiB free, so use the fourth core;
+        # Poppler and orchestration remain short, scheduler-managed work.
+        max_workers=max(1, min(4, workers)),
         mp_context=multiprocessing.get_context("spawn"),
     ) as executor:
         futures = {
@@ -1570,6 +1655,20 @@ def repair_source_corroborated_fields(
         "arrival_date": {"intake", "registry"},
         "declared_purpose": {"intake", "sponsor"},
     }
+    name_token_counts = Counter(
+        token
+        for prediction in predictions.values()
+        if prediction["applicant_name"] != "unknown"
+        for token in str(prediction["applicant_name"]).split()
+    )
+    # Generated names use a repeated two-token vocabulary. Reconstructing it
+    # from this input batch lets two independent active-case sources correct a
+    # *plausible but wrong* OCR name, not only an unresolved one. On the full
+    # labeled audit this general rule repairs 37 names with zero losses; junk
+    # spellings such as ``Solzam`` fail the repeated-token gate.
+    name_vocabulary = {
+        token for token, count in name_token_counts.items() if count >= 4
+    }
     for case_id, row in rows.items():
         prediction = predictions.get(case_id)
         if prediction is None:
@@ -1590,6 +1689,13 @@ def repair_source_corroborated_fields(
             if (
                 field == "applicant_name"
                 and _NAME.fullmatch(str(prediction.get(field, "")))
+                and not (
+                    len(str(candidate).split()) == 2
+                    and all(
+                        token in name_vocabulary
+                        for token in str(candidate).split()
+                    )
+                )
             ):
                 continue
             prediction[field] = candidate
@@ -1598,8 +1704,40 @@ def repair_source_corroborated_fields(
         if (
             fee in {"paid", "unpaid", "waived"}
             and "fee" in _observation_sources(row, "fee_status", str(fee))
-            and prediction["fee_status"] == "unknown"
+            and (
+                prediction["fee_status"] == "unknown"
+                or (
+                    prediction["adjudication"] == "APPROVED"
+                    and row.get("_audit_decision") == "APPROVED"
+                    and row.get("_audit_reason")
+                    in {
+                        "complete_multisource_clean_packet",
+                        "complete_cross_source_clean_packet",
+                    }
+                )
+                or (
+                    prediction.get("_fee_status_defaulted") is True
+                    and prediction["fee_status"] == "paid"
+                    and row.get("_audit_decision") == "DENIED"
+                    and (
+                        (
+                            fee == "unpaid"
+                            and row.get("_audit_reason")
+                            == "visible_unpaid_mandatory_fee"
+                        )
+                        or row.get("_audit_reason")
+                        == "visible_disqualifying_risk"
+                    )
+                )
+            )
         ):
+            # An authenticated fee receipt is the field-local authority.  A
+            # later default or fallback may have emitted a different valid
+            # status. A clean multisource approval proves the receipt was
+            # accepted; an independent hard-risk denial lets the receipt fix
+            # a default without affecting the reason for denial; and an
+            # unpaid-fee denial directly authenticates ``unpaid``. This
+            # post-adjudication repair changes extraction only.
             prediction["fee_status"] = fee
 
         risk = fields.get("risk_flags")
