@@ -20,16 +20,16 @@ The latest exact full 800-case replay measured:
 
 | Evaluator section | Exact development score |
 |---|---:|
-| Extraction | 47.0556 / 50 |
-| Classification | 78.5000 / 80 |
-| Calibration | 19.6009 / 20 |
-| **Total** | **145.1564 / 150** |
+| Extraction | 47.0611 / 50 |
+| Classification | 78.5750 / 80 |
+| Calibration | 19.6016 / 20 |
+| **Total** | **145.2377 / 150** |
 | Catastrophic false approvals | **0** |
 | Valid / expected rows | **800 / 800** |
 
-The exact confusion contains 203 correct approvals, 350 correct denials, and
-227 correct reviews. The remaining 20 errors are conservative abstentions:
-20 approvals were sent to review. No denial or review was approved. The
+The exact confusion contains 204 correct approvals, 350 correct denials, and
+227 correct reviews. The remaining 19 errors are conservative abstentions:
+19 approvals were sent to review. No denial or review was approved. The
 earlier frozen candidate was evaluated once on the 200-case
 validation partition: **46.8111 extraction, 72.5500 classification, 17.1061
 calibration, 136.4672 total, and 3 catastrophic false approvals**. Because that
@@ -37,13 +37,20 @@ aggregate result was discussed, the partition is spent and is not used to
 select current changes. Complete support, controls, rejected experiments,
 split commitments, and the boundary disclosure are in [`RULES.md`](RULES.md).
 
-The preceding 145.0510 safety-baseline replay was byte-for-byte stable after
-the Docker scheduling work. This candidate differs from that artifact in one
-row: a visibly sourced technical-medical packet without B-13 clearance moves
-from review to denial. The two Docker-specific false approvals found on a
-200-row development-only runtime slice were removed with general evidence
-invariants: categorical program predicates must be visible, and an
-authenticated 0.99 review cannot be reopened by a synthetic program rule.
+The preceding 145.1564 artifact remains the comparison baseline. This candidate
+differs in one row: a damaged, sideways fee receipt is recovered from rendered
+pixels, allowing one otherwise complete clean diplomatic packet to pass the
+ordinary approval quorum. The reader is not a packet exception. It scans exact
+active-case unknown pages, requires two raster scales to agree on one row-local
+fee status, rejects prompt-like and non-fee headings, and then reapplies the
+normal approval safety fence.
+
+The complete fixed-800 structural census contained 127 eligible unknown-page
+packets. The detector produced six agreeing reads across three internal folds:
+two approvals and four denials, with all six fee values correct. Only one
+unresolved review gained approval authority. This is a source-reader rule, not
+an identity or one-row outcome rule; the four denial controls are part of the
+same accepted cohort.
 
 The decision layer uses visible/source-bound evidence rules plus explicitly
 disclosed, jointly ablatable fictional-program hypotheses. It contains no
@@ -301,6 +308,7 @@ interface; `1` enables and `0` disables a Boolean flag.
 | `MIB_UNTRUSTED_NATIVE_OUTPUT_READER` | `1` | Final output-only B-13/registry field reader |
 | `MIB_TERMINAL_SOURCE_RULES` | `1` | General visible multisource approval quorum |
 | `MIB_HIGH_RES_CLEAN_RISK` | `1` | Confirm a damaged clean B-13 from two active-case pixel reads |
+| `MIB_HIGH_RES_ROTATED_FEE` | `1` | Recover a fragmented sideways fee row only when two active-case pixel scales agree |
 | `MIB_STRICT_APPROVAL_SAFETY` | `1` | Demote unsigned approvals with unsupported fee, explicit MED-3 panel, or archival-authority faults |
 | `MIB_STRICT_FENCE_RECOVERY` | `1` | Recover fenced reviews only from disclosed source/program families after independent vetoes |
 | `MIB_EXPERIMENTAL_SYNTHETIC_POLICY` | `1` | Apply the disclosed low-support program/structure hypotheses |
@@ -376,28 +384,29 @@ with no network access.
 
 The latest generalized development replay used four workers and a warm host
 evidence cache. The complete 800-row run—including every final reconciliation
-stage—finished in **1,229 seconds**, or **1.536 seconds/PDF**. Host timing is
+stage—finished in **1,142 seconds**, or **1.428 seconds/PDF**. Host timing is
 useful engineering evidence, not a substitute for the constrained Docker
 result.
-The organizer source was refreshed first and remains at commit
-`f480e6d614fec24853411bfe8cf9b462a388a616`.
+The organizer source was refreshed first. Upstream challenge core remains at
+`38ce8883`; the local `f480e6d6` commit adds only this submission's organizer
+memo files and does not change rules, evaluator, schema, or runner.
 
 | Artifact | SHA-256 |
 |---|---|
-| Generalized 800 development predictions | `79b33a17f0fce1b01e18b430ed5cd60526a8d7198033d6e03f96c067f851060d` |
-| Generalized 800 development evaluation | `09199d270eb1b25ba46865aef9e3aa06a074180eee30dfec2d68dbd64e6f4291` |
+| Generalized 800 development predictions | `71f52a60dacf16154733e431d9754c7ccae1a366e204ecde21b86854b88837de` |
+| Generalized 800 development evaluation | `03765e3a8084e30b44a50e2e6b17038937f28bea0c8738591af0e8801917aa74` |
 | Current Docker development-slice predictions | `09c96315afee5ead5f09174ad3d0eccdd0b17e85f529771f9b978c5dbda85da0` |
 | Current Docker development-slice evaluation | `21cd97a05f7696df7f44eb07aa44ff9c998397c15f4c2a67ebff09feab63d42c` |
 | Broad-safety Docker predictions | `40296e37807765bb63c179722e1b9b05a598f7726601e1409c23f76ee7bc05c8` |
 | Broad-safety Docker evaluation | `acae436b8479bd1f0d57134bcb4da08b40a0a9b33506632458a02201e5e5cbc4` |
 
-The most recent constrained Docker replay of the preceding source uses four
+The most recent constrained Docker replay of the current source uses four
 CPUs, 8 GiB RAM, a read-only root,
 `--network none`, `no-new-privileges`, and the organizer validator. On a fixed
 200-packet slice drawn only from the permitted development 800, the current
 image scored **142.5201/150**: 46.7778 extraction, 77.20 classification,
 18.5423 calibration, and zero catastrophic false approvals. The cold replay
-completed in **707.99 seconds / 3.540 seconds per PDF**, below the four-second
+completed in **701 seconds / 3.505 seconds per PDF**, below the four-second
 headroom target and the organizer's six-second limit. That runtime slice was
 drawn only from the 800 development packets; it did not mount the separate 200.
 Linux OCR produced one ordinary review-to-approval error and one
@@ -428,7 +437,7 @@ That does not make public replay a private-set guarantee:
 - private/admin scoring may remove hidden-only fields from the extraction
   maximum, so public output-only gains need not transfer as score;
 - several complete fictional-program cohorts are small;
-- the exact 145.1564 score is development evidence, not a fresh validation;
+- the exact 145.2377 score is development evidence, not a fresh validation;
 - the historical 145.7151 score used rules removed by the generalization audit.
 
 Use the flags to run strict ablations, and preserve `NEEDS_REVIEW` when the

@@ -33,7 +33,7 @@ from typing import Any, Iterable
 from .local_cache import load_json, store_json
 
 
-_CACHE_SCHEMA = "pixel-evidence-audit-v14-lost-home-label"
+_CACHE_SCHEMA = "pixel-evidence-audit-v15-unknown-page-numbers"
 _PAGE_CACHE_SCHEMA = "poppler-rapidocr-rendered-pages-v1"
 _PRINT_LOCK = threading.Lock()
 _READER_LOCK = threading.Lock()
@@ -1064,10 +1064,10 @@ def _audit_pdf(pdf_path: Path) -> dict[str, Any]:
     packet_has_foreign_case = bool(packet_numbers - {expected_number})
 
     prepared: list[
-        tuple[str, set[str], str, dict[str, str]]
+        tuple[int, str, set[str], str, dict[str, str]]
     ] = []
     exact_applicants: set[str] = set()
-    for original_text in page_text.values():
+    for page_index, original_text in sorted(page_text.items()):
         text = _active_page_segment(pdf_path.stem, original_text)
         visible_numbers = _case_numbers(text)
         kind = _page_kind(text)
@@ -1084,7 +1084,9 @@ def _audit_pdf(pdf_path: Path) -> dict[str, Any]:
             if kind != "unknown"
             else {}
         )
-        prepared.append((text, visible_numbers, kind, fields))
+        prepared.append(
+            (page_index + 1, text, visible_numbers, kind, fields)
+        )
         if visible_numbers == {expected_number} and fields.get("applicant_name"):
             exact_applicants.add(fields["applicant_name"])
 
@@ -1102,8 +1104,8 @@ def _audit_pdf(pdf_path: Path) -> dict[str, Any]:
             for active in exact_applicants
         )
 
-    active_unknown_pages = 0
-    for text, visible_numbers, kind, fields in prepared:
+    active_unknown_page_numbers: list[int] = []
+    for page_number, text, visible_numbers, kind, fields in prepared:
         active_page = visible_numbers == {expected_number}
         # A severely damaged raster note can lose both header and footer while
         # retaining its stamp.  It is packet-local only when every readable
@@ -1128,7 +1130,7 @@ def _audit_pdf(pdf_path: Path) -> dict[str, Any]:
         if not (active_page or packet_local_note or applicant_bound_page):
             continue
         if kind == "unknown":
-            active_unknown_pages += 1
+            active_unknown_page_numbers.append(page_number)
             continue
         page_counts[kind] += 1
         source_kinds.add(kind)
@@ -1373,7 +1375,7 @@ def _audit_pdf(pdf_path: Path) -> dict[str, Any]:
             or fields["sponsor_id"] not in _REVOKED_SPONSORS
         )
         and "intake" in source_kinds
-        and active_unknown_pages == 0
+        and not active_unknown_page_numbers
         and len(source_kinds) >= 3
     ):
         decision = "APPROVED"
@@ -1410,7 +1412,8 @@ def _audit_pdf(pdf_path: Path) -> dict[str, Any]:
         "confidence": confidence,
         "source_kinds": sorted(source_kinds),
         "page_counts": dict(sorted(page_counts.items())),
-        "active_unknown_pages": active_unknown_pages,
+        "active_unknown_pages": len(active_unknown_page_numbers),
+        "active_unknown_page_numbers": active_unknown_page_numbers,
         "risk_panel_state": risk_panel_state,
         "authorized_waiver": authorized_waiver,
         "intake_arrival_unreadable": intake_arrival_unreadable,
@@ -1499,6 +1502,10 @@ def _materialize(audit: dict[str, Any], prediction: dict[str, Any]) -> dict[str,
     )
     row["_audit_active_unknown_pages"] = int(
         audit.get("active_unknown_pages", 0),
+    )
+    row["_audit_active_unknown_page_numbers"] = tuple(
+        int(page_number)
+        for page_number in audit.get("active_unknown_page_numbers", ())
     )
     row["_audit_intake_arrival_unreadable"] = bool(
         audit.get("intake_arrival_unreadable", False),

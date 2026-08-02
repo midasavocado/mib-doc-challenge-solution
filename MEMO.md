@@ -17,15 +17,15 @@ deterministic 800-case development partition is:
 
 | Section | Exact development score |
 |---|---:|
-| Extraction | 47.0556 / 50 |
-| Classification | 78.5000 / 80 |
-| Calibration | 19.6009 / 20 |
-| **Total** | **145.1564 / 150** |
+| Extraction | 47.0611 / 50 |
+| Classification | 78.5750 / 80 |
+| Calibration | 19.6016 / 20 |
+| **Total** | **145.2377 / 150** |
 | Catastrophic false approvals | **0** |
 | Valid / expected rows | **800 / 800** |
 
-The confusion contains 203 correct approvals, 350 correct denials, and 227
-correct reviews. The only 20 mistakes are conservative abstentions: 20 true
+The confusion contains 204 correct approvals, 350 correct denials, and 227
+correct reviews. The only 19 mistakes are conservative abstentions: 19 true
 approvals remain review. No denial or review is approved.
 
 An earlier 143.1247 artifact was the first exact result after a rules audit closed a recovered-approval
@@ -226,6 +226,26 @@ widths. The detector runs only on unresolved sparse packets, and it reads no
 identity, case ID, sponsor value, filename, or hidden text. A recovered manual
 finding is treated as visible adjudicator evidence, so later generator and
 completeness stages cannot reinterpret it.
+
+A second visible-only recovery handles sideways fee receipts whose heading is
+too fragmented for document-type classification. The pixel audit first supplies
+the exact active-case page numbers it could not classify. The narrow reader
+then rejects prompt-like text and every non-fee heading, rotates only those
+pages, and requires both 150 and 200 DPI renders to produce the same row-local
+`Fee ... Status` value. Linux Tesseract may preserve one blank physical row
+between `Sta` and `tus`; the parser permits exactly that single gap while
+retaining a four-row and 48-character geometry bound.
+
+The complete 800 development census contained 127 structurally eligible
+unknown-page packets. Six produced a two-scale fee read across three folds: two
+approvals and four denials, with all six fee statuses read correctly. Five reach
+the terminal reader in the normal runtime because the sixth has an earlier
+authenticated finding. Only one unresolved clean diplomatic waiver acquired
+new approval authority; all other reads merely corroborated terminal packets.
+Sparse review retries additionally require a defaulted fee, visibly observed
+`DIP-1`, a clean audited risk panel, no visible decision/reason/contest, and
+confidence below 0.99. The ordinary quorum and both final safety passes still
+decide the verdict.
 
 The quorum itself is identity- and case-independent. It checks whether a field
 is visibly supported, which physical source supplied it, and ordinary policy
@@ -437,7 +457,7 @@ Fee projection remains limited to an absent or unreadable fee source, risk
 projection cannot replace an existing visible flag, and active visible values
 always win. These repairs do not rerun adjudication or confidence logic.
 
-The exact generalized 800-case development run measured **47.0556/50**
+The exact generalized 800-case development run measured **47.0611/50**
 extraction. Source-local and
 output-only repairs
 include a decision/risk invariant, a repeated closed-vocabulary visa repair,
@@ -460,7 +480,7 @@ calibration = 20 × max(0, 1 - 2 × mean_brier)
 ```
 
 The exact generalized 800-case development run has mean Brier error
-**0.00997775**, producing **19.600890/20** calibration. Confidence is assigned
+**0.009959875**, producing **19.601605/20** calibration. Confidence is assigned
 only at the final output boundary, after verdict and extraction premises are
 frozen. No confidence value can feed back into adjudication or extraction.
 
@@ -508,7 +528,7 @@ flowchart LR
     H["Cold full broad fence<br/>128.6496 · rejected"] -->
     I["Prospective 800 checkpoint<br/>145.7151 · superseded"] -->
     J["Generalized safety baseline<br/>143.1247 · zero CFA"] -->
-    K["Current exact 800<br/>145.1564 · zero CFA"]
+    K["Current exact 800<br/>145.2377 · zero CFA"]
 ```
 
 | Exact checkpoint | Extraction | Classification | Calibration | CFA | Total |
@@ -524,8 +544,9 @@ flowchart LR
 | Broad-fence cold full Docker replay | 45.6233 | 66.11 | 16.9163 | 0 | 128.6496 |
 | Prospective 800 checkpoint, superseded | 47.0319 | 79.1375 | 19.5456 | 0 | **145.7151** |
 | Generalized safety baseline | 46.9653 | 77.3250 | 18.8344 | 0 | **143.1247** |
-| Previous exact 800 development | 46.9431 | 77.9000 | 19.4429 | 0 | **144.2859** |
-| Current exact 800 development | 47.0556 | 78.5000 | 19.6009 | 0 | **145.1564** |
+| Earlier exact 800 development | 46.9431 | 77.9000 | 19.4429 | 0 | **144.2859** |
+| Immediate previous exact 800 | 47.0556 | 78.5000 | 19.6009 | 0 | **145.1564** |
+| Current exact 800 development | 47.0611 | 78.5750 | 19.6016 | 0 | **145.2377** |
 
 The historical sequence is retained to show how the score was obtained, not
 to claim that every row is directly comparable. The 80-case row is an older
@@ -539,7 +560,7 @@ the current exact development result under the prospective 800/200 protocol.
 
 | Truth ↓ / prediction → | APPROVED | DENIED | NEEDS_REVIEW |
 |---|---:|---:|---:|
-| APPROVED | 203 | 0 | 20 |
+| APPROVED | 204 | 0 | 19 |
 | DENIED | 0 | 350 | 0 |
 | NEEDS_REVIEW | 0 | 0 | 227 |
 
@@ -548,11 +569,11 @@ the current exact development result under the prospective 800/200 protocol.
 | Submitted/scored rows | 800 / 800 |
 | Invalid rows | 0 |
 | Input-relative missing or extra cases | 0 |
-| Mean Brier error | 0.00997775 |
+| Mean Brier error | 0.009959875 |
 | Catastrophic false approvals | 0 |
-| Prediction SHA-256 | `79b33a17f0fce1b01e18b430ed5cd60526a8d7198033d6e03f96c067f851060d` |
-| Evaluation SHA-256 | `09199d270eb1b25ba46865aef9e3aa06a074180eee30dfec2d68dbd64e6f4291` |
-| **Total** | **145.1564 / 150** |
+| Prediction SHA-256 | `71f52a60dacf16154733e431d9754c7ccae1a366e204ecde21b86854b88837de` |
+| Evaluation SHA-256 | `03765e3a8084e30b44a50e2e6b17038937f28bea0c8738591af0e8801917aa74` |
+| **Total** | **145.2377 / 150** |
 
 The exact artifact contains 800 valid rows, no duplicates, no extra or missing
 cases, and no invalid confidence or fee values. The spent 200 was not inspected
@@ -561,7 +582,7 @@ or rescored while developing this candidate.
 ## Performance and organizer contract
 
 The latest generalized 800-case development replay completed end to end in
-**1,229 seconds** with four workers and a warm host evidence cache, or **1.536
+**1,142 seconds** with four workers and a warm host evidence cache, or **1.428
 seconds/PDF**.
 
 The current source reuses the audit's immutable pixel-page cache for the late
@@ -569,13 +590,16 @@ multi-flag repair, rerenders only pages relevant to a disputed sponsor/visa
 field, and removed a broad date-repair tail that reprocessed already-correct
 June dates without changing a single emitted value. It also pins BLAS/OpenMP
 backends to one thread per packet worker, so four packet workers cannot fan out
-into sixteen numerical threads.
+into sixteen numerical threads. The rotated-fee reader performs sparse
+high-resolution work only for reviews that already satisfy every non-fee
+approval premise; terminal packets require a direct fee hint in the primary
+pixel read before the two-scale confirmation runs.
 
 That host measurement is not Docker acceptance. A cold constrained 200-packet
 slice drawn only from the development 800 validated all expected rows and
 scored **142.5201/150**: 46.7778 extraction, 77.20 classification, 18.5423
-calibration, and zero catastrophic false approvals. It ran in **707.99 seconds
-/ 3.540 seconds per PDF**, below the four-second headroom target and the
+calibration, and zero catastrophic false approvals. It ran in **701 seconds
+/ 3.505 seconds per PDF**, below the four-second headroom target and the
 organizer's six-second limit. It does not estimate the spent holdout or private
 score. Linux OCR changed two review outcomes relative to truth on this slice:
 one ordinary false approval and one false denial; neither is catastrophic, but
@@ -595,8 +619,9 @@ The official runner builds and executes with:
 - `no-new-privileges`;
 - required completeness validation.
 
-The organizer source was refreshed before acceptance and remains at commit
-`f480e6d614fec24853411bfe8cf9b462a388a616`.
+The organizer source was refreshed before acceptance. Upstream challenge core
+remains at `38ce8883`; local commit `f480e6d6` adds only this submission's memo
+files and changes no rule, evaluator, schema, or runner.
 
 The two merged organizer maintenance PRs were inspected directly:
 
@@ -612,23 +637,24 @@ formula.
 
 | Artifact | Value |
 |---|---|
-| Organizer commit | `f480e6d614fec24853411bfe8cf9b462a388a616` |
+| Organizer upstream core commit | `38ce8883` |
+| Organizer local submission-doc commit | `f480e6d6` |
 | Broad-safety code commit | `d17b3789e260ee6003d1bf9d8d31c644bc16c301` |
 | Broad-safety Docker image tag | `mib-doc-solution:submission-cfa-safety` |
 | Broad-safety Docker image ID | `19c17a0d35c698bcd6ae6d38b8c7cbf55edf502bcad7d84f52d19478bb21e58e` |
 | Broad-safety prediction SHA-256 | `40296e37807765bb63c179722e1b9b05a598f7726601e1409c23f76ee7bc05c8` |
 | Broad-safety evaluation SHA-256 | `acae436b8479bd1f0d57134bcb4da08b40a0a9b33506632458a02201e5e5cbc4` |
 | Broad-safety Docker wall time | `4,070.61 s` |
-| Generalized 800 prediction SHA-256 | `79b33a17f0fce1b01e18b430ed5cd60526a8d7198033d6e03f96c067f851060d` |
-| Generalized 800 evaluation SHA-256 | `09199d270eb1b25ba46865aef9e3aa06a074180eee30dfec2d68dbd64e6f4291` |
-| Generalized 800 exact score | `145.15644555555556 / 150` |
-| Generalized 800 observed host interval | `1,229 s / 1.536 s per PDF` |
+| Generalized 800 prediction SHA-256 | `71f52a60dacf16154733e431d9754c7ccae1a366e204ecde21b86854b88837de` |
+| Generalized 800 evaluation SHA-256 | `03765e3a8084e30b44a50e2e6b17038937f28bea0c8738591af0e8801917aa74` |
+| Generalized 800 exact score | `145.23771611111113 / 150` |
+| Generalized 800 observed host interval | `1,142 s / 1.428 s per PDF` |
 | Docker development-slice prediction SHA-256 | `09c96315afee5ead5f09174ad3d0eccdd0b17e85f529771f9b978c5dbda85da0` |
 | Docker development-slice evaluation SHA-256 | `21cd97a05f7696df7f44eb07aa44ff9c998397c15f4c2a67ebff09feab63d42c` |
 | Docker development-slice score | `142.52009777777778 / 150` |
-| Final Docker image ID | `sha256:9dd8ab4703cf973ca716ee94bf89c046c02878bf0fc7a52ae0952836a1277bef` |
-| Final Docker image size | `217,430,501 bytes` |
-| Final Docker development-slice wall time | `707.99 s / 3.540 s per PDF` |
+| Final Docker image ID | `sha256:23fb8fe0d1d78f5c2b5dca2994a2f5ef1e14a4fa790e3e296492fa7f0b5bc190` |
+| Final Docker image size | `217,433,111 bytes` |
+| Final Docker development-slice wall time | `701 s / 3.505 s per PDF` |
 | Pre-optimization safety replay | `886.61 s / 4.433 s per PDF` |
 
 The exact broad-safety artifact is retained as historical audit evidence, not
@@ -712,7 +738,7 @@ trained model is blocked by the internal-fold-plus-spent-validation contract in
 
 ## Known limits
 
-- The 145.1564/150 score is exact on the fixed 800 development packets, not
+- The 145.2377/150 score is exact on the fixed 800 development packets, not
   the spent 200-case validation and not a private-corpus guarantee. The higher
   145.7151 checkpoint is historical and used rules removed by the audit.
 - The preceding candidate has exact warm-host timing. Its representative

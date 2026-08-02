@@ -181,6 +181,7 @@ hand-picked changed-case list.
 | Diplomatic botanical clearance veto | Unsigned paid `DIP-1` xenobotany needs both fee and biometric authority; missing either preserves review | 2 reviews, 0 others; 2 folds; 3 independent approval controls |
 | Two-scale damaged manual finding | An active-case manual-note header, Reason row, and the same unambiguous fuzzy decision at 150 and 200 DPI can recover the visible finding; a `SAMPLE DENIAL` watermark is non-operative | Complete 8-page candidate cohort: 1 additional approval read, 7 abstentions, 0 false reads |
 | Two-scale damaged fee witness | An active-case `Fee/Foe/Foo Status` row must agree at 300 and 600 DPI before it supplies payment evidence | Complete eligible cohort replayed; disagreement or unreadability abstains |
+| Two-scale sideways fragmented fee source | Exact active-case unknown pages are rotated at 150 and 200 DPI; both scales must agree on one row-local fee status, while prompt-like/non-fee headings, conflicts, and multiple hits abstain | 127 structurally eligible development packets; 6 reads across 3 folds (2 approvals, 4 denials), all 6 fee values correct; one clean diplomatic review recovered, 0 CFA |
 | Policy-clean negative generator polarity | A complete hidden tuple that requests denial but encodes no policy denial is an inverted generator proposal. The default profile treats it as alternate authority after signed-finding, positive visible-denial, and emitted-risk vetoes; it is not visible evidence | 25/25 approvals across all five development folds and 37/37 independent controls; feature-flagged and disabled by `visible_evidence_only` |
 | Sirius avian medical/transit waiver ineligibility | A visibly sourced `SIRIUS_AVIAN` program under visible `MED-3`/`TRANSIT-7` and an authorized visible waiver is ineligible for that waiver interface | 4 denials, 0 others; four folds |
 | XW-2 waiver without sponsor assumption | A visibly sourced XW-2 waiver still lacks the program's sponsor authority when no sponsor source exists; risk, contest, unknown-page, and flag uncertainty veto the rule | 5 denials, 0 others; one in every fold |
@@ -343,18 +344,18 @@ produced 800 valid rows with no missing, extra, duplicate, or invalid records:
 
 | Exact development result | Score |
 |---|---:|
-| Extraction | 47.055556 / 50 |
-| Classification | 78.500000 / 80 |
-| Calibration | 19.600890 / 20 |
-| **Total** | **145.156446 / 150** |
+| Extraction | 47.061111 / 50 |
+| Classification | 78.575000 / 80 |
+| Calibration | 19.601605 / 20 |
+| **Total** | **145.237716 / 150** |
 | Catastrophic false approvals | **0** |
 
-The confusion is 203 correct approvals, 20 approvals preserved as review, 350
+The confusion is 204 correct approvals, 19 approvals preserved as review, 350
 correct denials, and 227 correct reviews. No review or denial was approved.
 Prediction SHA-256 is
-`79b33a17f0fce1b01e18b430ed5cd60526a8d7198033d6e03f96c067f851060d`;
+`71f52a60dacf16154733e431d9754c7ccae1a366e204ecde21b86854b88837de`;
 evaluation SHA-256 is
-`09199d270eb1b25ba46865aef9e3aa06a074180eee30dfec2d68dbd64e6f4291`.
+`03765e3a8084e30b44a50e2e6b17038937f28bea0c8738591af0e8801917aa74`.
 The spent 200 was not used to explain or tune any of these outcomes.
 
 ### Superseded calibration-only projection
@@ -382,7 +383,7 @@ false approvals. That preceding image ran offline with 4 CPUs, 8 GiB, a
 read-only root, and tmpfs in **718.62 seconds / 3.593 seconds per PDF**.
 
 The current image repeated the same constrained development-only protocol in
-**707.99 seconds / 3.540 seconds per PDF** and scored 46.7778 extraction,
+**701 seconds / 3.505 seconds per PDF** and scored 46.7778 extraction,
 77.20 classification, 18.5423 calibration, **142.5201 total**, with zero
 catastrophic false approvals. This is portability
 and timing evidence, not a holdout estimate.
@@ -520,6 +521,7 @@ risk visible.
 | Evidence review fence | Blank, unreadable, conflicting, unknown, or incomplete required evidence | Abstains instead of guessing |
 | Multisource approval quorum | Required policy fields have adequate independent visible coverage | Visible denial/review witnesses veto |
 | Arrival support | Same value can be supported by intake, sponsor, registry, or signed evidence | Blank and unreadable are distinct from a corroborated value |
+| Fragmented rotated fee source | Two agreeing active-case pixel scales may classify one sideways row that the ordinary document reader could not type | Exact unknown page, local label geometry, heading/trap rejection, and ordinary approval quorum remain mandatory |
 | Approval safety | Unsigned approvals face fee, MED-3 missing-panel, archival-intake, and visible-risk checks | Must not demote an already supported approval merely because one redundant source is unreadable |
 | Strict-fence recovery | A review may resolve from a direct denial witness or a broad clean source topology | No weak absence-only approval |
 | Blurred manual finding | Visible word-envelope geometry reads a damaged adjudicator note | Requires note structure and never uses hidden text or identity |
@@ -554,6 +556,7 @@ experimental rows are jointly removable with
 | Registry-native diplomatic interface | JOVIAN_GASFORM and VENUSIAN_MYCELIAL DIP-1 waiver packets can use an agreeing registry chain instead of conventional B-13 | Experimental approval; the same complete-chain vetoes apply |
 | TRIANGULAN waiver treaty | A visible waived fee and complete intake-based core packet can establish a visa-neutral fictional treaty waiver | Experimental approval; no risk, contest, decision, unknown page, or unsupported field is tolerated |
 | Technical medical mission | Visibly sourced XW technical authority plus visibly sourced medical-consult purpose does not replace required biometric clearance, and a visibly read waived status changes payment status rather than medical eligibility | Deny only for the repeated paid-or-waived fee+intake+registry backbone with no visible Alpha Draconian, Andromedan, LUNA, or complete paid Jovian/Titan alternate interface; authenticated findings, notes, audit uncertainty, contests, unknown pages, and every other topology retain review |
+| Sideways fragmented fee receipt | A damaged receipt may retain a row-local fee status even when its heading is unreadable | Read only from exact active-case unknown pages with two-scale agreement; review unlock additionally requires a defaulted fee, visible DIP-1, clean risk, and no decision/reason/contest before the ordinary quorum and safety passes |
 | Explicitly missing MED-3 B-13 | The active biometric form explicitly marks its panel missing | Deny under the inferred edge policy; mere absence or unreadability is excluded |
 | MED-3 compound clearance conflict | Unreadable biological clearance and an independent sponsor conflict jointly fail two mandatory controls | Deny; either single fault alone stays review |
 | MED-3 transit mismatch | Transit purpose cannot satisfy a medical authorization when no biometric source exists | Low-confidence denial; visible/signed evidence still outranks it |
@@ -606,7 +609,7 @@ answer-shaped artifact as a souvenir.
       score.
 - [x] Schema and Docker checks use the 800 development packets and the
       organizer validation controls only. The spent 200 is not reopened.
-- [x] Total Docker runtime is below five seconds per PDF under the organizer
-      resource contract; sub-four remains a best-effort optimization target.
+- [x] Total Docker runtime is below four seconds per PDF under the organizer
+      resource contract on the fixed 200-packet development fixture.
 - [x] `README.md`, `MEMO.md`, and `CHANGELOG.md` match the promoted code and
       distinguish the full-800 host score from the Docker development slice.

@@ -6,6 +6,45 @@ For the current architecture, measured result, and engineering rationale, see
 
 Last updated: 2026-08-01
 
+## 2026-08-01 — fragmented sideways fee source reaches 145.2377
+
+- Added a visible-pixel source reader for fee receipts whose sideways row
+  survives while the document heading is too damaged to classify. It consumes
+  only exact active-case unknown-page numbers from the independent audit,
+  rejects prompt-like and non-fee headings, and requires 150/200-DPI rotated
+  reads to agree on one row-local status.
+- Preserved physical OCR geometry: up to four rows and 48 compact characters,
+  with at most one blank row to accommodate Linux Tesseract splitting `Sta`
+  from `tus`. Conflicting scales, multiple pages, multiple statuses, or a
+  different nondefault extraction all abstain.
+- Audited the complete structural development cohort: 127 eligible packets,
+  six detector reads across three folds, two approvals and four denials, and
+  six of six fee values correct. Five reads reach the normal terminal stage
+  because the sixth packet has an earlier authenticated finding. Only one
+  unresolved clean diplomatic waiver changes verdict, from review to approval.
+- The review path is not fee-only authority. Sparse retry requires a defaulted
+  fee, visibly observed `DIP-1`, a clean audited risk panel, no visible
+  decision/reason/contest, and confidence below 0.99. The ordinary source
+  quorum plus both final approval-safety passes still gate the result.
+- Exact fixed-800 replay: **47.061111 extraction**, **78.575000
+  classification**, **19.601605 calibration**, and **145.237716 total**, with
+  **0 catastrophic false approvals**. Confusion is 204 correct approvals, 350
+  correct denials, 227 correct reviews, and 19 approvals conservatively held
+  for review. The spent 200 was not opened or rescored.
+- Prediction SHA-256:
+  `71f52a60dacf16154733e431d9754c7ccae1a366e204ecde21b86854b88837de`.
+  Evaluation SHA-256:
+  `03765e3a8084e30b44a50e2e6b17038937f28bea0c8738591af0e8801917aa74`.
+- A constrained Linux damage/control smoke recovered the same waiver while all
+  four denied controls remained denied. A cold 200-packet fixture drawn only
+  from development emitted predictions byte-for-byte identical to the prior
+  accepted image in **701 seconds / 3.505 seconds per PDF**, under four CPUs,
+  8 GiB, `--network none`, a read-only root, PID limit, and
+  `no-new-privileges`.
+- The optimized full-800 host replay completed in **1,142 seconds / 1.428
+  seconds per PDF**, 99 seconds faster than the prior exact artifact, while
+  reproducing the new prediction and evaluation hashes byte-for-byte.
+
 ## 2026-08-01 — visible technical-medical rule reaches 145.1564
 
 - Extended the existing XW technical-medical clearance rule from a visibly

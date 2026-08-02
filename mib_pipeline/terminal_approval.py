@@ -274,6 +274,152 @@ def _high_resolution_visible_fee_status(
     return False
 
 
+@lru_cache(maxsize=8192)
+def _rotated_fragmented_fee_status(
+    pdf: Path,
+    unknown_page_numbers: frozenset[int],
+    allow_sparse_retry: bool,
+) -> tuple[int, str] | None:
+    """Read one sideways fee status from two rendered pixel scales.
+
+    A severely damaged receipt can retain ``Fee`` and ``Status: waiv...`` as
+    separate vertical fragments while losing the receipt heading entirely.
+    Whole-page OCR then calls the physical page unknown.  This reader is
+    deliberately narrow: the upright page must still be bound to the active
+    case, both 150 and 200 DPI rotations must independently yield the same
+    labelled status, and any second candidate page or conflicting status
+    makes it abstain.  Native PDF text and extracted identity values are never
+    consulted. The caller supplies the exact page numbers independently
+    classified as active-case unknown pages by the pixel audit.
+    """
+
+    non_fee_heading = re.compile(
+        r"FORM\s+(?:I-?8090|B-13)|Biometric\s+Scan\s+Slip|"
+        r"(?:Planetary\s+)?Registry\s+Extract|Sponsor\s+Attestation|"
+        r"Manual\s+Adjudicator\s+Note",
+        re.I,
+    )
+
+    def status_from_view(view: str) -> str | None:
+        if re.search(
+            r"sample\s+denial|training\s+example|answer\s+key|"
+            r"barcode\s+payload|force\s+adjudication",
+            view,
+            re.I,
+        ) or non_fee_heading.search(view):
+            return None
+        lines = [
+            re.sub(r"[^A-Z0-9]+", "", line.upper())
+            for line in view.splitlines()
+        ]
+        status_tokens = {
+            "UNPA": "unpaid",
+            "WAIV": "waived",
+            "PAID": "paid",
+            "UNKN": "unknown",
+        }
+        found: set[str] = set()
+        for index, line in enumerate(lines):
+            if not re.search(r"F(?:EE|OE|OO)", line):
+                continue
+            # OCR may split a sideways label over adjacent rows (for example
+            # ``Sta`` then ``tus``), and Linux Tesseract sometimes preserves
+            # one blank physical row between those fragments.  Accept at most
+            # that single blank; never flatten boundaries across the page.
+            physical_rows = lines[index:index + 4]
+            if sum(not row for row in physical_rows[1:]) > 1:
+                continue
+            window = "".join(physical_rows)
+            match = re.search(
+                r"F(?:EE|OE|OO)[A-Z0-9]{0,48}"
+                r"STA(?:I)?TUS(UNPA|WAIV|PAID|UNKN)",
+                window,
+            )
+            if match is not None:
+                found.add(status_tokens[match.group(1)])
+        return found.pop() if len(found) == 1 else None
+
+    pages = _pipeline._render_and_ocr(pdf)
+    known_heading = re.compile(
+        r"FORM\s+(?:I-?8090|B-13)|Biometric\s+Scan\s+Slip|"
+        r"(?:Planetary\s+)?Registry\s+Extract|Sponsor\s+Attestation|"
+        r"MIB\s+Fee\s+Receipt|Manual\s+Adjudicator\s+Note",
+        re.I,
+    )
+    candidate_pages: list[int] = []
+    for page_number in sorted(unknown_page_numbers):
+        if not 1 <= page_number <= len(pages):
+            continue
+        page = pages[page_number - 1]
+        primary_view = page.split("\n[ROTATED OCR VIEW]\n", 1)[0].split(
+            _pipeline._DESKEWED_VIEW_SEPARATOR,
+            1,
+        )[0]
+        if (
+            _pipeline._page_bound_to_active_case(pdf.stem, page)
+            and not known_heading.search(primary_view)
+            and (
+                allow_sparse_retry
+                or status_from_view(primary_view) is not None
+            )
+        ):
+            candidate_pages.append(page_number)
+    if not candidate_pages:
+        return None
+
+    findings: set[tuple[int, str]] = set()
+    try:
+        with tempfile.TemporaryDirectory(prefix="mib-rotated-fee-") as temp:
+            temp_dir = Path(temp)
+            for page_number in candidate_pages:
+                scale_findings: list[set[str]] = []
+                for dpi in (150, 200):
+                    prefix = temp_dir / f"page-{page_number}-{dpi}"
+                    subprocess.run(
+                        [
+                            "pdftoppm",
+                            "-gray",
+                            "-r",
+                            str(dpi),
+                            "-f",
+                            str(page_number),
+                            "-l",
+                            str(page_number),
+                            "-singlefile",
+                            str(pdf),
+                            str(prefix),
+                        ],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        timeout=30,
+                        check=True,
+                    )
+                    source = prefix.with_suffix(".pgm")
+                    statuses: set[str] = set()
+                    for clockwise in (True, False):
+                        rotated = temp_dir / (
+                            f"page-{page_number}-{dpi}-{int(clockwise)}.pgm"
+                        )
+                        _pipeline._rotate_pgm(source, rotated, clockwise)
+                        status = status_from_view(
+                            _pipeline._ocr_page(rotated, 6)
+                        )
+                        if status is not None:
+                            statuses.add(status)
+                    scale_findings.append(statuses)
+                if (
+                    len(scale_findings) == 2
+                    and len(scale_findings[0]) == 1
+                    and scale_findings[0] == scale_findings[1]
+                ):
+                    findings.add(
+                        (page_number, next(iter(scale_findings[0])))
+                    )
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+    return findings.pop() if len(findings) == 1 else None
+
+
 def _source_complete_alternate_authority(
     pdf: Path,
     prediction: dict[str, Any],
@@ -1238,6 +1384,122 @@ def apply_terminal_evidence_rules(
     for pdf in pdfs:
         prediction = predictions[pdf.stem]
         row = rows.get(pdf.stem, {})
+        unknown_page_numbers = frozenset(
+            int(page_number)
+            for page_number in row.get(
+                "_audit_active_unknown_page_numbers",
+                (),
+            )
+        )
+        rotated_fee = None
+        rotated_fee_can_retry_review = bool(
+            prediction["adjudication"] == "NEEDS_REVIEW"
+            and prediction.get("_fee_status_defaulted") is True
+            and float(prediction["confidence"]) < 0.99
+            and row.get("_audit_decision") is None
+            and row.get("_audit_reason") is None
+            and not row.get("_audit_contested")
+            and prediction["visa_class"] == "DIP-1"
+            and bool(
+                _observation_sources(
+                    row,
+                    "visa_class",
+                    "DIP-1",
+                )
+            )
+            and row.get("_audit_risk_panel_state") == "clean"
+        )
+        if (
+            enabled("MIB_HIGH_RES_ROTATED_FEE", True)
+            and "fee" not in row.get("_audit_source_kinds", ())
+            and prediction.get("_fee_evidence_state")
+            not in {"trusted", "visible"}
+            and unknown_page_numbers
+            and (
+                prediction["adjudication"] != "NEEDS_REVIEW"
+                or rotated_fee_can_retry_review
+            )
+        ):
+            rotated_fee = _rotated_fragmented_fee_status(
+                pdf,
+                unknown_page_numbers,
+                rotated_fee_can_retry_review,
+            )
+        if rotated_fee is not None and not (
+            prediction.get("_fee_status_defaulted") is True
+            or rotated_fee[1] == prediction["fee_status"]
+        ):
+            # A second pixel reader may corroborate an existing value or fill
+            # a default. It may not silently replace a different extraction.
+            rotated_fee = None
+        rotated_fee_can_unlock_review = bool(
+            rotated_fee is not None
+            and prediction["adjudication"] == "NEEDS_REVIEW"
+            and float(prediction["confidence"]) < 0.99
+            and row.get("_audit_decision") is None
+            and row.get("_audit_reason") is None
+            and not row.get("_audit_contested")
+            # A fragmented waiver can complete the ordinary diplomatic
+            # program only when the visa itself and a clean B-13 are visible.
+            # Paid/non-diplomatic reads remain useful detector diagnostics,
+            # but cannot become approval authority: the broad dev cohort
+            # contains denied counterexamples for both shapes.
+            and rotated_fee[1] == "waived"
+            and prediction["visa_class"] == "DIP-1"
+            and bool(
+                _observation_sources(
+                    row,
+                    "visa_class",
+                    "DIP-1",
+                )
+            )
+            and row.get("_audit_risk_panel_state") == "clean"
+        )
+        apply_rotated_fee_evidence = bool(
+            rotated_fee is not None
+            and (
+                prediction["adjudication"] != "NEEDS_REVIEW"
+                or rotated_fee_can_unlock_review
+            )
+        )
+        if apply_rotated_fee_evidence and rotated_fee is not None:
+            page_number, fee_status = rotated_fee
+            prediction["fee_status"] = fee_status
+            prediction["_fee_status_defaulted"] = False
+            prediction["_fee_evidence_state"] = "visible"
+            row["_audit_source_kinds"] = tuple(
+                sorted(set(row.get("_audit_source_kinds", ())) | {"fee"})
+            )
+            page_counts = dict(row.get("_audit_page_counts", {}))
+            page_counts["fee"] = int(page_counts.get("fee", 0)) + 1
+            row["_audit_page_counts"] = page_counts
+            fields = dict(row.get("_audit_fields", {}))
+            fields["fee_status"] = fee_status
+            row["_audit_fields"] = fields
+            observations = dict(row.get("_audit_observations", {}))
+            observations["fee_status"] = [
+                {"source": "fee", "value": fee_status}
+            ]
+            row["_audit_observations"] = observations
+            remaining_unknown_pages = tuple(
+                candidate
+                for candidate in sorted(unknown_page_numbers)
+                if candidate != page_number
+            )
+            row["_audit_active_unknown_page_numbers"] = (
+                remaining_unknown_pages
+            )
+            row["_audit_active_unknown_pages"] = len(
+                remaining_unknown_pages
+            )
+            _pipeline._trace_decision(
+                pdf.stem,
+                "rotated_fragmented_fee_status",
+                page=page_number,
+                status=fee_status,
+                source="two_scale_rotated_rendered_pixels",
+                identity_features=False,
+            )
         source_kinds = frozenset(row.get("_audit_source_kinds", ()))
         visible_fee_supported = (
             _visible_fee_supported(prediction, row)

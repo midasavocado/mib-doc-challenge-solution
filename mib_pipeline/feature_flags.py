@@ -136,6 +136,12 @@ EVIDENCE_FLAGS = (
         "active-case pixel reads before applying the ordinary source quorum.",
     ),
     FeatureFlag(
+        "MIB_HIGH_RES_ROTATED_FEE",
+        "1",
+        "Recover a sideways fragmented fee-status row only when two "
+        "active-case pixel scales agree before applying the ordinary quorum.",
+    ),
+    FeatureFlag(
         "MIB_STRICT_APPROVAL_SAFETY",
         "1",
         "Demote unsigned approvals with unsupported fee authorization, an "
