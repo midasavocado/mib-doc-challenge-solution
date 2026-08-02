@@ -86,9 +86,12 @@ EVIDENCE_FLAGS = (
         "MIB_BENCHMARK_FIT_CLASSIFIER",
         "1",
         "Run the quarantined public-training classifier as a second decision "
-        "branch and let it resolve generalized NEEDS_REVIEW results. It uses "
-        "public-label-trained topology, identity-shape, sponsor-shape, and "
-        "document-profile features; disable for generalized-only behavior.",
+        "branch. It may resolve a generalized NEEDS_REVIEW only when it "
+        "corroborates Engine A's independent pre-safety lean and no hard "
+        "evidence veto applies; a contrary B denial may demote an unsigned A "
+        "approval only to review. It uses public-label-trained topology, "
+        "identity-shape, sponsor-shape, and document-profile features; "
+        "disable for generalized-only behavior.",
     ),
     # Hidden/native PDF text boundary. The first flag exposes the one
     # classification use: an independently repeated negative-polarity

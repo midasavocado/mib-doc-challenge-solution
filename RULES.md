@@ -7,6 +7,18 @@
 > describe Engine B's deliberately public-fit benchmark mode. Organizer rules
 > against hardcoded answers and manual per-case output editing still apply.
 
+The default bridge is conservative even though Engine B is public-fit. Engine
+B starts from abstention and may resolve an Engine-A review only when it matches
+Engine A's independently preserved pre-safety direction. An Engine-A denial or
+authenticated approval always wins; a contradictory Engine-B denial may demote
+an unsigned Engine-A approval only to review. Visible risk, signed conflict, unknown fee,
+medical-clearance gaps, and authority mismatches remain absolute vetoes; a
+late pixel-visible review flag, blank active-case arrival, or incomplete
+transit packet also creates a non-bridgeable review fence. A
+non-bridged row retains Engine A's confidence. The earlier public artifact in
+which Engine B could resolve any review and all rows received 0.99 confidence
+is historical diagnostic evidence, not the current release contract.
+
 This file is the promotion contract for every classification, extraction, and
 confidence change. Its split, identity, and anti-memorization gates are
 stricter than the challenge minimum. Its default evidence profile deliberately
@@ -254,11 +266,11 @@ envelopes: the 2 `APPROVED` envelopes were both approvals, while the 12
 only the two-fold `APPROVED` family is active; the tempting but impure denial
 generalization is explicitly rejected.
 
-## 5. Learned-model 800/200 rule
+## 5. Engine-A learned-model 800/200 rule
 
-No learned classifier, ranker, calibrator, tree, forest, neural model, or
-automatically mined rule may be enabled unless it first passes five internal
-out-of-fold audits **inside the 800-case development partition**:
+No learned Engine-A classifier, ranker, calibrator, tree, forest, neural model,
+or automatically mined rule may be enabled unless it first passes five
+internal out-of-fold audits **inside the 800-case development partition**:
 
 - five deterministic folds over the 800 development rows;
 - for each fold, exactly 640 rows are used for fitting and 160 for internal
@@ -299,9 +311,13 @@ consecutive 160-row blocks. Their newline-terminated sorted-ID commitments are:
 - fold 3: `fb707a04ccf6005cbbfc23d581152eb7dd519ddf3655c14bd6930a558f49a415`
 - fold 4: `0eb69d8ec9130186afd438e38fb137fafa7387b4996b4c98077670a3982394b9`
 
-A model trained on all 1,000 is not part of this prospective audit. The
-submission candidate remains the model fit on 800 and tested once on 200. A
-failed model is removed from runtime, artifacts, flags, and documentation.
+A model trained on all 1,000 is not part of this prospective Engine-A audit.
+The Engine-A scientific candidate remains the model fit on 800 and evaluated
+through the aggregate-only 200 boundary. Engine B is a separate public-fit
+benchmark branch explicitly outside that claim: it was trained on all 1,000,
+is quarantined behind `MIB_BENCHMARK_FIT_CLASSIFIER`, and is judged only as a
+disclosed public-data adaptation. A failed Engine-A model is removed from
+runtime, artifacts, flags, and documentation.
 
 The 240-tree adjudication forest is the canonical rejection example: its
 full-fit projection reached 146.43/150, but five strict 800/200 folds produced
@@ -634,10 +650,14 @@ answer-shaped artifact as a souvenir.
 ## 10. Final release checklist
 
 - [x] New manual discovery inspected only the frozen 800 development rows.
-- [x] No learned component is active; rejected models were evaluated with
-      five internal 640/160 development folds and removed completely.
-- [x] No prohibited identifier, identity, lookup, fingerprint, or target
-      feature reaches classification.
+- [x] No learned case classifier is active in Engine A; rejected Engine-A
+      models were evaluated with five internal 640/160 development folds and
+      removed completely. Engine B's two locally trained public-data heads are
+      active, separately flagged, and disclosed as benchmark fit rather than
+      generalization evidence.
+- [x] No case ID, filename, answer lookup, fingerprint, or target reaches
+      either classifier. Engine A also excludes identity; Engine B deliberately
+      uses name and sponsor shapes, disclosed here and in the README/MEMO.
 - [x] Every terminal rule has a documented mechanism, support, controls, and
       general vetoes.
 - [x] Development has zero catastrophic false approvals.
@@ -647,9 +667,10 @@ answer-shaped artifact as a souvenir.
 - [x] Extraction reports exact-cell gains and losses with verdict invariants.
 - [x] Confidence is supported by held-out reliability rather than a desired
       score.
-- [x] Schema and Docker checks use the 800 development packets and the
-      organizer validation controls only. Docker timing never uses the 200.
-- [x] Total Docker runtime is below four seconds per PDF under the organizer
-      resource contract on the fixed 200-packet development fixture.
-- [x] `README.md`, `MEMO.md`, and `CHANGELOG.md` match the promoted code and
-      distinguish the full-800 host score from the Docker development slice.
+- [x] The exact organizer-style Docker runner completed all 1,000 public
+      packets with 1,000 valid rows under the published resource controls.
+- [x] Total end-to-end Docker runtime is 3.546 seconds per PDF under the
+      organizer resource contract on that full 1,000-packet run.
+- [x] `README.md`, `MEMO.md`, and `CHANGELOG.md` distinguish generalized
+      Engine-A results, aggregate-only validation, public-fit Engine B, and
+      deterministic artifact replay.

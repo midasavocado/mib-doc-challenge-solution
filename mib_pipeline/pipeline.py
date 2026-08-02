@@ -4659,6 +4659,10 @@ def _apply_output_policy_guard(pdf: Path, result: dict) -> None:
     transition = f"{result['adjudication']}->NEEDS_REVIEW"
     result["adjudication"] = "NEEDS_REVIEW"
     result["confidence"] = min(float(result["confidence"]), 0.38)
+    # This review was created after Engine B's snapshot from affirmative
+    # packet-local evidence. Mark it as an absolute bridge veto so an older
+    # soft-gap marker cannot authorize a later re-promotion.
+    result["_bridge_hard_review_fence"] = review_reason
     _trace_decision(
         pdf.stem,
         "output_policy_guard",
@@ -7073,6 +7077,13 @@ def _apply_post_extraction_review_safeguard(
                 float(prediction["confidence"]),
                 0.78,
             )
+            # The late pixel read outranks the public-fit branch. Keep the
+            # reason internal and make the arbitration veto structural.
+            prediction["_bridge_hard_review_fence"] = (
+                "late_active_case_b13_review_flags"
+                if review_evidence
+                else "visible_blank_active_intake_arrival"
+            )
             _trace_decision(
                 prediction["case_id"],
                 "post_extraction_review_safeguard",
@@ -7510,11 +7521,19 @@ def main(input_dir: str, output_path: str) -> None:
     )
     benchmark_fit_predictions: dict[str, dict] | None = None
     if enabled("MIB_BENCHMARK_FIT_CLASSIFIER"):
-        # Engine B receives a branch-local copy after the shared extraction and
-        # claim-signal stages. It can mutate only its own adjudication and
-        # confidence; Engine A continues below on the original rows.
+        # Engine B receives the same extracted fields, but not Engine A's
+        # decision. Preserve A's pre-safety direction as an explicit lean and
+        # reset B to abstention so the two branches actually classify
+        # independently. The final arbiter may use B only when it corroborates
+        # that A lean; it cannot manufacture a direction of its own.
         benchmark_fit_predictions = {
-            case_id: dict(prediction)
+            case_id: {
+                **prediction,
+                "_bridge_primary_lean_decision": prediction["adjudication"],
+                "_bridge_primary_lean_confidence": prediction["confidence"],
+                "adjudication": "NEEDS_REVIEW",
+                "confidence": 0.18,
+            }
             for case_id, prediction in predictions.items()
         }
         try:
@@ -7626,6 +7645,12 @@ def main(input_dir: str, output_path: str) -> None:
     for case_id, (adjudication, confidence) in terminal_outputs.items():
         predictions[case_id]["adjudication"] = adjudication
         predictions[case_id]["confidence"] = confidence
+    # Output-only reconciliation can change the emitted home world after the
+    # first embargo check. Reapply the same corpus-wide invariant to the final
+    # tuple so a non-diplomatic approval cannot leave with an embargoed world.
+    # This is the only post-freeze policy check; it can only replace an
+    # approval with the existing denial and never consumes Engine B output.
+    _apply_final_output_embargo_safeguard(predictions)
     _apply_final_review_confidence_calibration(
         predictions,
         evidence_rows,
@@ -7673,6 +7698,8 @@ def main(input_dir: str, output_path: str) -> None:
         prediction.pop("_fee_intake_registry_review_route", None)
         prediction.pop("_probabilistic_denial_confidence", None)
         prediction.pop("_strict_fence_recovered_approval", None)
+        prediction.pop("_strict_approval_safety_reason", None)
+        prediction.pop("_bridge_hard_review_fence", None)
         prediction.pop("_source_complete_alternate_authority", None)
         prediction.pop("_clean_damaged_supporting_page", None)
         prediction.pop("_high_reliability_source_quorum", None)

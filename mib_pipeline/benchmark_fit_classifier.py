@@ -13,8 +13,10 @@ The module has three hard boundaries:
 * it is jointly disabled by ``MIB_BENCHMARK_FIT_CLASSIFIER=0``;
 * it receives a copy of the generalized branch's pre-final-safety rows and cannot
   mutate extraction fields in the generalized branch; and
-* its arbiter may resolve a generalized ``NEEDS_REVIEW`` but never overturns a
-  settled generalized approval or denial.
+* its arbiter may resolve a generalized ``NEEDS_REVIEW`` only when Engine A
+  independently leaned the same way before its final safety fence; it never
+  overturns a generalized denial or authenticated approval, and a contrary B
+  denial may move an unsigned A approval only to review.
 
 There is no case-ID answer table or manual output-row editing here. The model
 and historical rules are public-label-trained logic recovered from this
@@ -36,6 +38,12 @@ from .pattern_policy import intake_arrival_state
 
 
 _APPROVAL_THRESHOLD = 0.5580683534306421
+_SOFT_APPROVAL_GAPS = frozenset(
+    {
+        "unsupported_arrival",
+        "unsupported_fee_authorization",
+    }
+)
 _FIELD_SENTINELS = {
     "applicant_name": "unknown",
     "species_code": "unknown",
@@ -986,13 +994,14 @@ def arbitrate_benchmark_fit_classifier(
 ) -> None:
     """Merge two independent decision branches without touching extraction.
 
-    Generalized decisive outcomes have evidence precedence. The benchmark-fit
-    branch is allowed to resolve only a generalized abstention. Public replay
-    measured the resulting route family at near-perfect aggregate accuracy.
-    Combined public-benchmark mode therefore applies one uniformly fitted 0.99
-    confidence; this is benchmark calibration, not per-record certainty.
-    Generalized-only confidence remains unchanged byte for byte when the flag
-    is disabled.
+    Generalized denials and authenticated approvals have evidence precedence.
+    A benchmark-fit decision can resolve an Engine A abstention only when
+    Engine A independently leaned in the same direction before its final
+    safety pass. Approval is additionally limited to two soft completeness
+    gaps; hard risk, conflict, medical-clearance, and authority vetoes remain
+    absolute. A contrary B denial can move an unsigned A approval only to
+    review. A bridged decision receives conservative 0.90 confidence. Every
+    other row retains Engine A's original confidence byte for byte.
     """
 
     if (
@@ -1006,26 +1015,93 @@ def arbitrate_benchmark_fit_classifier(
             continue
         primary_decision = str(result["adjudication"])
         alternate_decision = str(alternate["adjudication"])
+        primary_lean = str(
+            alternate.get(
+                "_bridge_primary_lean_decision",
+                "NEEDS_REVIEW",
+            )
+        )
+        primary_lean_confidence = float(
+            alternate.get("_bridge_primary_lean_confidence", 0.0)
+        )
+        safety_reason = result.get("_strict_approval_safety_reason")
         selected = primary_decision
         reason = "engines_agree"
-        if (
+        corroborated_direction = (
             primary_decision == "NEEDS_REVIEW"
             and alternate_decision != "NEEDS_REVIEW"
+            and primary_lean == alternate_decision
+        )
+        conservative_approval_support = (
+            alternate_decision == "APPROVED"
+            and safety_reason in _SOFT_APPROVAL_GAPS
+            and not result.get("_bridge_hard_review_fence")
+            and result.get("risk_flags") == "none"
+            and result.get("fee_status") in {"paid", "waived"}
+            and not result.get("_untrusted_visible_decision_conflict")
+            and not result.get(
+                "_untrusted_review_only_visible_denial_conflict"
+            )
+            and all(
+                result.get(field) != sentinel
+                for field, sentinel in _FIELD_SENTINELS.items()
+                if field not in {"arrival_date", "risk_flags", "fee_status"}
+            )
+            and (
+                safety_reason == "unsupported_arrival"
+                or result.get("arrival_date")
+                != _FIELD_SENTINELS["arrival_date"]
+            )
+        )
+        conservative_denial_support = (
+            alternate_decision == "DENIED"
+            and safety_reason is None
+            and not result.get("_bridge_hard_review_fence")
+            and (
+                result.get("risk_flags") != "none"
+                or result.get("fee_status") == "unpaid"
+            )
+            and not result.get("_untrusted_visible_decision_conflict")
+        )
+        if corroborated_direction and (
+            conservative_approval_support or conservative_denial_support
         ):
             selected = alternate_decision
-            reason = "benchmark_resolves_generalized_review"
+            reason = "benchmark_corroborates_generalized_lean"
+            result["confidence"] = 0.90
+        elif primary_decision == "NEEDS_REVIEW" and (
+            alternate_decision != "NEEDS_REVIEW"
+        ):
+            reason = "benchmark_lacks_generalized_support"
+        elif (
+            primary_decision == "APPROVED"
+            and alternate_decision == "DENIED"
+            and primary_lean_confidence < 0.99
+        ):
+            # B is not trusted enough to deny over A, but two contradictory
+            # unsigned classifiers are not enough to approve either. Preserve
+            # authenticated 0.99 A findings; otherwise fail closed to review.
+            selected = "NEEDS_REVIEW"
+            result["confidence"] = min(
+                float(result["confidence"]),
+                0.50,
+            )
+            reason = "benchmark_denial_vetoes_unsigned_approval"
         elif primary_decision != alternate_decision:
             # A visible-evidence decision outranks a contradictory or
             # abstaining public-fit model. This also prevents Engine B from
             # creating a catastrophic false approval over Engine A's denial.
             reason = "generalized_decisive_precedence"
         result["adjudication"] = selected
-        result["confidence"] = 0.99
         _pipeline._trace_decision(
             case_id,
             "benchmark_fit_arbiter",
             generalized=primary_decision,
             benchmark_fit=alternate_decision,
+            generalized_lean=primary_lean,
+            generalized_lean_confidence=primary_lean_confidence,
+            safety_reason=safety_reason,
+            hard_review_fence=result.get("_bridge_hard_review_fence"),
             selected=selected,
             reason=reason,
         )

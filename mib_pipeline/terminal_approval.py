@@ -1417,6 +1417,13 @@ def apply_terminal_evidence_rules(
     rows = evidence_rows or {}
     for pdf in pdfs:
         prediction = predictions[pdf.stem]
+        # A recovery may turn a previously fenced review back into an
+        # approval before this function's final pass. Discard the prior fence
+        # reason at that point; only a fresh demotion below may authorize the
+        # conservative A/B bridge. This prevents an unrelated late review from
+        # inheriting stale soft-gap authority.
+        if prediction["adjudication"] == "APPROVED":
+            prediction.pop("_strict_approval_safety_reason", None)
         row = rows.get(pdf.stem, {})
         unknown_page_numbers = frozenset(
             int(page_number)
@@ -1831,6 +1838,12 @@ def apply_strict_approval_safety(
     rows = evidence_rows or {}
     for pdf in pdfs:
         prediction = predictions[pdf.stem]
+        # This function can run, then be followed by strict-fence recovery,
+        # and run again. A recovered approval must enter the second pass with
+        # no authority borrowed from its earlier demotion. Only a fresh
+        # demotion at the end of this pass may authorize the A/B bridge.
+        if prediction["adjudication"] == "APPROVED":
+            prediction.pop("_strict_approval_safety_reason", None)
         row = rows.get(pdf.stem, {})
         recognized_pages = sum(
             int(count)
@@ -2669,6 +2682,11 @@ def apply_strict_approval_safety(
         # This fence optimizes for safety, not changed-set accuracy. Preserve
         # the measured low probability of the replacement decision.
         prediction["confidence"] = replacement_confidence
+        # Kept internal until the final two-engine arbitration. The public-fit
+        # branch may corroborate only the two explicitly soft evidence gaps;
+        # every risk, conflict, medical-clearance, and authority veto remains
+        # absolute. This marker is removed before JSONL serialization.
+        prediction["_strict_approval_safety_reason"] = unsafe_reason
         _pipeline._trace_decision(
             pdf.stem,
             "strict_approval_safety",

@@ -4,6 +4,12 @@ This directory adds the license and model provenance files that are not
 present in the `rapidocr==3.9.2` wheel itself. The Docker image copies this
 directory to `/app/third_party_licenses`.
 
+The two generated Python classifier heads in `mib_pipeline/_approval_seed_2.py`
+and `mib_pipeline/_approval_seed_4.py` were exported by CatBoost 1.2.8 from
+models trained locally on the public challenge training set. They contain no
+CatBoost runtime dependency, but retain CatBoost's Apache-2.0 notice in
+`CatBoost-Apache-2.0.txt`.
+
 The remaining pinned Python wheels retain their own license and NOTICE files
 inside the installed package tree. In particular, redistribution must retain:
 

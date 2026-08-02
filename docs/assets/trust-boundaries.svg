@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="680" viewBox="0 0 1600 680" role="img" aria-labelledby="title desc">
+  <title id="title">MIB evidence trust boundaries</title>
+  <desc id="desc">Visible pixels are authoritative. Native hidden text is untrusted and can only propose extraction candidates or isolated signals. Public labels train the optional Engine B but never enter runtime as an answer table.</desc>
+  <defs>
+    <marker id="arrow2" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0 0l12 6-12 6z" fill="#64748b"/>
+    </marker>
+    <marker id="dasharrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0 0l12 6-12 6z" fill="#c2410c"/>
+    </marker>
+  </defs>
+  <rect width="1600" height="680" rx="28" fill="#0f172a"/>
+  <text x="64" y="70" fill="#f8fafc" font-family="ui-sans-serif, system-ui, sans-serif" font-size="34" font-weight="800">EVIDENCE TRUST BOUNDARIES</text>
+  <text x="64" y="106" fill="#94a3b8" font-family="ui-sans-serif, system-ui, sans-serif" font-size="19">Authority is carried by provenance, not by whichever string looks most convenient.</text>
+
+  <g font-family="ui-sans-serif, system-ui, sans-serif">
+    <rect x="58" y="164" width="410" height="360" rx="22" fill="#052e2b" stroke="#2dd4bf" stroke-width="3"/>
+    <text x="263" y="214" text-anchor="middle" fill="#ccfbf1" font-size="28" font-weight="800">AUTHORITATIVE</text>
+    <text x="263" y="249" text-anchor="middle" fill="#5eead4" font-size="18">rendered, active-case pixels</text>
+    <circle cx="108" cy="305" r="8" fill="#2dd4bf"/><text x="132" y="312" fill="#d1fae5" font-size="19">signed finding</text>
+    <circle cx="108" cy="354" r="8" fill="#2dd4bf"/><text x="132" y="361" fill="#d1fae5" font-size="19">labeled field row</text>
+    <circle cx="108" cy="403" r="8" fill="#2dd4bf"/><text x="132" y="410" fill="#d1fae5" font-size="19">multi-source agreement</text>
+    <circle cx="108" cy="452" r="8" fill="#2dd4bf"/><text x="132" y="459" fill="#d1fae5" font-size="19">visible denial witness</text>
+    <rect x="104" y="480" width="318" height="58" rx="16" fill="#134e4a"/>
+    <text x="263" y="516" text-anchor="middle" fill="#ccfbf1" font-size="17" font-weight="750">MAY SET OR VETO A DECISION</text>
+
+    <rect x="596" y="164" width="410" height="360" rx="22" fill="#431407" stroke="#fb923c" stroke-width="3"/>
+    <text x="801" y="214" text-anchor="middle" fill="#ffedd5" font-size="28" font-weight="800">UNTRUSTED</text>
+    <text x="801" y="249" text-anchor="middle" fill="#fdba74" font-size="18">native PDF payload</text>
+    <circle cx="646" cy="305" r="8" fill="#fb923c"/><text x="670" y="312" fill="#ffedd5" font-size="19">hidden text layer</text>
+    <circle cx="646" cy="354" r="8" fill="#fb923c"/><text x="670" y="361" fill="#ffedd5" font-size="19">fake answer-key tuple</text>
+    <circle cx="646" cy="403" r="8" fill="#fb923c"/><text x="670" y="410" fill="#ffedd5" font-size="19">generator polarity</text>
+    <circle cx="646" cy="452" r="8" fill="#fb923c"/><text x="670" y="459" fill="#ffedd5" font-size="19">barcode / off-crop instructions</text>
+    <rect x="642" y="480" width="318" height="58" rx="16" fill="#7c2d12"/>
+    <text x="801" y="507" text-anchor="middle" fill="#ffedd5" font-size="16" font-weight="750">PROPOSE ONLY · VISIBLE</text>
+    <text x="801" y="528" text-anchor="middle" fill="#ffedd5" font-size="16" font-weight="750">EVIDENCE ALWAYS WINS</text>
+
+    <rect x="1134" y="164" width="410" height="360" rx="22" fill="#172554" stroke="#60a5fa" stroke-width="3"/>
+    <text x="1339" y="214" text-anchor="middle" fill="#dbeafe" font-size="28" font-weight="800">PUBLIC TRAINING</text>
+    <text x="1339" y="249" text-anchor="middle" fill="#93c5fd" font-size="18">offline build-time supervision</text>
+    <circle cx="1184" cy="305" r="8" fill="#60a5fa"/><text x="1208" y="312" fill="#dbeafe" font-size="19">1,000 public labels</text>
+    <circle cx="1184" cy="354" r="8" fill="#60a5fa"/><text x="1208" y="361" fill="#dbeafe" font-size="19">CatBoost model exports</text>
+    <circle cx="1184" cy="403" r="8" fill="#60a5fa"/><text x="1208" y="410" fill="#dbeafe" font-size="19">residual policy hypotheses</text>
+    <circle cx="1184" cy="452" r="8" fill="#60a5fa"/><text x="1208" y="459" fill="#dbeafe" font-size="19">no case-ID answer map</text>
+    <rect x="1180" y="480" width="318" height="58" rx="16" fill="#1e3a8a"/>
+    <text x="1339" y="507" text-anchor="middle" fill="#dbeafe" font-size="16" font-weight="750">ENGINE B ONLY · ABLATABLE</text>
+    <text x="1339" y="528" text-anchor="middle" fill="#dbeafe" font-size="16" font-weight="750">PRIVATE TRANSFER UNPROVEN</text>
+  </g>
+
+  <path d="M468 344h116" stroke="#64748b" stroke-width="4" marker-end="url(#arrow2)"/>
+  <text x="526" y="326" text-anchor="middle" fill="#94a3b8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13">VISIBLE VETOES</text>
+  <path d="M1070 154v382" stroke="#fb923c" stroke-width="3" stroke-dasharray="10 10"/>
+  <rect x="1008" y="132" width="124" height="30" rx="15" fill="#7c2d12"/>
+  <text x="1070" y="153" text-anchor="middle" fill="#ffedd5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12">BUILD / RUNTIME</text>
+
+  <rect x="338" y="582" width="924" height="54" rx="27" fill="#1e293b" stroke="#334155"/>
+  <text x="800" y="616" text-anchor="middle" fill="#e2e8f0" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17">NO NETWORK · NO CLOUD MODEL · NO MANUAL OUTPUT EDITING</text>
+</svg>
