@@ -278,6 +278,17 @@ controls confirmed both transitions, and a deterministic two-row replay of the
 full artifact scores 46.9478 extraction, 73.4800 classification, 17.7769
 calibration, **138.2047 total, and 0 CFA**.
 
+The same frozen image then processed the organizer's complete 5,000-packet
+validation directory under the identical constrained contract. It emitted
+**5,000 unique, schema-valid rows with zero missing or extra case IDs**. The
+container-start-to-artifact wall clock was 17,682.5 seconds, or **3.5365
+seconds/PDF total**, including primary OCR, the 4,022-packet selective audit,
+extraction repair, both classifiers, arbitration, calibration, and JSONL
+writing. The validator reran successfully against
+`data/validation_manifest.csv`. The final validation artifact is 1,754,045
+bytes with SHA-256
+`64c39e664ad3990f969ef18bb8fd3245d5238375c9098fce9ce30752ce703dc2`.
+
 The final ARM64 image is 217,916,620 bytes (0.20 GiB). The full-run prediction
 SHA-256 is `f8829b96111c7907eaa33f33c1560548c9195fa244dd812f696ccc86de055b4a`;
 the final-candidate replay and evaluation SHA-256 values are
@@ -335,10 +346,10 @@ GEOS obligations.
 - [x] organizer source refreshed and contract re-read
 - [x] constrained ARM64 full 1,000 run, score, CFA repair, and schema checks
 - [x] clean AMD64 cross-build and emulated entrypoint check
-- [ ] generate and validate the final 5,000-row validation `predictions.jsonl`
-- [ ] copy the memo and solution link into `submissions/midasavocado/`
+- [x] generate and validate the final 5,000-row validation `predictions.jsonl`
+- [x] copy predictions, memo, and solution link into
+      `submissions/midasavocado/`
 - [ ] submit the form and open the organizer pull request
 
-The last three items require the final validation run and external submission
-actions; they are deliberately visible instead of being hand-waved into a
-green checkmark.
+The remaining item is an external submission action and is deliberately left
+for the participant instead of being hand-waved into a green checkmark.

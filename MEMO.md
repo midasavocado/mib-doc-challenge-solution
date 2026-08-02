@@ -158,6 +158,15 @@ the full artifact rather than pretending a second full Docker run occurred.
 The final image is 217,916,620 bytes (0.20 GiB). These are public runtime and
 score checks, not validation/private-score evidence.
 
+The frozen image subsequently completed the full 5,000-packet validation
+directory under the same organizer controls. It emitted 5,000 unique,
+schema-valid rows with zero missing or extra IDs. Container start to final
+artifact emission took 17,682.5 seconds, or **3.5365 seconds/PDF total**. The
+organizer validator passed against `data/validation_manifest.csv`; the
+1,754,045-byte artifact SHA-256 is
+`64c39e664ad3990f969ef18bb8fd3245d5238375c9098fce9ce30752ce703dc2`.
+No private labels or validation score were available or inferred.
+
 ## Runtime and reproducibility
 
 The Docker image accepts exactly:
