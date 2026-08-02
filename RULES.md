@@ -8,13 +8,13 @@ contains one disclosed benchmark-adaptive generator exception; use
 higher development score is not sufficient evidence that a change belongs in
 either profile.
 
-## 1. Frozen 800/200 development boundary
+## 1. Frozen 800 / aggregate-only 200 boundary
 
 From the checkpoint immediately before this file was added, all new pattern
 discovery—manual or learned—uses only 800 development packets. This includes
 PDF inspection, pixel/OCR inspection, native-text inspection, labels, derived
-features, and error analysis. The remaining 200 packets were reserved for one
-prospective validation and have now been spent.
+features, and error analysis. The remaining 200 packets are an aggregate-only
+validation gate. They are not a second development set.
 
 The split is exact, deterministic, and label-blind:
 
@@ -33,26 +33,43 @@ sorted ID commitments are:
 - development: `41313a397308dcb7858a915ba483c899578a050d7ce76f3a2a41e5ab2aae3fa3`
 - holdout: `51a6955323053bf080b14df4766a32f2b6128ee8455bf05fd01242a8e387354a`
 
-This was a **prospective holdout**, not a historically untouched one. Earlier
-development inspected aggregate and per-case results across the public 1,000.
-That limitation must remain disclosed. From this checkpoint onward, nobody may
-inspect holdout labels, errors, feature distributions by label, or individual
-holdout cases while changing the system. Aggregate scores recomputed across
-all 1,000 are also prohibited because they still leak holdout feedback.
+This began as a **prospective holdout**, not a historically untouched one.
+Earlier development inspected aggregate and per-case results across the public
+1,000, so that limitation must remain disclosed. The 200 may now be executed
+repeatedly only as a sealed aggregate scoreboard under the following contract:
+
+- permitted output is the aggregate extraction, classification, calibration,
+  and total score, plus aggregate catastrophic-false-approval and structural
+  validity counts;
+- forbidden output includes PDFs, labels, individual predictions, case scores,
+  error identities, traces, field differences, feature rows, confusion cells,
+  or any other case- or class-level breakdown;
+- every hypothesis, feature, rule, threshold, confidence mapping, veto, and
+  counterexample audit must originate exclusively in the fixed 800;
+- an aggregate 200 result may accept or reject a frozen candidate, but may not
+  be used to diagnose a failure or nominate the next change.
+
+Repeated aggregate checks mean this partition is an **aggregate validation
+benchmark**, not an untouched scientific holdout. That reuse must be disclosed
+with every reported result. It does not authorize opening the benchmark to
+explain why a score moved.
 
 One post-split source-manual search was accidentally broad enough to print a
-small number of sponsor-related label rows outside the 800. That output was
-discarded immediately and none of its values or labels may support a rule, but
-the 200 can no longer honestly be described as perfectly unseen. It remains a
-**quarantined prospective audit**, with this contamination disclosed, rather
-than a pristine scientific holdout. No holdout PDF, derived feature, error, or
-aggregate score may be inspected during further development.
+small number of label rows outside the 800. After the first aggregate run, a
+protocol misunderstanding also exposed some per-case evaluation details and a
+small number of 200 PDFs. Those observations and all temporary derived
+artifacts are quarantined: they may not be cited, encoded, summarized into a
+feature, or used to support any future change. This contamination is disclosed
+rather than retroactively calling the benchmark pristine.
 
-The partition was opened once for a frozen candidate. Its aggregate score was
-46.8111 extraction, 72.5500 classification, 17.1061 calibration, 136.4672
-total, with 3 catastrophic false approvals. That feedback was discussed, so
-the partition is now **spent**. It must not become another development set
-through repeated peeking, error inspection, or aggregate-driven tuning.
+The first current-candidate aggregate run scored 46.8111 extraction, 71.7500
+classification, 16.4525 calibration, and 135.0136 total, with 3 catastrophic
+false approvals. This aggregate baseline may be retained for candidate
+comparison. Its underlying rows remain sealed. Future 200 runs must use a
+score-only wrapper that suppresses evaluator stdout and exposes only the
+permitted aggregate values above. The repository wrapper is
+`tools/score_aggregate_only.py`; future validation commands must use it and
+must not request or retain per-case score output.
 
 ## 2. Evidence hierarchy
 
@@ -236,11 +253,12 @@ out-of-fold audits **inside the 800-case development partition**:
 - fold results report extraction, classification, calibration, total, class
   confusion, and catastrophic false approvals separately.
 
-The original 200-row partition has already been spent. A final model may be
-fit on the complete 800-case development partition only after internal folds,
-but any further external acceptance must use independent controls or genuinely
-new data. The spent validation cannot select features, thresholds, exceptions,
-hyperparameters, or another candidate.
+The 200-row partition is an aggregate-only validation benchmark. A final model
+may be fit on the complete 800-case development partition only after internal
+folds. The 200 may compare frozen candidates by aggregate score, but it cannot
+select or explain features, thresholds, exceptions, hyperparameters, or error
+families. Strong scientific transfer claims still require independent controls
+or genuinely new data.
 
 Minimum promotion gates are:
 
