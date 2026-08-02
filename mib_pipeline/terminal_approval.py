@@ -2228,6 +2228,26 @@ def apply_strict_approval_safety(
             med3_reciprocal_registry_clearance
             or dip_registry_native_clearance
         )
+        med3_complete_distributed_authority = (
+            enabled("MIB_MED3_COMPLETE_DISTRIBUTED_AUTHORITY")
+            and prediction["visa_class"] == "MED-3"
+            and risk_state == "absent"
+            and {"intake", "registry", "sponsor"} <= source_kinds
+            and prediction["fee_status"] in {"paid", "waived"}
+            and safety_core_visible
+            and arrival_supported
+            and not flags
+            and row.get("_audit_decision") is None
+            and row.get("_audit_reason") is None
+            and not row.get("_audit_contested")
+            and int(row.get("_audit_active_unknown_pages", 0)) == 0
+            and _visible_denial_reason(
+                pdf,
+                prediction,
+                row,
+            )
+            is None
+        )
         unsafe_reason: str | None = None
         replacement_confidence = 0.18
         if flags & (_HARD_FLAGS | _REVIEW_FLAGS):
@@ -2316,13 +2336,16 @@ def apply_strict_approval_safety(
             enabled("MIB_MED3_ABSENT_BIOMETRIC_REVIEW")
             and prediction["visa_class"] == "MED-3"
             and risk_state == "absent"
+            and not med3_complete_distributed_authority
         ):
             # Strict safety ablation: MED-3 is the one visa family whose
             # approval contract affirmatively requires a clean B-13. This is
             # a visa-wide evidence requirement, not a species, identity,
-            # sponsor, date, or case exception. It is the conservative default
-            # despite valid development approvals with an omitted panel; the
-            # flag preserves the measured safety/coverage ablation.
+            # sponsor value, date, or case exception. A complete distributed
+            # sponsor+intake+registry chain is the general counter-rule only
+            # when every core fact, arrival, and common safety veto agrees. Its
+            # marginal development cohort is five correct approvals across
+            # four folds; it never promotes an existing review.
             unsafe_reason = "medical_visa_without_affirmative_clean_b13"
         elif (
             risk_state != "clean"

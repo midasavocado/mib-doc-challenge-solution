@@ -80,6 +80,16 @@ OPERATIONAL_FLAGS = (
 
 
 EVIDENCE_FLAGS = (
+    # Public benchmark-fit classifier. This is deliberately separate from the
+    # generalized evidence engine so it can be disabled with one switch.
+    FeatureFlag(
+        "MIB_BENCHMARK_FIT_CLASSIFIER",
+        "1",
+        "Run the quarantined public-training classifier as a second decision "
+        "branch and let it resolve generalized NEEDS_REVIEW results. It uses "
+        "public-label-trained topology, identity-shape, sponsor-shape, and "
+        "document-profile features; disable for generalized-only behavior.",
+    ),
     # Hidden/native PDF text boundary. The first flag exposes the one
     # classification use: an independently repeated negative-polarity
     # generator signal. It never follows the hidden adjudication directly.
@@ -161,6 +171,13 @@ EVIDENCE_FLAGS = (
         "Require an affirmative clean B-13 state for unsigned MED-3 approval; "
         "enabled as the conservative zero-catastrophic-approval default even "
         "though merely absent panels also occur in valid development approvals.",
+    ),
+    FeatureFlag(
+        "MIB_MED3_COMPLETE_DISTRIBUTED_AUTHORITY",
+        "1",
+        "Preserve an upstream MED-3 approval only when complete visible core "
+        "facts and arrival agree across sponsor, intake, and registry sources "
+        "and every ordinary safety veto is clear.",
     ),
     FeatureFlag(
         "MIB_STRICT_FENCE_RECOVERY",
@@ -249,6 +266,12 @@ EVIDENCE_FLAGS = (
         "1",
         "Apply the final identity-free confidence calibration.",
     ),
+    FeatureFlag(
+        "MIB_CONFIDENCE_POST_BLEND_PLATT",
+        "1",
+        "Apply the five-fold-selected, class-conditional monotone mapping to "
+        "final confidence; adjudication and extraction remain frozen.",
+    ),
 )
 
 
@@ -256,7 +279,14 @@ ALL_FEATURE_FLAGS = OPERATIONAL_FLAGS + EVIDENCE_FLAGS
 
 
 EVIDENCE_PROFILES = {
+    "generalized_only": {
+        "MIB_BENCHMARK_FIT_CLASSIFIER": "0",
+    },
+    "public_benchmark_fit": {
+        "MIB_BENCHMARK_FIT_CLASSIFIER": "1",
+    },
     "visible_evidence_only": {
+        "MIB_BENCHMARK_FIT_CLASSIFIER": "0",
         "MIB_UNTRUSTED_NEGATIVE_CLAIM_ROUTING": "0",
         "MIB_UNTRUSTED_REGISTRY_STATUS_ROUTING": "0",
         "MIB_UNTRUSTED_SPONSOR_NOTICE_ROUTING": "0",
@@ -271,6 +301,7 @@ EVIDENCE_PROFILES = {
         "MIB_BLURRED_MANUAL_APPROVAL_RECOVERY": "0",
     },
     "experimental_signals_off": {
+        "MIB_BENCHMARK_FIT_CLASSIFIER": "0",
         "MIB_UNTRUSTED_NEGATIVE_CLAIM_ROUTING": "0",
         "MIB_UNTRUSTED_REGISTRY_STATUS_ROUTING": "0",
         "MIB_UNTRUSTED_SPONSOR_NOTICE_ROUTING": "0",
@@ -318,6 +349,8 @@ def enabled(name: str, default: bool | None = None) -> bool:
 def runtime_mode() -> str:
     """Return a truthful one-line description for the execution log."""
 
+    if enabled("MIB_BENCHMARK_FIT_CLASSIFIER"):
+        return "generalized+public-benchmark-fit-arbiter-configured"
     payload_flags = (
         "MIB_UNTRUSTED_NEGATIVE_CLAIM_ROUTING",
         "MIB_UNTRUSTED_REGISTRY_STATUS_ROUTING",

@@ -1,5 +1,12 @@
 # MIB Generalization and Evidence Rules
 
+> Historical generalized-mode protocol. The user explicitly reopened the
+> 1,000 public training rows for the separately flagged
+> `MIB_BENCHMARK_FIT_CLASSIFIER` experiment. The prohibitions and 800/200 seal
+> below continue to describe Engine A and generalization claims; they do not
+> describe Engine B's deliberately public-fit benchmark mode. Organizer rules
+> against hardcoded answers and manual per-case output editing still apply.
+
 This file is the promotion contract for every classification, extraction, and
 confidence change. Its split, identity, and anti-memorization gates are
 stricter than the challenge minimum. Its default evidence profile deliberately

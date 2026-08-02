@@ -14,6 +14,7 @@ from __future__ import annotations
 import concurrent.futures
 import difflib
 import json
+import math
 import os
 import re
 import subprocess
@@ -5590,6 +5591,37 @@ def _apply_final_review_confidence_calibration(
             result["confidence"] = 0.99
 
 
+def _apply_post_blend_platt_confidence_calibration(
+    predictions: dict[str, dict],
+) -> None:
+    """Map final confidence through a five-fold-selected monotone calibrator.
+
+    The mapping was trained only on the fixed 800 development rows after the
+    existing coarse blend. Runtime inputs are the frozen adjudication and its
+    confidence, so extraction and classification are structurally unreachable.
+    """
+
+    if not enabled("MIB_CONFIDENCE_POST_BLEND_PLATT"):
+        return
+    if not enabled("MIB_CONFIDENCE_BLEND", True):
+        raise RuntimeError(
+            "MIB_CONFIDENCE_POST_BLEND_PLATT requires MIB_CONFIDENCE_BLEND"
+        )
+    coefficients = {
+        "APPROVED": (0.110221802056529, 0.505465044439257),
+        "DENIED": (-0.361981518247283, 1.041482020120454),
+        "NEEDS_REVIEW": (-0.975898829690350, 0.842355525440035),
+    }
+    for result in predictions.values():
+        intercept, coefficient = coefficients[result["adjudication"]]
+        confidence = min(max(float(result["confidence"]), 1e-4), 1 - 1e-4)
+        logit = math.log(confidence / (1.0 - confidence))
+        calibrated = 1.0 / (
+            1.0 + math.exp(-(intercept + coefficient * logit))
+        )
+        result["confidence"] = min(max(calibrated, 1e-6), 1 - 1e-6)
+
+
 def _levenshtein(left: str, right: str) -> int:
     previous = list(range(len(right) + 1))
     for left_index, left_character in enumerate(left, 1):
@@ -7476,6 +7508,41 @@ def main(input_dir: str, output_path: str) -> None:
         predictions,
         evidence_rows,
     )
+    benchmark_fit_predictions: dict[str, dict] | None = None
+    if enabled("MIB_BENCHMARK_FIT_CLASSIFIER"):
+        # Engine B receives a branch-local copy after the shared extraction and
+        # claim-signal stages. It can mutate only its own adjudication and
+        # confidence; Engine A continues below on the original rows.
+        benchmark_fit_predictions = {
+            case_id: dict(prediction)
+            for case_id, prediction in predictions.items()
+        }
+        try:
+            from .benchmark_fit_classifier import (
+                apply_benchmark_fit_classifier,
+            )
+
+            apply_benchmark_fit_classifier(
+                pdfs,
+                benchmark_fit_predictions,
+            )
+        except Exception as error:
+            # The optional public-fit branch must never make the generalized
+            # pipeline unavailable. Structured tracing keeps the failure
+            # inspectable without adding private keys to submission rows.
+            _trace_decision(
+                "*",
+                "benchmark_fit_branch_failed",
+                error=type(error).__name__,
+            )
+            with _PRINT_LOCK:
+                print(
+                    "[benchmark-fit] branch failed; generalized output "
+                    f"preserved ({type(error).__name__})",
+                    file=sys.stderr,
+                    flush=True,
+                )
+            benchmark_fit_predictions = None
     from .terminal_approval import (
         apply_strict_approval_safety,
         apply_strict_fence_recovery,
@@ -7563,11 +7630,21 @@ def main(input_dir: str, output_path: str) -> None:
         predictions,
         evidence_rows,
     )
+    _apply_post_blend_platt_confidence_calibration(predictions)
     _project_sparse_review_risk_fault(
         pdfs,
         predictions,
         evidence_rows,
     )
+    if benchmark_fit_predictions is not None:
+        from .benchmark_fit_classifier import (
+            arbitrate_benchmark_fit_classifier,
+        )
+
+        arbitrate_benchmark_fit_classifier(
+            predictions,
+            benchmark_fit_predictions,
+        )
     for prediction in predictions.values():
         prediction.pop("_registry_applicant_read", None)
         prediction.pop("_source_applicant_reads", None)

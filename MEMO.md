@@ -7,11 +7,11 @@ history, including abandoned approaches and older checkpoints.
 
 ## Executive summary
 
-Earlier 145-point development replays relied on public-fit terminal profiles
-that did not transfer. Those checkpoints are historical. The promoted source
-combines general evidence rules, explicitly disclosed ablations, and one
-conservative MED-3 safety requirement selected on development before sealed
-aggregate validation.
+The repository now ships two deliberately separable classification branches.
+Engine A combines general evidence rules, disclosed ablations, and a
+conservative MED-3 safety requirement developed under the historical 800/200
+protocol. Engine B reconstructs this repository's own public-fit classifier
+from commit `d473fbf`; it is a benchmark instrument, not a transfer claim.
 
 The latest exact full replay on the
 deterministic 800-case development partition is:
@@ -39,6 +39,14 @@ not an untouched holdout: no per-row prediction, label, error, trace, feature,
 confusion cell, filename, or PDF was used for the final safety rule.
 [`RULES.md`](RULES.md) records the full boundary and experiment register.
 
+With `MIB_BENCHMARK_FIT_CLASSIFIER=1`, an exact artifact-level bridge replay on
+all 1,000 labeled public packets measured **46.6956 extraction, 79.9400
+classification, 19.9568 calibration, 146.5924 total, and 0 catastrophic false
+approvals**. This is not a fresh full OCR run: it applies the current Engine-B
+code and arbiter to a saved exact Engine-A artifact. A live two-packet smoke
+covered the projected residual boundary; current Engine A resolved one packet
+and Engine B resolved the other.
+
 An earlier evidence-invariant replay was byte-for-byte identical to its frozen
 800-row prediction artifact. A cold Linux OCR run had exposed two ordinary
 false approvals that the warm host cache did not: one program route consumed
@@ -47,9 +55,12 @@ recovery reopened an authenticated review. The fixes are symmetric invariants,
 not case exceptions: categorical program premises require visible observations,
 and 0.99 reviews are terminal.
 
-No participant challenge source is in the working tree or Docker image. The
-current engine is locally authored and uses no case, applicant identity, path,
-order, hash, fingerprint, or answer table as a decision feature.
+No participant challenge source is in the working tree or Docker image. Engine
+A is locally authored and uses no case, applicant identity, path, order, hash,
+fingerprint, or answer table as a decision feature. Engine B restores only our
+own generated model heads and rules from this repository's Git history. It has
+no answer table, but it deliberately uses public-fit identity/sponsor shapes
+and document profiles and must be judged accordingly.
 
 ## Why the rewrite exists
 
@@ -64,9 +75,11 @@ that package completely and replaces it with code written locally from:
 - ordinary open-source Poppler, Tesseract, RapidOCR, OpenCV, and ONNX Runtime
   interfaces.
 
-The old implementation remains reachable only through Git history for audit
-or recovery. It is not imported, copied into the image, or used to produce the
-new score.
+That participant-derived implementation remains reachable only through Git
+history for audit or recovery. It is not imported, copied into the image, or
+used to produce the new score. Engine B is different: it recovers our own later
+classifier/model code from `d473fbf` and adds a newly written counter-rule and
+arbiter.
 
 ## System view
 
@@ -88,17 +101,20 @@ flowchart LR
     end
 
     subgraph Decide["3 · Decide"]
-        SOURCES --> DIRECT["Direct evidence rules"]
-        DIRECT --> QUORUM["General multisource quorum"]
+        SOURCES --> DIRECT["Shared packet state"]
+        DIRECT --> QUORUM["Engine A · generalized rules"]
+        DIRECT -. "copied state" .-> PUBLIC["Engine B · public benchmark fit"]
         QUORUM --> FENCE{"Final approval safety"}
         FENCE -->|blocked| REVIEW["NEEDS_REVIEW"]
         FENCE -->|clear| TERMINAL["APPROVED / DENIED"]
+        REVIEW --> ARBITER["Asymmetric arbiter"]
+        TERMINAL --> ARBITER
+        PUBLIC --> ARBITER
     end
 
     subgraph Emit["4 · Emit"]
         RECON --> VALIDATE["Schema validation"]
-        REVIEW --> VALIDATE
-        TERMINAL --> VALIDATE
+        ARBITER --> VALIDATE
         VALIDATE --> JSONL["JSONL"]
     end
 
@@ -117,6 +133,12 @@ The ordering is deliberate:
 6. extraction-only reconciliation runs last and cannot feed a new premise back
    into adjudication;
 7. identity-free confidence bins are applied to the final result.
+
+When Engine B is enabled, it branches from a copied pre-safety packet state.
+The generalized branch still completes normally. The arbiter runs after both
+decisions and after extraction is frozen; it may accept a decisive Engine-B
+answer only when Engine A abstained. A settled Engine-A approval or denial has
+precedence over every Engine-B disagreement.
 
 ## The locally authored evidence audit
 
@@ -378,6 +400,51 @@ visibly supplies the same emitted date. A visibly blank or explicitly
 unreadable cell remains review. This distinction covers dozens of cases and
 uses evidence presence rather than the date value.
 
+## Public benchmark-fit bridge
+
+[`mib_pipeline/benchmark_fit_classifier.py`](mib_pipeline/benchmark_fit_classifier.py)
+is an intentionally quarantined second classifier. Its provenance is exact:
+the historical source rules and generated CatBoost heads were recovered from
+this repository's own commit `d473fbf`. One Sirius/current-extractor
+counter-rule and the arbiter were written locally for this bridge; neither
+participant code nor an external prediction file is imported at runtime.
+
+Engine B includes two kinds of public-label-trained logic:
+
+- two 350-tree generated CatBoost heads over page sequence, source topology,
+  fee/flag state, low-cardinality policy fields, and document-size/text-length
+  profiles;
+- ordered residual cells over applicant-name shape, sponsor-number shape,
+  program fields, damage markers, and source-support counts.
+
+Those features explain the score and the risk. They are more informative on
+the public generator than Engine A's conservative abstention, but several
+cells have only one to five public examples. They are benchmark fit by design.
+The module contains no `case_id -> decision` dictionary and never edits an
+output row by case identifier.
+
+The arbiter is deliberately asymmetric:
+
+| Engine A | Engine B | Selected result | Rationale |
+|---|---|---|---|
+| decisive | same decisive | common result | agreement |
+| `NEEDS_REVIEW` | decisive | Engine B | benchmark branch resolves abstention |
+| decisive | `NEEDS_REVIEW` | Engine A | visible/generalized evidence precedence |
+| decisive | opposite decisive | Engine A | benchmark contradiction cannot erase settled evidence |
+| `NEEDS_REVIEW` | `NEEDS_REVIEW` | `NEEDS_REVIEW` | neither branch has authority |
+
+Public bridge replay changed only adjudication and confidence. Engine-B output
+fields never replace Engine-A extraction. The public route family measured
+999/1,000 correct, so combined mode emits confidence 0.99 and scores 19.9568
+calibration points. With the flag set to `0`, the module is not imported and
+Engine-A adjudication, extraction, and calibration remain unchanged.
+
+This bridge is a useful disagreement experiment and public-score ceiling. It
+is not evidence that the name/sponsor cells will transfer to validation or the
+private anti-gaming set. The organizer permits candidate-trained models but
+forbids hardcoded answers and audits source manually; submission use therefore
+requires an explicit judgment call, not score laundering.
+
 ## Disclosed untrusted generator signal
 
 Some PDFs contain a complete schema-valid tuple in native text. The grammar is
@@ -422,6 +489,17 @@ This is not visible evidence, and the documentation does not pretend it is.
 `MIB_UNTRUSTED_NEGATIVE_CLAIM_ROUTING=0` disables the classification use.
 
 ## Extraction
+
+The same historical perfect checkpoint improved extraction by 101 raw points
+relative to the saved Engine-A artifact: 21 cells gained and one sponsor cell
+lost. The gains were six names, one species, nine visas, one sponsor net, one
+arrival date, one purpose, and one risk field. Current source already contains
+descendants of the historical case-bound/high-resolution repair helpers, so
+the bridge does **not** wholesale-copy Engine-B fields. A future extraction
+bridge should accept only a source-bound candidate when Engine A is unresolved,
+or when Engine A has no active-source support and an independent high-resolution
+reader agrees; sponsor replacement needs an even stronger gate because of the
+observed regression.
 
 ### Ordinary field recovery
 
@@ -482,6 +560,11 @@ The evaluator uses:
 mean_brier = mean((confidence - classification_correct)^2)
 calibration = 20 × max(0, 1 - 2 × mean_brier)
 ```
+
+Benchmark-fit calibration is isolated from the generalized Platt mapping. The
+bridge's fixed 0.99 confidence is fitted to its public route family and yields
+mean Brier 0.00108 / 19.9568 points on the saved 1,000-row replay. It must not
+be presented as private-set calibration.
 
 The exact generalized 800-case development run has mean Brier error
 **0.05310525**, producing **17.875790/20** calibration. Confidence is assigned
@@ -643,6 +726,9 @@ formula.
 
 | Artifact | Value |
 |---|---|
+| Public dual-engine bridge score | `146.59235555555554 / 150` |
+| Public dual-engine bridge prediction SHA-256 | `35c64aa505e98dd6dde80570afbce686806d4186fc91eabbbf674bcf65ad41b7` |
+| Public dual-engine bridge evaluation SHA-256 | `9cd2d96428917ee6338b7e91a5d66208bb50aabb40d918c76bd6523f22ea43e7` |
 | Organizer upstream core commit | `38ce8883` |
 | Organizer local submission-doc commit | `f480e6d6` |
 | Broad-safety code commit | `d17b3789e260ee6003d1bf9d8d31c644bc16c301` |
@@ -670,6 +756,12 @@ and exact evaluator result. Host and Linux-container OCR can legitimately
 differ, so each environment's artifact and score are reported separately.
 
 ## Overfit and compliance audit
+
+Engine B is explicitly excluded from the generalized claim below. It uses all
+1,000 public labels, exact failed-row inspection, name/sponsor shapes, document
+profiles, and tiny residual cells. That is the overfit benchmark the feature
+flag exists to expose. `MIB_BENCHMARK_FIT_CLASSIFIER=0` removes the branch;
+`visible_evidence_only` and `experimental_signals_off` disable it as well.
 
 The repository's binding experiment and promotion standard is
 [`RULES.md`](RULES.md). From the current checkpoint onward, manual pattern

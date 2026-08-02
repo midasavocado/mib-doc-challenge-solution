@@ -8,13 +8,11 @@ packets into one schema-valid JSONL record per case.
 `4 CPU workers` · `No network at inference` · `Deterministic policy` ·
 `Docker-ready` · `Feature-flagged evidence boundaries`
 
-Development and promotion are governed by the stricter
-[`RULES.md`](RULES.md) contract. New manual patterns use only a frozen 800-row
-development set; learned components additionally require five internal
-640/160 folds inside those 800 rows. The remaining 200 rows are a sealed,
-aggregate-only validation benchmark: runs may expose only section scores,
-structural counts, and the CFA count. No row, label, prediction, error, trace,
-feature, filename, or PDF from that benchmark may drive development.
+The repository now exposes two explicitly different classification modes.
+The generalized branch follows the historical 800/200 protocol recorded in
+[`RULES.md`](RULES.md). The separately flagged public-benchmark branch was fit
+and inspected on all 1,000 labeled training packets. It is useful for public
+replay and classifier-disagreement research, but it is not a transfer claim.
 
 ## Current result status
 
@@ -37,18 +35,47 @@ and 211 correct reviews. There are no denied cases approved. The final sealed
 [`tools/score_aggregate_only.py`](tools/score_aggregate_only.py); its rows and
 class-level confusion remain sealed.
 
-A score-first candidate reached **72.7000/80 validation classification** and
+A score-first generalized candidate reached **72.7000/80 validation classification** and
 **136.2405/150 total**, but retained one catastrophic false approval. It is not
 the default. The promoted rule requires an unsigned `MED-3` approval to have an
 affirmatively clean B-13 state. That visa-wide safety rule was developed on the
 800, froze before aggregate validation, and was not narrowed after it removed
 the CFA.
 
-The decision layer uses visible/source-bound evidence rules plus explicitly
-disclosed, jointly ablatable fictional-program hypotheses. It contains no
-case-ID, filename, applicant-name, row-order, hash, image-fingerprint, or
-answer-table adjudication feature. Low-support hypotheses remain disclosed as
-transfer risks rather than being promoted into universal facts.
+The generalized decision layer uses visible/source-bound evidence rules plus
+explicitly disclosed, jointly ablatable fictional-program hypotheses. It
+contains no case-ID, filename, applicant-name, row-order, hash,
+image-fingerprint, or answer-table adjudication feature. The benchmark-fit
+branch deliberately adds public-label-trained document-profile,
+applicant-name-shape, sponsor-number-shape, and small topology cells. Neither
+branch contains a case-ID answer map or manually edited output rows.
+
+### Public benchmark-fit bridge
+
+The feature-flagged/ablatable second branch reconstructs the repository's own
+historical classifier from commit `d473fbf` and adds one current-extractor
+counter-rule. It runs on a copy of the shared
+packet state. The arbiter follows one asymmetric rule: Engine B may resolve an
+Engine-A `NEEDS_REVIEW`, while Engine A's settled approval or denial always
+wins a disagreement. Classification is the only field the arbiter changes.
+
+An exact bridge replay using the saved 1,000-row Engine-A artifact and the
+current Engine-B code measured:
+
+| Evaluator section | Exact public bridge projection |
+|---|---:|
+| Extraction | 46.6956 / 50 |
+| Classification | 79.9400 / 80 |
+| Calibration | 19.9568 / 20 |
+| **Total** | **146.5924 / 150** |
+| Catastrophic false approvals | **0** |
+
+This is an artifact-level bridge replay, not a fresh end-to-end 1,000-PDF run.
+A two-packet live smoke test covered the projection's remaining review and the
+one public counter-cell; the current generalized branch resolved the former
+and the benchmark branch resolved the latter. The historical monolithic
+checkpoint remains 80/80 and 146.8078/150, but its score is not relabeled as a
+new current run.
 
 Historical 145-point development checkpoints and the rejected broad safety
 fence remain in [`CHANGELOG.md`](CHANGELOG.md). They are not current validation
@@ -65,13 +92,16 @@ flowchart LR
     B --> P["Independent pixel audit"]
     X --> E["Source precedence<br/>and field policy"]
     P --> C["Field reconciliation"]
-    E --> T["Terminal evidence rules"]
+    E --> T["Engine A<br/>generalized evidence rules"]
     T --> G{"Hard fence?"}
     G -->|yes| N["NEEDS_REVIEW"]
     G -->|no| D["APPROVED / DENIED"]
-    C --> J["Schema-valid JSONL"]
-    N --> J
-    D --> J
+    T -. "copied packet state" .-> BF["Engine B<br/>public benchmark fit"]
+    BF --> ARB["Asymmetric arbiter"]
+    N --> ARB
+    D --> ARB
+    ARB --> J["Schema-valid JSONL"]
+    C --> J
 
     H["Schema-valid hidden tuple"] -. "untrusted field candidate" .-> C
     H -. "disclosed negative-polarity signal" .-> T
@@ -95,6 +125,7 @@ risk. This extraction-only repair changes neither adjudication nor confidence.
 | [`mib_pipeline/evidence_audit.py`](mib_pipeline/evidence_audit.py) | Independent pixel read, provenance, precedence, reconciliation |
 | [`mib_pipeline/terminal_approval.py`](mib_pipeline/terminal_approval.py) | General approval quorum and final safety fence |
 | [`mib_pipeline/claim_signal.py`](mib_pipeline/claim_signal.py) | Isolated untrusted generator-polarity channel |
+| [`mib_pipeline/benchmark_fit_classifier.py`](mib_pipeline/benchmark_fit_classifier.py) | Historical public-fit Engine B and asymmetric decision arbiter |
 | [`mib_pipeline/feature_flags.py`](mib_pipeline/feature_flags.py) | Operational and evidence/trust controls |
 
 ## How decisions are made
@@ -291,6 +322,7 @@ interface; `1` enables and `0` disables a Boolean flag.
 
 | Flag | Default | Purpose |
 |---|---:|---|
+| `MIB_BENCHMARK_FIT_CLASSIFIER` | `1` | Run the public-label-trained Engine B and allow it to resolve Engine-A reviews; set `0` for generalized-only behavior |
 | `MIB_UNTRUSTED_NEGATIVE_CLAIM_ROUTING` | `1` | Disclosed inverted-generator classification channel; one validated family can supply alternate approval authority, while disagreement can only abstain |
 | `MIB_UNTRUSTED_REGISTRY_STATUS_ROUTING` | `1` | Disclosed native registry-status proposal; denial requires an independent pixel-visible witness |
 | `MIB_UNTRUSTED_SPONSOR_NOTICE_ROUTING` | `1` | Independently ablatable native sponsor-notice proposal; its diplomatic exception still passes the common safety fence |
@@ -303,6 +335,7 @@ interface; `1` enables and `0` disables a Boolean flag.
 | `MIB_HIGH_RES_ROTATED_FEE` | `1` | Recover a fragmented sideways fee row only when two active-case pixel scales agree |
 | `MIB_STRICT_APPROVAL_SAFETY` | `1` | Demote unsigned approvals with unsupported fee, explicit MED-3 panel, or archival-authority faults |
 | `MIB_MED3_ABSENT_BIOMETRIC_REVIEW` | `1` | Conservative zero-CFA rule: unsigned MED-3 requires an affirmative clean B-13 state |
+| `MIB_MED3_COMPLETE_DISTRIBUTED_AUTHORITY` | `1` | Preserve an upstream MED-3 approval when a complete sponsor+intake+registry chain and all safety vetoes agree |
 | `MIB_STRICT_FENCE_RECOVERY` | `1` | Recover fenced reviews only from disclosed source/program families after independent vetoes |
 | `MIB_EXPERIMENTAL_SYNTHETIC_POLICY` | `0` | Legacy master switch for every low-support fictional-program hypothesis |
 | `MIB_EXPERIMENTAL_REVIEW_POLICY` | `0` | Review-only fictional-program hypotheses |
@@ -317,6 +350,13 @@ interface; `1` enables and `0` disables a Boolean flag.
 | `MIB_JUDGMENT_FIELD_REPAIR` | `1` | Extraction-only signed-approval repair |
 | `MIB_DECISION_CONSISTENT_RISK_PROJECTION` | `1` | Output-only missing-B-13 or MED-3 risk inference |
 | `MIB_CONFIDENCE_BLEND` | `1` | Identity-free confidence bins |
+| `MIB_CONFIDENCE_POST_BLEND_PLATT` | `1` | Five-fold class-conditional monotone confidence map used by generalized-only mode |
+
+To run only the generalized classifier:
+
+```bash
+export MIB_BENCHMARK_FIT_CLASSIFIER=0
+```
 
 To disable every native hidden-text channel:
 
@@ -333,10 +373,12 @@ export MIB_UNTRUSTED_NATIVE_OUTPUT_READER=0
 The same mapping is available as
 `EVIDENCE_PROFILES["visible_evidence_only"]` for wrappers and audits.
 
-| Preset | What it disables |
+| Preset | Behavior |
 |---|---|
-| `visible_evidence_only` | Every native/hidden-text classification and extraction channel |
-| `experimental_signals_off` | Both untrusted classification proposals plus all low-support fictional-program rules; output-only hidden extraction remains available |
+| `generalized_only` | Public benchmark-fit Engine B only |
+| `public_benchmark_fit` | Explicitly enables Engine B; leaves every other evidence flag at its normal default |
+| `visible_evidence_only` | Engine B plus every native/hidden-text classification and extraction channel |
+| `experimental_signals_off` | Engine B, both untrusted classification proposals, and all low-support fictional-program rules; output-only hidden extraction remains available |
 
 ### Operational flags
 
@@ -392,6 +434,8 @@ memo files and does not change rules, evaluator, schema, or runner.
 
 | Artifact | SHA-256 |
 |---|---|
+| Public dual-engine bridge predictions | `35c64aa505e98dd6dde80570afbce686806d4186fc91eabbbf674bcf65ad41b7` |
+| Public dual-engine bridge evaluation | `9cd2d96428917ee6338b7e91a5d66208bb50aabb40d918c76bd6523f22ea43e7` |
 | Generalized 800 development predictions | `c537e8d2383eceb819ad4e2169dd0c37d4d5b575beede23510edaa93a2d6fc17` |
 | Generalized 800 development evaluation | `9a582d3d79f82d17b27b8b642e2a8293203c656b4d858d06de28b5b6a19d9f54` |
 | Current Docker development-slice predictions | `95f2cced59020e6076bf26d5900f5fb0e6c2c6a0310a036247b87d344e132b83` |
@@ -413,9 +457,12 @@ extra, missing, or invalid records.
 
 ## Generalization and limits
 
-There is no per-case answer table, identity routing, filename routing, exact
-date cell, document fingerprint, real-world demographic classifier, or
-terminal profile table in the current runtime. The disclosed fictional-species
+Generalized-only mode has no per-case answer table, identity routing, filename
+routing, exact-date cell, document fingerprint, real-world demographic
+classifier, or terminal profile table. Benchmark-fit mode intentionally uses
+identity/sponsor shapes and document profiles learned from the public training
+corpus, but still has no case-ID lookup table or hand-edited prediction rows.
+The disclosed fictional-species
 program hypotheses are split into review, denial, approval, and stricter
 approval-quorum flags. The negative-polarity claim is a separate,
 feature-flagged generator signal checked against readable signed controls.
@@ -438,7 +485,9 @@ That does not make public replay a private-set guarantee:
 - several complete fictional-program cohorts are small;
 - the exact 138.2286 score is development evidence; the separate aggregate
   validation score is 135.1749;
-- the historical 145.7151 score used rules removed by the generalization audit.
+- the historical 145.7151 generalized-development score and the current
+  146.5924 bridge projection answer different questions;
+- Engine B's public fit may regress sharply on validation or private layouts.
 
 Use the flags to run strict ablations, and preserve `NEEDS_REVIEW` when the
 selected evidence mode cannot support a terminal outcome.
@@ -449,8 +498,10 @@ The current evidence/provenance implementation was written locally from
 scratch against the organizer's public field manual, runtime contract, PDFs,
 and evaluator. An earlier Git revision temporarily contained a participant-
 derived MIT package. That package and its challenge-specific code are absent
-from the current source and Docker image; history is retained only for
-recovery and audit.
+from the current source and Docker image. The restored Engine-B model heads and
+historical residual rules come only from this repository's own commit
+`d473fbf`; the counter-rule and arbiter are new local code. No participant PR
+or external challenge solution was used.
 
 Open-source OCR and runtime dependencies retain their upstream notices in
 [`third_party_licenses`](third_party_licenses). The detailed engineering
