@@ -95,6 +95,40 @@ _DIP_REGISTRY_NATIVE_SPECIES = frozenset(
     {"JOVIAN_GASFORM", "VENUSIAN_MYCELIAL"}
 )
 
+
+def _experimental_policy_enabled(kind: str) -> bool:
+    """Return one direction-specific fictional-program switch.
+
+    The legacy master flag remains an explicit opt-in for the historical
+    combined experiment. Every direction defaults off after the directional
+    review-and-denial candidate failed to transfer in aggregate validation.
+    """
+
+    if enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", False):
+        return True
+    names = {
+        "approval": "MIB_EXPERIMENTAL_APPROVAL_POLICY",
+        "denial": "MIB_EXPERIMENTAL_DENIAL_POLICY",
+        "review": "MIB_EXPERIMENTAL_REVIEW_POLICY",
+    }
+    defaults = {"approval": False, "denial": False, "review": False}
+    return enabled(names[kind], defaults[kind])
+
+
+def _experimental_approval_quorum_enabled() -> bool:
+    """Return whether the visible source-quorum approval family is enabled.
+
+    The legacy combined switches still opt into the full historical family;
+    the dedicated switch allows source-authority proposals to be validated
+    without also activating lower-support named-program recoveries.
+    """
+
+    return bool(
+        _experimental_policy_enabled("approval")
+        or enabled("MIB_EXPERIMENTAL_APPROVAL_QUORUM")
+    )
+
+
 def _observation_sources(
     row: dict[str, Any],
     field: str,
@@ -993,7 +1027,7 @@ def _approval_quorum(
         and _visible_fee_supported(prediction, row)
     )
     luyten_xw2_digital_corridor = (
-        enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+        _experimental_approval_quorum_enabled()
         and prediction["home_world"] == "Luyten-b"
         and prediction["visa_class"] == "XW-2"
         and prediction["fee_status"] == "paid"
@@ -1024,7 +1058,7 @@ def _approval_quorum(
         and _visible_fee_supported(prediction, row)
     )
     kaiju_xw1_registry_clearance = (
-        enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+        _experimental_approval_quorum_enabled()
         and prediction["species_code"] == "KAIJU_MICRO"
         and prediction["visa_class"] == "XW-1"
         and prediction["declared_purpose"] != "transit"
@@ -1051,7 +1085,7 @@ def _approval_quorum(
     # visible denial witness. All matching public and signed-control packets
     # are approvals. This is page/source coverage, not a person or case rule.
     clean_damaged_supporting_page_quorum = (
-        enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+        _experimental_approval_quorum_enabled()
         and physical_pages == 4
         and "biometric" in source_kinds
         and len(source_kinds & {"fee", "intake", "registry"}) >= 2
@@ -1128,7 +1162,7 @@ def _approval_quorum(
     # exception uses a fictional visa program and evidence gaps only; no
     # applicant, sponsor, exact date, case id, or page fingerprint is read.
     diplomatic_embargo_exception = (
-        enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+        _experimental_approval_quorum_enabled()
         and prediction["visa_class"] == "DIP-1"
         and prediction["home_world"] in _pipeline.EMBARGOED_HOME_WORLDS
         # Let the later generator-signal stage own a negative-request packet.
@@ -1183,7 +1217,7 @@ def _approval_quorum(
     # controls add matching approvals while their medical review remains
     # excluded. These are not person, sponsor, date, order, or case rules.
     electronic_fee_common = (
-        enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+        _experimental_approval_quorum_enabled()
         and "intake" in source_kinds
         and prediction["fee_status"] in {"paid", "waived"}
         and row.get("_audit_risk_panel_state") in {"absent", "clean"}
@@ -1228,7 +1262,7 @@ def _approval_quorum(
     # 0 reviews across four internal folds. Signed review controls carry
     # explicit mismatch flags and remain review.
     med3_reciprocal_registry_quorum = (
-        enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+        _experimental_approval_quorum_enabled()
         and prediction["visa_class"] == "MED-3"
         and prediction["home_world"]
         in _MED3_RECIPROCAL_REGISTRY_JURISDICTIONS
@@ -1264,7 +1298,7 @@ def _approval_quorum(
     # the signed controls contribute one approval while their one review is
     # vetoed by an explicit identity-conflict flag.
     triangulan_fee_waiver_quorum = (
-        enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+        _experimental_approval_quorum_enabled()
         and prediction["species_code"] == "TRIANGULAN"
         and prediction["fee_status"] == "waived"
         and {"fee", "intake"} <= source_kinds
@@ -1580,9 +1614,8 @@ def apply_terminal_evidence_rules(
                 identity_features=False,
             )
             continue
-        experimental_synthetic_policy = enabled(
-            "MIB_EXPERIMENTAL_SYNTHETIC_POLICY",
-            True,
+        experimental_synthetic_policy = _experimental_policy_enabled(
+            "denial"
         )
         # A note whose characters collapsed into scan lines can still expose a
         # source-local DENIED word envelope. The proposal is the geometric
@@ -1807,7 +1840,8 @@ def apply_strict_approval_safety(
             len(_pipeline._render_and_ocr(pdf)) > recognized_pages
         )
         blurred_manual_approval = (
-            float(prediction["confidence"]) < 0.99
+            enabled("MIB_BLURRED_MANUAL_APPROVAL_RECOVERY", False)
+            and float(prediction["confidence"]) < 0.99
             and row.get("_audit_reason") != "visible_signed_decision"
             and (
                 has_unclassified_physical_page
@@ -1965,7 +1999,7 @@ def apply_strict_approval_safety(
             and not row.get("_audit_contested")
         )
         diplomatic_botanical_clearance_gap = (
-            enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+            _experimental_policy_enabled("review")
             and prediction["adjudication"] == "APPROVED"
             and float(prediction["confidence"]) < 0.99
             and prediction["visa_class"] == "DIP-1"
@@ -2022,7 +2056,7 @@ def apply_strict_approval_safety(
             and visible_fee_supported
         )
         luyten_xw2_digital_corridor = (
-            enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+            _experimental_policy_enabled("approval")
             and prediction["home_world"] == "Luyten-b"
             and prediction["visa_class"] == "XW-2"
             and prediction["fee_status"] == "paid"
@@ -2037,7 +2071,7 @@ def apply_strict_approval_safety(
             and visible_fee_supported
         )
         kaiju_xw1_registry_clearance = (
-            enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+            _experimental_policy_enabled("approval")
             and prediction["species_code"] == "KAIJU_MICRO"
             and prediction["visa_class"] == "XW-1"
             and prediction["declared_purpose"] != "transit"
@@ -2120,7 +2154,7 @@ def apply_strict_approval_safety(
             )
         )
         electronic_fee_common = (
-            enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+            _experimental_policy_enabled("approval")
             and "intake" in source_kinds
             and prediction["fee_status"] in {"paid", "waived"}
             and risk_state in {"absent", "clean"}
@@ -2167,7 +2201,7 @@ def apply_strict_approval_safety(
         # vetoed. No identity, sponsor value, date, order, or case key
         # participates.
         med3_reciprocal_registry_clearance = (
-            enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+            _experimental_policy_enabled("approval")
             and agreeing_registry_chain
             and prediction["visa_class"] == "MED-3"
             and prediction["home_world"]
@@ -2184,7 +2218,7 @@ def apply_strict_approval_safety(
         # the same JOVIAN waiver program appears in an independent signed
         # approval. The agreeing-chain predicate remains the safety veto.
         dip_registry_native_clearance = (
-            enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+            _experimental_policy_enabled("approval")
             and agreeing_registry_chain
             and prediction["visa_class"] == "DIP-1"
             and prediction["fee_status"] == "waived"
@@ -2279,6 +2313,18 @@ def apply_strict_approval_safety(
             # broader states also contain valid approvals.
             unsafe_reason = "medical_visa_with_explicitly_missing_b13"
         elif (
+            enabled("MIB_MED3_ABSENT_BIOMETRIC_REVIEW")
+            and prediction["visa_class"] == "MED-3"
+            and risk_state == "absent"
+        ):
+            # Strict safety ablation: MED-3 is the one visa family whose
+            # approval contract affirmatively requires a clean B-13. This is
+            # a visa-wide evidence requirement, not a species, identity,
+            # sponsor, date, or case exception. It is the conservative default
+            # despite valid development approvals with an omitted panel; the
+            # flag preserves the measured safety/coverage ablation.
+            unsafe_reason = "medical_visa_without_affirmative_clean_b13"
+        elif (
             risk_state != "clean"
             and not registry_clearance_exception
             and not electronic_fee_clearance
@@ -2307,7 +2353,7 @@ def apply_strict_approval_safety(
             # be cleared. This rule never invents a harmful trait or denies
             # the applicant; it only preserves review, and it is ablatable.
             luna_medical_clearance_required = (
-                enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+                _experimental_policy_enabled("review")
                 and species == "LUNA_SECURID"
                 and visa == "XW-2"
                 and purpose == "medical consult"
@@ -2338,7 +2384,7 @@ def apply_strict_approval_safety(
             ):
                 policy_gap = "technical_visa_medical_purpose_mismatch"
             elif (
-                enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+                _experimental_policy_enabled("review")
                 and visa == "XW-2"
                 and purpose == "diplomatic"
                 and "registry" in source_kinds
@@ -2353,7 +2399,7 @@ def apply_strict_approval_safety(
                 replacement_confidence = 0.67
                 prediction["_program_review_confidence"] = 0.67
             elif (
-                enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+                _experimental_policy_enabled("review")
                 and visa == "DIP-1"
                 and purpose == "reactor maintenance"
                 and source_kinds == {"fee", "intake", "registry"}
@@ -2379,7 +2425,7 @@ def apply_strict_approval_safety(
                 replacement_confidence = 0.60
                 prediction["_program_review_confidence"] = 0.60
             elif (
-                enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+                _experimental_policy_enabled("review")
                 and visa == "DIP-1"
                 and visible_gap_fact("visa_class", visa)
                 and purpose == "translation"
@@ -2395,7 +2441,7 @@ def apply_strict_approval_safety(
                 replacement_confidence = 0.78
                 prediction["_program_review_confidence"] = 0.78
             elif (
-                enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+                _experimental_policy_enabled("review")
                 and visa == "XW-1"
                 and visible_gap_fact("visa_class", visa)
                 and purpose == "transit"
@@ -2422,14 +2468,14 @@ def apply_strict_approval_safety(
             # Because the family does not identify a denial cause, the rule
             # preserves NEEDS_REVIEW at 0.67 instead of asserting a hard risk.
             elif (
-                enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+                _experimental_policy_enabled("review")
                 and species == "AQUARIAN_MANTIS"
                 and visa == "XW-1"
             ):
                 policy_gap = "aquarian_xw1_requires_biometric_clearance"
                 replacement_confidence = 0.67
             elif (
-                enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+                _experimental_policy_enabled("review")
                 and species == "ARCTURIAN"
                 and visible_gap_fact("species_code", species)
                 and purpose == "xenobotany"
@@ -2443,7 +2489,7 @@ def apply_strict_approval_safety(
                 replacement_confidence = 0.78
                 prediction["_program_review_confidence"] = 0.78
             elif (
-                enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+                _experimental_policy_enabled("review")
                 and species == "VENUSIAN_MYCELIAL"
                 and visible_gap_fact("species_code", species)
                 and purpose == "archive audit"
@@ -2458,7 +2504,7 @@ def apply_strict_approval_safety(
                 replacement_confidence = 0.78
                 prediction["_program_review_confidence"] = 0.78
             elif (
-                enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+                _experimental_policy_enabled("review")
                 and species == "ALPHA_DRACONIAN"
                 and visible_gap_fact("species_code", species)
                 and purpose == "research"
@@ -2473,7 +2519,7 @@ def apply_strict_approval_safety(
                 replacement_confidence = 0.78
                 prediction["_program_review_confidence"] = 0.78
             elif (
-                enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+                _experimental_policy_enabled("review")
                 and prediction["home_world"] == "Sirius Outpost"
                 and visible_gap_fact(
                     "home_world",
@@ -2494,7 +2540,7 @@ def apply_strict_approval_safety(
                 replacement_confidence = 0.78
                 prediction["_program_review_confidence"] = 0.78
             elif (
-                enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+                _experimental_policy_enabled("review")
                 and species == "AQUARIAN_MANTIS"
                 and visible_gap_fact("species_code", species)
                 and prediction["home_world"] == "Proxima-b"
@@ -2544,7 +2590,7 @@ def apply_strict_approval_safety(
             # clearance hypotheses above into the common fail-to-review
             # gate. It does not add another species rule.
             species_clearance_required = (
-                enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+                _experimental_policy_enabled("review")
                 and (
                     (
                         species == "AQUARIAN_MANTIS"
@@ -2654,7 +2700,7 @@ def _sparse_source_resolution(
         return bool(_observation_sources(row, field, value))
 
     diplomatic_chain_without_mandatory_authority = (
-        enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+        _experimental_policy_enabled("denial")
         and visa == "DIP-1"
         and visible_fact("visa_class", visa)
         and source_kinds == {"intake", "registry", "sponsor"}
@@ -2698,7 +2744,7 @@ def _sparse_source_resolution(
         )
 
     med3_reactor_sparse_program_failure = (
-        enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+        _experimental_policy_enabled("denial")
         and visa == "MED-3"
         and visible_fact("visa_class", visa)
         and purpose == "reactor maintenance"
@@ -2734,7 +2780,7 @@ def _sparse_source_resolution(
     # jurisdiction/source-coverage rule: applicant identity, sponsor number,
     # exact date, page order, and hidden text are unreachable.
     gliese_sponsor_clearance_missing = (
-        enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+        _experimental_policy_enabled("denial")
         and prediction["home_world"] == "Gliese-581g"
         and {"intake", "registry"} <= source_kinds
         and "sponsor" not in source_kinds
@@ -2783,7 +2829,7 @@ def _sparse_source_resolution(
         visible_alternate_medical_interface or jovian_paid_titan_interface
     )
     technical_medical_without_clearance = (
-        enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+        _experimental_policy_enabled("denial")
         and visa in {"XW-1", "XW-2"}
         and visible_fact("visa_class", visa)
         and purpose == "medical consult"
@@ -3034,9 +3080,8 @@ def apply_strict_fence_recovery(
                 identity_features=False,
             )
             continue
-        synthetic_policy = enabled(
-            "MIB_EXPERIMENTAL_SYNTHETIC_POLICY",
-            True,
+        synthetic_policy = _experimental_policy_enabled(
+            "approval"
         )
         source_complete_alternate_authority = (
             _source_complete_alternate_authority(
@@ -3431,7 +3476,7 @@ def apply_strict_fence_recovery(
             continue
 
         europa_sponsor_clearance_missing = (
-            enabled("MIB_EXPERIMENTAL_SYNTHETIC_POLICY", True)
+            _experimental_policy_enabled("denial")
             and prediction["home_world"] == "Europa Station"
             and "sponsor" not in source_kinds
             and row.get("_audit_decision") is None

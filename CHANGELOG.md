@@ -6,6 +6,55 @@ For the current architecture, measured result, and engineering rationale, see
 
 Last updated: 2026-08-01
 
+## 2026-08-01 — prospective zero-CFA candidate replaces public-fit checkpoint
+
+- Re-established the fixed boundary: all discovery, PDF inspection, feature
+  engineering, counterexample analysis, and model fitting used only the 800
+  development packets. The separate 200 exposed aggregate section scores,
+  validity counts, and CFA count through `tools/score_aggregate_only.py`; no
+  row, prediction, error, confusion cell, trace, feature, filename, or PDF was
+  inspected.
+- Rejected every identity-free learned resolver tested on five internal
+  development folds. Structured CatBoost, sanitized visible OCR, text/feature
+  stacking, evidence graphs, source-topology trees, and compound manual rules
+  either reproduced the baseline, regressed, or introduced CFA risk.
+- Split the historical synthetic-policy master into direction-specific flags.
+  The broad review, denial, lower-support approval, and damaged-manual families
+  default off. The disclosed source/program approval-quorum family remains
+  independently ablatable.
+- Moved batch vocabulary/year repairs behind the frozen adjudication boundary
+  and reapplied the packet-local visible-policy guard immediately before the
+  terminal snapshot. This makes classification invariant to submission batch
+  composition and prevents a late recovery from erasing a visible denial.
+- Fixed the sponsor-notice flag so it no longer silently depends on the
+  registry-status switch. Corrected source and documentation claims about the
+  aggressive hidden extraction projection and hidden policy proposals.
+- A score-first candidate reached **74.6375/80 development classification**
+  and **72.7000/80 aggregate validation classification**, but the validation
+  result retained one catastrophic false approval. It was rejected.
+- Promoted one broad field-manual safety rule: an unsigned `MED-3` approval
+  requires an affirmative clean B-13 state. The rule was frozen before its
+  aggregate result and was not narrowed afterward. Exact fixed-800 result:
+  **46.902778 extraction, 73.450000 classification, 17.875790 calibration,
+  138.228568 total, and 0 CFA**. Aggregate-only 200 result: **46.738889
+  extraction, 71.500000 classification, 16.936040 calibration, 135.174929
+  total, and 0 CFA**, with 200/200 valid rows.
+- Final development prediction SHA-256:
+  `c537e8d2383eceb819ad4e2169dd0c37d4d5b575beede23510edaa93a2d6fc17`.
+  Evaluation SHA-256:
+  `9a582d3d79f82d17b27b8b642e2a8293203c656b4d858d06de28b5b6a19d9f54`.
+- Exact four-worker warm-host runtime was **1,087.34 seconds / 1.359 seconds
+  per PDF**. The organizer-compatible image is
+  `sha256:6730073e027af64aa37a593042293986e49cde4f462db6263a86e62c9b4a758f`
+  at 217,434,647 bytes. A constrained 200-packet slice drawn only from the
+  development 800 completed in **710.11 seconds / 3.551 seconds per PDF** and
+  scored **46.611111 extraction, 69.950000 classification, 15.887460
+  calibration, 132.448571 total, and 0 CFA**, with 200/200 valid rows.
+  Docker prediction SHA-256:
+  `95f2cced59020e6076bf26d5900f5fb0e6c2c6a0310a036247b87d344e132b83`;
+  evaluation SHA-256:
+  `b1943ef40d1273f4cc9798c1ab786945948763176905c52363ce55d64674acc5`.
+
 ## 2026-08-01 — fragmented sideways fee source reaches 145.2377
 
 - Added a visible-pixel source reader for fee receipts whose sideways row

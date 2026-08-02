@@ -7,36 +7,37 @@ history, including abandoned approaches and older checkpoints.
 
 ## Executive summary
 
-The previous clean-room full replay reached the 143-point range by using
-dozens of small terminal profiles. Those profiles have been removed. The
-current source instead combines general evidence rules with explicitly
-disclosed, ablatable low-support hypotheses.
+Earlier 145-point development replays relied on public-fit terminal profiles
+that did not transfer. Those checkpoints are historical. The promoted source
+combines general evidence rules, explicitly disclosed ablations, and one
+conservative MED-3 safety requirement selected on development before sealed
+aggregate validation.
 
 The latest exact full replay on the
 deterministic 800-case development partition is:
 
 | Section | Exact development score |
 |---|---:|
-| Extraction | 47.0611 / 50 |
-| Classification | 78.5750 / 80 |
-| Calibration | 19.6016 / 20 |
-| **Total** | **145.2377 / 150** |
+| Extraction | 46.9028 / 50 |
+| Classification | 73.4500 / 80 |
+| Calibration | 17.8758 / 20 |
+| **Total** | **138.2286 / 150** |
 | Catastrophic false approvals | **0** |
 | Valid / expected rows | **800 / 800** |
 
-The confusion contains 204 correct approvals, 350 correct denials, and 227
-correct reviews. The only 19 mistakes are conservative abstentions: 19 true
-approvals remain review. No denial or review is approved.
+The confusion contains 171 correct approvals, 335 correct denials, and 211
+correct reviews. No denied case is approved. The errors include conservative
+reviews as well as ordinary approval/denial misses; they are not presented as
+perfect classification.
 
-An earlier 143.1247 artifact was the first exact result after a rules audit closed a recovered-approval
-evidence bypass and removed several two-row categorical policies. The earlier
-145.7151 score is a **superseded development checkpoint**, not a claim for the
-current source. The then-frozen candidate was evaluated once on the 200-case
-validation partition and scored **136.4672/150** in aggregate, with 3
-catastrophic false approvals. Because that feedback was discussed, the 200 is
-spent and is not used to select current changes. [`RULES.md`](RULES.md)
-records the split commitments, active proposals and controls, rejected
-experiments, and the boundary disclosure.
+The sealed 200 aggregate validation for the promoted build is **46.7389
+extraction, 71.5000 classification, 16.9360 calibration, 135.1749 total, and
+0 catastrophic false approvals**. A higher score-first candidate reached
+72.7000 classification and 136.2405 total but retained one CFA, so it was not
+promoted. The 200 is a repeatedly consulted aggregate validation benchmark,
+not an untouched holdout: no per-row prediction, label, error, trace, feature,
+confusion cell, filename, or PDF was used for the final safety rule.
+[`RULES.md`](RULES.md) records the full boundary and experiment register.
 
 An earlier evidence-invariant replay was byte-for-byte identical to its frozen
 800-row prediction artifact. A cold Linux OCR run had exposed two ordinary
@@ -329,11 +330,14 @@ proposal is isolated behind its own flag and is the sole disclosed exception
 to the ordinary visible-authority contract; disabling it restores the strict
 visible-only behavior.
 
-The MED-3 fence is source-state specific. Among the 233 labeled MED-3
-development packets, the audit marks 4 B-13 panels explicitly `missing`, and
-all 4 are denials.
-Broader `absent` and `unreadable` states include valid approvals and therefore
-do not trigger the fence. One additional provenance rule treats an intake
+The MED-3 fence is source-state specific. An explicitly `missing` B-13 keeps
+the existing denial edge. The promoted safety guard separately requires an
+affirmatively clean B-13 before an unsigned MED-3 verdict may remain approved;
+an absent panel preserves review. This changed 22 development verdicts and
+reduced classification by 1.1875 points, reflecting genuine valid-approval
+counterexamples. It was accepted to remove the aggregate-validation CFA and
+was not narrowed afterward. Unreadable panels remain a distinct state. One
+additional provenance rule treats an intake
 carrying at least two of the visible `COPY`, `FILED`, and `ARCHIVE` stamps as
 historical. When that archival page is the only source for a non-diplomatic
 visa attached to a waiver, the packet remains in review. This is not a denial
@@ -446,18 +450,18 @@ adjudication is finished. Three flags split the boundary:
    rendered pixels already support.
 2. `MIB_NON_TEMPLATE_PAYLOAD_RECONCILIATION` enables a narrow output-only
    unsupported-field audit, with published example values excluded.
-3. `MIB_UNTRUSTED_PAYLOAD_PROJECTION` may fill an unsupported output with a
-   non-template hidden value after every adjudication stage. It cannot replace
-   a value still present in active-case pixels. The fixed-800 audit retained
-   only replacements with non-negative field-level utility across the
-   development folds. Values copied from either published sample tuple remain
-   blocked.
+3. `MIB_UNTRUSTED_PAYLOAD_PROJECTION` is the aggressive mode: after every
+   adjudication stage it may replace a competing OCR output with a complete
+   non-template hidden tuple. It is not visible evidence. Values copied from
+   either published sample tuple remain blocked, and a later two-source pixel
+   agreement can restore a visible value.
 
-Fee projection remains limited to an absent or unreadable fee source, risk
-projection cannot replace an existing visible flag, and active visible values
-always win. These repairs do not rerun adjudication or confidence logic.
+Fee projection remains limited to an absent or unreadable fee source and risk
+projection cannot replace an existing visible flag. These repairs do not rerun
+adjudication or confidence logic, but the aggressive tuple projection is a
+real output-trust tradeoff and is disabled by `visible_evidence_only`.
 
-The exact generalized 800-case development run measured **47.0611/50**
+The exact generalized 800-case development run measured **46.9028/50**
 extraction. Source-local and
 output-only repairs
 include a decision/risk invariant, a repeated closed-vocabulary visa repair,
@@ -466,9 +470,9 @@ and missing B-13 review states emitted as `illegible_biometrics` or, in the
 narrow diplomatic-reactor family, `sponsor_mismatch`. The applicant correction
 requires a case-bound intake read above the documented similarity threshold;
 all risk/purpose projections run only after the verdict is final and cannot
-feed back into policy. Visible supported values outrank every native-text
-proposal. Exact-cell support and loss counts are recorded in
-[`RULES.md`](RULES.md).
+feed back into policy. Normal readers prefer visible support; the aggressive
+final tuple projection is the disclosed exception. Exact-cell support and
+loss counts are recorded in [`RULES.md`](RULES.md).
 
 ## Calibration
 
@@ -480,7 +484,7 @@ calibration = 20 × max(0, 1 - 2 × mean_brier)
 ```
 
 The exact generalized 800-case development run has mean Brier error
-**0.009959875**, producing **19.601605/20** calibration. Confidence is assigned
+**0.05310525**, producing **17.875790/20** calibration. Confidence is assigned
 only at the final output boundary, after verdict and extraction premises are
 frozen. No confidence value can feed back into adjudication or extraction.
 
@@ -528,7 +532,7 @@ flowchart LR
     H["Cold full broad fence<br/>128.6496 · rejected"] -->
     I["Prospective 800 checkpoint<br/>145.7151 · superseded"] -->
     J["Generalized safety baseline<br/>143.1247 · zero CFA"] -->
-    K["Current exact 800<br/>145.2377 · zero CFA"]
+    K["Current zero-CFA 800<br/>138.2286"]
 ```
 
 | Exact checkpoint | Extraction | Classification | Calibration | CFA | Total |
@@ -546,7 +550,8 @@ flowchart LR
 | Generalized safety baseline | 46.9653 | 77.3250 | 18.8344 | 0 | **143.1247** |
 | Earlier exact 800 development | 46.9431 | 77.9000 | 19.4429 | 0 | **144.2859** |
 | Immediate previous exact 800 | 47.0556 | 78.5000 | 19.6009 | 0 | **145.1564** |
-| Current exact 800 development | 47.0611 | 78.5750 | 19.6016 | 0 | **145.2377** |
+| Score-first 800 candidate, rejected after aggregate CFA | 46.9028 | 74.6375 | 17.7328 | 0 | **139.2731** |
+| Current zero-CFA 800 development | 46.9028 | 73.4500 | 17.8758 | 0 | **138.2286** |
 
 The historical sequence is retained to show how the score was obtained, not
 to claim that every row is directly comparable. The 80-case row is an older
@@ -560,30 +565,30 @@ the current exact development result under the prospective 800/200 protocol.
 
 | Truth ↓ / prediction → | APPROVED | DENIED | NEEDS_REVIEW |
 |---|---:|---:|---:|
-| APPROVED | 204 | 0 | 19 |
-| DENIED | 0 | 350 | 0 |
-| NEEDS_REVIEW | 0 | 0 | 227 |
+| APPROVED | 171 | 5 | 47 |
+| DENIED | 0 | 335 | 15 |
+| NEEDS_REVIEW | 15 | 1 | 211 |
 
 | Metric | Measured value |
 |---|---:|
 | Submitted/scored rows | 800 / 800 |
 | Invalid rows | 0 |
 | Input-relative missing or extra cases | 0 |
-| Mean Brier error | 0.009959875 |
+| Mean Brier error | 0.05310525 |
 | Catastrophic false approvals | 0 |
-| Prediction SHA-256 | `71f52a60dacf16154733e431d9754c7ccae1a366e204ecde21b86854b88837de` |
-| Evaluation SHA-256 | `03765e3a8084e30b44a50e2e6b17038937f28bea0c8738591af0e8801917aa74` |
-| **Total** | **145.2377 / 150** |
+| Prediction SHA-256 | `c537e8d2383eceb819ad4e2169dd0c37d4d5b575beede23510edaa93a2d6fc17` |
+| Evaluation SHA-256 | `9a582d3d79f82d17b27b8b642e2a8293203c656b4d858d06de28b5b6a19d9f54` |
+| **Total** | **138.2286 / 150** |
 
 The exact artifact contains 800 valid rows, no duplicates, no extra or missing
-cases, and no invalid confidence or fee values. The spent 200 was not inspected
-or rescored while developing this candidate.
+cases, and no invalid confidence or fee values. The separate 200 was scored
+only through the aggregate wrapper; its rows remained sealed.
 
 ## Performance and organizer contract
 
 The latest generalized 800-case development replay completed end to end in
-**1,142 seconds** with four workers and a warm host evidence cache, or **1.428
-seconds/PDF**.
+**1,087.34 seconds** with four workers and a warm host evidence cache, or
+**1.359 seconds/PDF**.
 
 The current source reuses the audit's immutable pixel-page cache for the late
 multi-flag repair, rerenders only pages relevant to a disputed sponsor/visa
@@ -597,13 +602,14 @@ pixel read before the two-scale confirmation runs.
 
 That host measurement is not Docker acceptance. A cold constrained 200-packet
 slice drawn only from the development 800 validated all expected rows and
-scored **142.5201/150**: 46.7778 extraction, 77.20 classification, 18.5423
-calibration, and zero catastrophic false approvals. It ran in **701 seconds
-/ 3.505 seconds per PDF**, below the four-second headroom target and the
-organizer's six-second limit. It does not estimate the spent holdout or private
-score. Linux OCR changed two review outcomes relative to truth on this slice:
-one ordinary false approval and one false denial; neither is catastrophic, but
-the drift is disclosed rather than hidden behind the aggregate.
+scored **132.4486/150**: 46.6111 extraction, 69.95 classification, 15.8875
+calibration, and zero catastrophic false approvals. It ran in **710.11 seconds
+/ 3.551 seconds per PDF**, below the four-second headroom target and the
+organizer's six-second limit. This is a development-only portability and
+runtime check; it is not an estimate of the separate validation or private
+score. Host and Linux OCR can legitimately differ, so the Docker result is
+reported independently rather than being presented as a reproduction of the
+host score.
 
 During the clean Docker replay, a live runtime snapshot showed 396% CPU,
 1.587 GiB of 7.734 GiB available memory, and 12 processes. The workload is
@@ -645,16 +651,16 @@ formula.
 | Broad-safety prediction SHA-256 | `40296e37807765bb63c179722e1b9b05a598f7726601e1409c23f76ee7bc05c8` |
 | Broad-safety evaluation SHA-256 | `acae436b8479bd1f0d57134bcb4da08b40a0a9b33506632458a02201e5e5cbc4` |
 | Broad-safety Docker wall time | `4,070.61 s` |
-| Generalized 800 prediction SHA-256 | `71f52a60dacf16154733e431d9754c7ccae1a366e204ecde21b86854b88837de` |
-| Generalized 800 evaluation SHA-256 | `03765e3a8084e30b44a50e2e6b17038937f28bea0c8738591af0e8801917aa74` |
-| Generalized 800 exact score | `145.23771611111113 / 150` |
-| Generalized 800 observed host interval | `1,142 s / 1.428 s per PDF` |
-| Docker development-slice prediction SHA-256 | `09c96315afee5ead5f09174ad3d0eccdd0b17e85f529771f9b978c5dbda85da0` |
-| Docker development-slice evaluation SHA-256 | `21cd97a05f7696df7f44eb07aa44ff9c998397c15f4c2a67ebff09feab63d42c` |
-| Docker development-slice score | `142.52009777777778 / 150` |
-| Final Docker image ID | `sha256:23fb8fe0d1d78f5c2b5dca2994a2f5ef1e14a4fa790e3e296492fa7f0b5bc190` |
-| Final Docker image size | `217,433,111 bytes` |
-| Final Docker development-slice wall time | `701 s / 3.505 s per PDF` |
+| Generalized 800 prediction SHA-256 | `c537e8d2383eceb819ad4e2169dd0c37d4d5b575beede23510edaa93a2d6fc17` |
+| Generalized 800 evaluation SHA-256 | `9a582d3d79f82d17b27b8b642e2a8293203c656b4d858d06de28b5b6a19d9f54` |
+| Generalized 800 exact score | `138.22856777777778 / 150` |
+| Generalized 800 observed host interval | `1,087.34 s / 1.359 s per PDF` |
+| Docker development-slice prediction SHA-256 | `95f2cced59020e6076bf26d5900f5fb0e6c2c6a0310a036247b87d344e132b83` |
+| Docker development-slice evaluation SHA-256 | `b1943ef40d1273f4cc9798c1ab786945948763176905c52363ce55d64674acc5` |
+| Docker development-slice score | `132.4485711111111 / 150` |
+| Final Docker image ID | `sha256:6730073e027af64aa37a593042293986e49cde4f462db6263a86e62c9b4a758f` |
+| Final Docker image size | `217,434,647 bytes` |
+| Final Docker development-slice wall time | `710.11 s / 3.551 s per PDF` |
 | Pre-optimization safety replay | `886.61 s / 4.433 s per PDF` |
 
 The exact broad-safety artifact is retained as historical audit evidence, not
@@ -668,15 +674,16 @@ differ, so each environment's artifact and score are reported separately.
 The repository's binding experiment and promotion standard is
 [`RULES.md`](RULES.md). From the current checkpoint onward, manual pattern
 discovery is limited to a deterministic 800-row development set. The original
-200-row validation partition has already been evaluated once and is now spent;
-its aggregate result cannot select later changes. Any future learned component
-must first pass five 640/160 folds entirely within development, then use only
-independent organizer controls or genuinely new data for external validation.
+200-row partition is now a repeatedly consulted **aggregate-only validation
+benchmark**, not an untouched holdout. It may accept or reject a frozen
+development candidate but may expose no row, prediction, error, confusion,
+trace, feature, filename, or PDF. Any learned component must first pass five
+640/160 folds entirely within development.
 
 ```mermaid
 flowchart LR
     ALL["Fixed public 1,000"] --> DEV["800 development packets"]
-    ALL --> HOLD["200 one-time validation<br/>spent after aggregate audit"]
+    ALL --> HOLD["200 aggregate-only validation<br/>rows remain sealed"]
     DEV --> F0["Fold 0 · 160"]
     DEV --> F1["Fold 1 · 160"]
     DEV --> F2["Fold 2 · 160"]
@@ -684,11 +691,11 @@ flowchart LR
     DEV --> F4["Fold 4 · 160"]
     F0 & F1 & F2 & F3 & F4 --> OOF["Five 640-train / 160-check audits"]
     OOF -->|"passes promotion gates"| FREEZE["Freeze rules, model, thresholds, and flags"]
-    FREEZE -. "historical one-time evaluation" .-> HOLD
+    FREEZE -. "aggregate score + CFA only" .-> HOLD
 ```
 
 Manual discovery is confined to `DEV` too. The inner folds are not a license
-to reuse the spent validation; they only prevent a learned component from
+to inspect the validation benchmark; they prevent a learned component from
 grading the same development rows it fitted.
 
 ### What is absent
@@ -726,24 +733,24 @@ The defenses are structural rather than rhetorical:
 - signed-finding precedence;
 - separate signed-control checks;
 - feature-flagged hidden/native-text channels;
-- one flag that removes every fictional program/structure hypothesis;
+- direction-specific fictional-program flags plus an all-experiments-off
+  profile;
 - a visible-only ablation;
 - fail-to-review behavior when a selected evidence mode lacks a witness.
 
 The strongest defensible conclusion is therefore: **the current code contains
 no explicit case lookup or identifier feature, and its active terminal rules
 are reusable evidence states. Private transfer remains unproven. Any future
-trained model is blocked by the internal-fold-plus-spent-validation contract in
-[`RULES.md`](RULES.md).**
+trained model remains subject to the internal-fold-plus-sealed-aggregate
+contract in [`RULES.md`](RULES.md).**
 
 ## Known limits
 
-- The 145.2377/150 score is exact on the fixed 800 development packets, not
-  the spent 200-case validation and not a private-corpus guarantee. The higher
-  145.7151 checkpoint is historical and used rules removed by the audit.
-- The preceding candidate has exact warm-host timing. Its representative
-  constrained Docker replay uses only development packets and remains distinct
-  from the historical one-time validation evaluation.
+- The current 138.2286/150 score is exact on the fixed 800 development
+  packets; the aggregate-only 200 result is 135.1749/150. Neither guarantees
+  private transfer. Historical 145-point rows are development checkpoints.
+- The current candidate has exact warm-host timing. Its constrained Docker
+  replay uses only development packets and remains distinct from validation.
 - Several fictional program hypotheses have small complete cohorts. They have
   mechanisms, controls, fold support, zero development CFA, one joint feature
   flag, and explicit disclosure; their private transfer remains unproven.
@@ -752,9 +759,9 @@ trained model is blocked by the internal-fold-plus-spent-validation contract in
 - Private/admin labels may mark hidden-only fields unrecoverable and remove
   them from the extraction denominator, so public output-only gains may have
   no private scoring value.
-- The 200 boundary was quarantined rather than scientifically pristine, then
-  evaluated once. Its aggregate result is recorded, but it is now spent and
-  is not used for current pattern discovery or tuning.
+- The 200 boundary is not scientifically pristine and has been queried more
+  than once. Only aggregate section scores, validity counts, and CFA count are
+  exposed; all row-level material remains sealed and cannot nominate a rule.
 
 These limits are why the review state, trace mode, and feature-flag presets
 remain first-class parts of the submission.

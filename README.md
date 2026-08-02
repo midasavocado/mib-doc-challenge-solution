@@ -11,46 +11,38 @@ packets into one schema-valid JSONL record per case.
 Development and promotion are governed by the stricter
 [`RULES.md`](RULES.md) contract. New manual patterns use only a frozen 800-row
 development set; learned components additionally require five internal
-640/160 folds inside those 800 rows. The original 200-row validation partition
-has been evaluated once and is now spent; it cannot select later changes.
+640/160 folds inside those 800 rows. The remaining 200 rows are a sealed,
+aggregate-only validation benchmark: runs may expose only section scores,
+structural counts, and the CFA count. No row, label, prediction, error, trace,
+feature, filename, or PDF from that benchmark may drive development.
 
 ## Current result status
 
-The latest exact full 800-case replay measured:
+The promoted zero-catastrophic-approval build measured:
 
 | Evaluator section | Exact development score |
 |---|---:|
-| Extraction | 47.0611 / 50 |
-| Classification | 78.5750 / 80 |
-| Calibration | 19.6016 / 20 |
-| **Total** | **145.2377 / 150** |
+| Extraction | 46.9028 / 50 |
+| Classification | 73.4500 / 80 |
+| Calibration | 17.8758 / 20 |
+| **Total** | **138.2286 / 150** |
 | Catastrophic false approvals | **0** |
 | Valid / expected rows | **800 / 800** |
 
-The exact confusion contains 204 correct approvals, 350 correct denials, and
-227 correct reviews. The remaining 19 errors are conservative abstentions:
-19 approvals were sent to review. No denial or review was approved. The
-earlier frozen candidate was evaluated once on the 200-case
-validation partition: **46.8111 extraction, 72.5500 classification, 17.1061
-calibration, 136.4672 total, and 3 catastrophic false approvals**. Because that
-aggregate result was discussed, the partition is spent and is not used to
-select current changes. Complete support, controls, rejected experiments,
-split commitments, and the boundary disclosure are in [`RULES.md`](RULES.md).
+The exact development confusion is 171 correct approvals, 335 correct denials,
+and 211 correct reviews. There are no denied cases approved. The final sealed
+200 aggregate validation is **46.7389 extraction, 71.5000 classification,
+16.9360 calibration, 135.1749 total, and 0 catastrophic false approvals**, with
+200/200 structurally valid rows. The benchmark was queried only through
+[`tools/score_aggregate_only.py`](tools/score_aggregate_only.py); its rows and
+class-level confusion remain sealed.
 
-The preceding 145.1564 artifact remains the comparison baseline. This candidate
-differs in one row: a damaged, sideways fee receipt is recovered from rendered
-pixels, allowing one otherwise complete clean diplomatic packet to pass the
-ordinary approval quorum. The reader is not a packet exception. It scans exact
-active-case unknown pages, requires two raster scales to agree on one row-local
-fee status, rejects prompt-like and non-fee headings, and then reapplies the
-normal approval safety fence.
-
-The complete fixed-800 structural census contained 127 eligible unknown-page
-packets. The detector produced six agreeing reads across three internal folds:
-two approvals and four denials, with all six fee values correct. Only one
-unresolved review gained approval authority. This is a source-reader rule, not
-an identity or one-row outcome rule; the four denial controls are part of the
-same accepted cohort.
+A score-first candidate reached **72.7000/80 validation classification** and
+**136.2405/150 total**, but retained one catastrophic false approval. It is not
+the default. The promoted rule requires an unsigned `MED-3` approval to have an
+affirmatively clean B-13 state. That visa-wide safety rule was developed on the
+800, froze before aggregate validation, and was not narrowed after it removed
+the CFA.
 
 The decision layer uses visible/source-bound evidence rules plus explicitly
 disclosed, jointly ablatable fictional-program hypotheses. It contains no
@@ -58,11 +50,9 @@ case-ID, filename, applicant-name, row-order, hash, image-fingerprint, or
 answer-table adjudication feature. Low-support hypotheses remain disclosed as
 transfer risks rather than being promoted into universal facts.
 
-For historical context, a rejected broad safety fence scored 128.6496 on a
-cold constrained 1,000-PDF Docker replay. It removed five catastrophic false
-approvals but incorrectly demoted 124 true approvals, so that fence is not the
-current policy. The historical result remains in [`CHANGELOG.md`](CHANGELOG.md)
-instead of being presented as the current score.
+Historical 145-point development checkpoints and the rejected broad safety
+fence remain in [`CHANGELOG.md`](CHANGELOG.md). They are not current validation
+claims.
 
 ## Architecture
 
@@ -206,14 +196,15 @@ marked and ablatable; all other hidden extraction runs after adjudication and
 cannot reach policy. This is intentionally aggressive benchmark adaptation,
 not a claim that hidden text is visible evidence.
 
-The MED-3 rule is narrower. Across the 233 labeled MED-3 development packets,
-the audit finds 4 explicitly missing B-13 panels and all 4 are denials. Merely absent or
-unreadable panels also contain approvals, so those broader states do not
-trigger this fence. Finally, a visibly `COPY`/`FILED`/`ARCHIVE`-stamped intake
-is treated as historical: if it is the only source for a non-diplomatic visa
-attached to a waiver, the packet stays in review because a clean B-13
-establishes biometric safety, not current visa authority. The stamps never
-prove denial.
+The MED-3 safety boundary has two levels. An explicitly missing B-13 supplies
+the existing denial edge. Separately, the promoted zero-CFA guard requires an
+affirmatively clean B-13 before an unsigned MED-3 result may remain approved;
+mere absence preserves review. On the 800 this broad guard changed 22 verdicts
+and cost 1.1875 classification points, so it is a disclosed safety tradeoff,
+not a free accuracy rule. An unreadable panel remains distinct and is handled
+by the existing evidence-state rules. Finally, a visibly
+`COPY`/`FILED`/`ARCHIVE`-stamped intake is historical: if it is the only source
+for a non-diplomatic visa attached to a waiver, the packet stays in review.
 
 Separately, a visible-only fallback reads severely defocused adjudicator notes.
 It requires the active-case manual-note header, a Reason row, an unambiguous
@@ -262,12 +253,12 @@ Some generated PDFs contain one complete schema-valid tuple in the native text
 layer. It is untrusted and never treated as a signed finding or visible fact.
 The default build nevertheless uses it in two explicitly feature-flagged ways:
 
-1. **Extraction candidate.** A non-template hidden field may fill an
-   unsupported output after adjudication, but it cannot replace a value still
-   present in active-case pixels. The fixed-800 audit retains only
-   non-template repairs with non-negative development-fold utility; values
-   copied from the two published sample tuples remain blocked. This is
-   output-only and cannot alter adjudication.
+1. **Extraction candidate.** A complete non-template hidden tuple may fill an
+   unsupported output or replace a competing OCR value after adjudication.
+   This is intentionally aggressive and is not presented as visible evidence.
+   Values copied from the two published sample tuples remain blocked; later
+   independent multi-source pixel agreement can restore a visible value. The
+   verdict and confidence are frozen before this projection and cannot change.
 2. **Negative-polarity generator signal.** All 25 policy-clean requested
    denials in the fixed development 800 are approvals, with support in every
    internal fold; 37/37 independently constructed controls show the same
@@ -302,16 +293,23 @@ interface; `1` enables and `0` disables a Boolean flag.
 |---|---:|---|
 | `MIB_UNTRUSTED_NEGATIVE_CLAIM_ROUTING` | `1` | Disclosed inverted-generator classification channel; one validated family can supply alternate approval authority, while disagreement can only abstain |
 | `MIB_UNTRUSTED_REGISTRY_STATUS_ROUTING` | `1` | Disclosed native registry-status proposal; denial requires an independent pixel-visible witness |
+| `MIB_UNTRUSTED_SPONSOR_NOTICE_ROUTING` | `1` | Independently ablatable native sponsor-notice proposal; its diplomatic exception still passes the common safety fence |
 | `MIB_CORROBORATED_PAYLOAD_EXTRACTION` | `1` | Pixel-corroborated hidden-field candidate |
 | `MIB_NON_TEMPLATE_PAYLOAD_RECONCILIATION` | `1` | Narrow output-only disagreement repair |
-| `MIB_UNTRUSTED_PAYLOAD_PROJECTION` | `1` | Output-only repair from audited non-template hidden values |
+| `MIB_UNTRUSTED_PAYLOAD_PROJECTION` | `1` | Aggressive output-only denoiser from a complete non-template hidden tuple; it may replace a competing OCR value but cannot alter the frozen verdict or confidence |
 | `MIB_UNTRUSTED_NATIVE_OUTPUT_READER` | `1` | Final output-only B-13/registry field reader |
 | `MIB_TERMINAL_SOURCE_RULES` | `1` | General visible multisource approval quorum |
 | `MIB_HIGH_RES_CLEAN_RISK` | `1` | Confirm a damaged clean B-13 from two active-case pixel reads |
 | `MIB_HIGH_RES_ROTATED_FEE` | `1` | Recover a fragmented sideways fee row only when two active-case pixel scales agree |
 | `MIB_STRICT_APPROVAL_SAFETY` | `1` | Demote unsigned approvals with unsupported fee, explicit MED-3 panel, or archival-authority faults |
+| `MIB_MED3_ABSENT_BIOMETRIC_REVIEW` | `1` | Conservative zero-CFA rule: unsigned MED-3 requires an affirmative clean B-13 state |
 | `MIB_STRICT_FENCE_RECOVERY` | `1` | Recover fenced reviews only from disclosed source/program families after independent vetoes |
-| `MIB_EXPERIMENTAL_SYNTHETIC_POLICY` | `1` | Apply the disclosed low-support program/structure hypotheses |
+| `MIB_EXPERIMENTAL_SYNTHETIC_POLICY` | `0` | Legacy master switch for every low-support fictional-program hypothesis |
+| `MIB_EXPERIMENTAL_REVIEW_POLICY` | `0` | Review-only fictional-program hypotheses |
+| `MIB_EXPERIMENTAL_DENIAL_POLICY` | `0` | Denial-only fictional-program hypotheses |
+| `MIB_EXPERIMENTAL_APPROVAL_POLICY` | `0` | Lower-support named approval hypotheses |
+| `MIB_EXPERIMENTAL_APPROVAL_QUORUM` | `1` | Disclosed source-topology and low-support named-program approval family |
+| `MIB_BLURRED_MANUAL_APPROVAL_RECOVERY` | `0` | Damaged rendered manual-approval recovery |
 | `MIB_MANUAL_REASON_FIELD_RECOVERY` | `1` | Parse visible manual-reason fields |
 | `MIB_SPONSOR_VERIFICATION_DENIAL` | `1` | Enforce visible sponsor-verification denial |
 | `MIB_POST_EXTRACTION_REVIEW_GUARD` | `1` | Demote approvals invalidated by late evidence |
@@ -325,6 +323,7 @@ To disable every native hidden-text channel:
 ```bash
 export MIB_UNTRUSTED_NEGATIVE_CLAIM_ROUTING=0
 export MIB_UNTRUSTED_REGISTRY_STATUS_ROUTING=0
+export MIB_UNTRUSTED_SPONSOR_NOTICE_ROUTING=0
 export MIB_CORROBORATED_PAYLOAD_EXTRACTION=0
 export MIB_NON_TEMPLATE_PAYLOAD_RECONCILIATION=0
 export MIB_UNTRUSTED_PAYLOAD_PROJECTION=0
@@ -384,7 +383,7 @@ with no network access.
 
 The latest generalized development replay used four workers and a warm host
 evidence cache. The complete 800-row run—including every final reconciliation
-stage—finished in **1,142 seconds**, or **1.428 seconds/PDF**. Host timing is
+stage—finished in **1,087.34 seconds**, or **1.359 seconds/PDF**. Host timing is
 useful engineering evidence, not a substitute for the constrained Docker
 result.
 The organizer source was refreshed first. Upstream challenge core remains at
@@ -393,10 +392,10 @@ memo files and does not change rules, evaluator, schema, or runner.
 
 | Artifact | SHA-256 |
 |---|---|
-| Generalized 800 development predictions | `71f52a60dacf16154733e431d9754c7ccae1a366e204ecde21b86854b88837de` |
-| Generalized 800 development evaluation | `03765e3a8084e30b44a50e2e6b17038937f28bea0c8738591af0e8801917aa74` |
-| Current Docker development-slice predictions | `09c96315afee5ead5f09174ad3d0eccdd0b17e85f529771f9b978c5dbda85da0` |
-| Current Docker development-slice evaluation | `21cd97a05f7696df7f44eb07aa44ff9c998397c15f4c2a67ebff09feab63d42c` |
+| Generalized 800 development predictions | `c537e8d2383eceb819ad4e2169dd0c37d4d5b575beede23510edaa93a2d6fc17` |
+| Generalized 800 development evaluation | `9a582d3d79f82d17b27b8b642e2a8293203c656b4d858d06de28b5b6a19d9f54` |
+| Current Docker development-slice predictions | `95f2cced59020e6076bf26d5900f5fb0e6c2c6a0310a036247b87d344e132b83` |
+| Current Docker development-slice evaluation | `b1943ef40d1273f4cc9798c1ab786945948763176905c52363ce55d64674acc5` |
 | Broad-safety Docker predictions | `40296e37807765bb63c179722e1b9b05a598f7726601e1409c23f76ee7bc05c8` |
 | Broad-safety Docker evaluation | `acae436b8479bd1f0d57134bcb4da08b40a0a9b33506632458a02201e5e5cbc4` |
 
@@ -404,22 +403,22 @@ The most recent constrained Docker replay of the current source uses four
 CPUs, 8 GiB RAM, a read-only root,
 `--network none`, `no-new-privileges`, and the organizer validator. On a fixed
 200-packet slice drawn only from the permitted development 800, the current
-image scored **142.5201/150**: 46.7778 extraction, 77.20 classification,
-18.5423 calibration, and zero catastrophic false approvals. The cold replay
-completed in **701 seconds / 3.505 seconds per PDF**, below the four-second
+image scored **132.4486/150**: 46.6111 extraction, 69.95 classification,
+15.8875 calibration, and zero catastrophic false approvals. The cold replay
+completed in **710.11 seconds / 3.551 seconds per PDF**, below the four-second
 headroom target and the organizer's six-second limit. That runtime slice was
 drawn only from the 800 development packets; it did not mount the separate 200.
-Linux OCR produced one ordinary review-to-approval error and one
-review-to-denial error on that slice; neither was catastrophic.
+The organizer validator accepted all 200 expected rows with no duplicate,
+extra, missing, or invalid records.
 
 ## Generalization and limits
 
 There is no per-case answer table, identity routing, filename routing, exact
 date cell, document fingerprint, real-world demographic classifier, or
 terminal profile table in the current runtime. The disclosed fictional-species
-program hypotheses are isolated behind one flag. The negative-polarity claim
-is a separate, feature-flagged generator signal checked against readable
-signed controls.
+program hypotheses are split into review, denial, approval, and stricter
+approval-quorum flags. The negative-polarity claim is a separate,
+feature-flagged generator signal checked against readable signed controls.
 
 Species and home-world values are used only where the synthetic benchmark
 behaves as though it has a recurring program or jurisdiction policy. Surviving
@@ -437,7 +436,8 @@ That does not make public replay a private-set guarantee:
 - private/admin scoring may remove hidden-only fields from the extraction
   maximum, so public output-only gains need not transfer as score;
 - several complete fictional-program cohorts are small;
-- the exact 145.2377 score is development evidence, not a fresh validation;
+- the exact 138.2286 score is development evidence; the separate aggregate
+  validation score is 135.1749;
 - the historical 145.7151 score used rules removed by the generalization audit.
 
 Use the flags to run strict ablations, and preserve `NEEDS_REVIEW` when the

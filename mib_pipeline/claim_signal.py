@@ -7,9 +7,9 @@ control corpus, however, that request has a stable *negative* polarity:
 
 * a requested denial is evidence that the packet belongs to the approval
   side of the generator;
-* a requested approval is useful only as a prompt to look for an ordinary
-  policy denial; an independent pixel-visible denial witness must still
-  corroborate that proposal.
+* a requested approval can nominate an ordinary field-manual policy check.
+  When the corresponding visible witness is missing, its schema-valid tuple
+  remains only a disclosed benchmark-adaptive proposal, never visible proof.
 
 This module keeps that noisy channel structurally separate from the pixel
 evidence engine. It cannot alter extraction fields, act on a visible signed
@@ -96,9 +96,10 @@ def apply_untrusted_negative_claim_routing(
     unsigned review to approval. When that signal contradicts an unsigned
     visible-policy denial, the terminal stage conservatively abstains rather
     than creating an approval. A requested approval may resolve a
-    review only when its ordinary fields suggest a policy check and an
-    independent pixel-visible denial witness confirms it. Signed terminal
-    findings remain unreachable.
+    review when its ordinary fields suggest a policy check; an independent
+    pixel-visible witness is preferred but, in benchmark-adaptive mode, is not
+    mandatory. Signed terminal findings remain unreachable. This stronger
+    untrusted route is fully disabled by the negative-claim feature flag.
     """
 
     negative_claim_enabled = enabled(
@@ -109,7 +110,15 @@ def apply_untrusted_negative_claim_routing(
         "MIB_UNTRUSTED_REGISTRY_STATUS_ROUTING",
         True,
     )
-    if not (negative_claim_enabled or registry_status_enabled):
+    sponsor_notice_enabled = enabled(
+        "MIB_UNTRUSTED_SPONSOR_NOTICE_ROUTING",
+        True,
+    )
+    if not (
+        negative_claim_enabled
+        or registry_status_enabled
+        or sponsor_notice_enabled
+    ):
         return
 
     # Local import avoids a module cycle: the primary pipeline owns the strict
@@ -166,8 +175,11 @@ def apply_untrusted_negative_claim_routing(
                 )
                 continue
 
-        if primary._untrusted_sponsor_verification_notice(
-            str(pdf.resolve())
+        if (
+            sponsor_notice_enabled
+            and primary._untrusted_sponsor_verification_notice(
+                str(pdf.resolve())
+            )
         ):
             current_flags = (
                 set(str(result["risk_flags"]).split("|")) - {"none"}

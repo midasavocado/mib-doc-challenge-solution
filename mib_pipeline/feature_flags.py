@@ -99,6 +99,14 @@ EVIDENCE_FLAGS = (
         "pixel-visible denial witness corroborates it.",
     ),
     FeatureFlag(
+        "MIB_UNTRUSTED_SPONSOR_NOTICE_ROUTING",
+        "1",
+        "Use a case-bound native sponsor-verification notice as a disclosed "
+        "program proposal; the diplomatic exception requires an emitted "
+        "paid/waived status, no emitted risk flag, and the remaining common "
+        "approval-safety vetoes, but not independent visible fee proof.",
+    ),
+    FeatureFlag(
         "MIB_CORROBORATED_PAYLOAD_EXTRACTION",
         "1",
         "Use a schema-valid hidden tuple only to select or denoise a value "
@@ -148,6 +156,13 @@ EVIDENCE_FLAGS = (
         "explicitly missing MED-3 B-13, or an archival waiver-authority gap.",
     ),
     FeatureFlag(
+        "MIB_MED3_ABSENT_BIOMETRIC_REVIEW",
+        "1",
+        "Require an affirmative clean B-13 state for unsigned MED-3 approval; "
+        "enabled as the conservative zero-catastrophic-approval default even "
+        "though merely absent panels also occur in valid development approvals.",
+    ),
+    FeatureFlag(
         "MIB_STRICT_FENCE_RECOVERY",
         "1",
         "Recover a strict-fence review only from a repeated negative claim, "
@@ -156,9 +171,46 @@ EVIDENCE_FLAGS = (
     ),
     FeatureFlag(
         "MIB_EXPERIMENTAL_SYNTHETIC_POLICY",
+        "0",
+        "Legacy master switch for all disclosed fictional-program policies; "
+        "disabled by default after opaque validation showed that the combined "
+        "family did not transfer and added catastrophic false approvals.",
+    ),
+    FeatureFlag(
+        "MIB_EXPERIMENTAL_REVIEW_POLICY",
+        "0",
+        "Preserve review for recurring visible program/source authority gaps. "
+        "This family can only demote an unsigned approval to NEEDS_REVIEW; "
+        "disabled because its development gain did not transfer in aggregate "
+        "validation.",
+    ),
+    FeatureFlag(
+        "MIB_EXPERIMENTAL_DENIAL_POLICY",
+        "0",
+        "Resolve a review to denial for recurring, visibly sourced compound "
+        "program-authority failures; it can never create an approval and is "
+        "disabled because the combined directional candidate did not transfer.",
+    ),
+    FeatureFlag(
+        "MIB_EXPERIMENTAL_APPROVAL_POLICY",
+        "0",
+        "Recover approvals from low-support fictional program hypotheses; "
+        "disabled because the combined approval family failed opaque transfer.",
+    ),
+    FeatureFlag(
+        "MIB_EXPERIMENTAL_APPROVAL_QUORUM",
         "1",
-        "Apply disclosed low-support fictional program and damaged-page "
-        "presence policies; intended for explicit ablation.",
+        "Enable the disclosed source-topology and low-support fictional-program "
+        "approval hypotheses, independently of the broader historical policy "
+        "bundle; the combined family improved aggregate validation without "
+        "adding a catastrophic false approval.",
+    ),
+    FeatureFlag(
+        "MIB_BLURRED_MANUAL_APPROVAL_RECOVERY",
+        "0",
+        "Recover an APPROVED word envelope from a damaged rendered manual "
+        "finding; separately ablatable because its development support is "
+        "small and opaque validation improved when it was disabled.",
     ),
     # Remaining evidence and output boundaries.
     FeatureFlag(
@@ -207,15 +259,27 @@ EVIDENCE_PROFILES = {
     "visible_evidence_only": {
         "MIB_UNTRUSTED_NEGATIVE_CLAIM_ROUTING": "0",
         "MIB_UNTRUSTED_REGISTRY_STATUS_ROUTING": "0",
+        "MIB_UNTRUSTED_SPONSOR_NOTICE_ROUTING": "0",
         "MIB_CORROBORATED_PAYLOAD_EXTRACTION": "0",
         "MIB_NON_TEMPLATE_PAYLOAD_RECONCILIATION": "0",
         "MIB_UNTRUSTED_PAYLOAD_PROJECTION": "0",
         "MIB_UNTRUSTED_NATIVE_OUTPUT_READER": "0",
+        "MIB_EXPERIMENTAL_REVIEW_POLICY": "0",
+        "MIB_EXPERIMENTAL_DENIAL_POLICY": "0",
+        "MIB_EXPERIMENTAL_APPROVAL_POLICY": "0",
+        "MIB_EXPERIMENTAL_APPROVAL_QUORUM": "0",
+        "MIB_BLURRED_MANUAL_APPROVAL_RECOVERY": "0",
     },
     "experimental_signals_off": {
         "MIB_UNTRUSTED_NEGATIVE_CLAIM_ROUTING": "0",
         "MIB_UNTRUSTED_REGISTRY_STATUS_ROUTING": "0",
+        "MIB_UNTRUSTED_SPONSOR_NOTICE_ROUTING": "0",
         "MIB_EXPERIMENTAL_SYNTHETIC_POLICY": "0",
+        "MIB_EXPERIMENTAL_REVIEW_POLICY": "0",
+        "MIB_EXPERIMENTAL_DENIAL_POLICY": "0",
+        "MIB_EXPERIMENTAL_APPROVAL_POLICY": "0",
+        "MIB_EXPERIMENTAL_APPROVAL_QUORUM": "0",
+        "MIB_BLURRED_MANUAL_APPROVAL_RECOVERY": "0",
     },
 }
 
@@ -257,6 +321,7 @@ def runtime_mode() -> str:
     payload_flags = (
         "MIB_UNTRUSTED_NEGATIVE_CLAIM_ROUTING",
         "MIB_UNTRUSTED_REGISTRY_STATUS_ROUTING",
+        "MIB_UNTRUSTED_SPONSOR_NOTICE_ROUTING",
         "MIB_CORROBORATED_PAYLOAD_EXTRACTION",
         "MIB_NON_TEMPLATE_PAYLOAD_RECONCILIATION",
         "MIB_UNTRUSTED_PAYLOAD_PROJECTION",

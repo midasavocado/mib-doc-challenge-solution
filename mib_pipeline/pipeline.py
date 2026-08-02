@@ -4857,8 +4857,6 @@ def _untrusted_sponsor_verification_notice(pdf_path: str) -> bool:
     precedence.
     """
 
-    if not enabled("MIB_UNTRUSTED_REGISTRY_STATUS_ROUTING", True):
-        return False
     expected_id = Path(pdf_path).stem.removeprefix("MIB-")
     try:
         with _PDFIUM_TEXT_LOCK:
@@ -7461,8 +7459,6 @@ def main(input_dir: str, output_path: str) -> None:
     _snap_names_to_batch_vocabulary(predictions)
     _adopt_valid_source_applicant_reads(predictions)
     _replace_unsupported_name(predictions)
-    _impute_closed_vocabulary_modes(predictions)
-    _repair_rare_arrival_years(predictions)
     from .evidence_audit import apply_evidence_adjudication
 
     apply_evidence_adjudication(predictions, evidence_rows)
@@ -7512,6 +7508,14 @@ def main(input_dir: str, output_path: str) -> None:
     _repair_rapid_review_flag_rows(pdfs, predictions)
     _apply_post_extraction_review_safeguard(predictions)
     _apply_final_output_embargo_safeguard(predictions)
+    # Terminal recovery is intentionally allowed to reconsider an unsigned
+    # review, but it must never erase one of the same packet-local visible
+    # denial witnesses enforced by the primary output guard. Reapply that
+    # existing public-policy invariant after every recovery and field repair,
+    # immediately before freezing adjudication. This is source precedence,
+    # not a new case or identity rule.
+    for pdf in pdfs:
+        _apply_output_policy_guard(pdf, predictions[pdf.stem])
     # Freeze terminal outputs before any untrusted/native extraction reader.
     # The restore below makes this boundary structural even if a future
     # extraction helper accidentally touches adjudication or route confidence.
@@ -7544,6 +7548,13 @@ def main(input_dir: str, output_path: str) -> None:
     _repair_authenticated_attestation_visas(predictions)
     _fill_final_unresolved_dip1_from_payload(pdfs, predictions)
     _repair_near_native_intake_names(pdfs, predictions)
+    # Batch modes and dominant-year repair are output-only guesses. Running
+    # them before adjudication made policy depend on the size and composition
+    # of the input directory, despite the helpers' documented extraction-only
+    # contract. Keep them behind the terminal decision boundary so a 160-case
+    # shard and a 5,000-case submission use the same packet-local evidence.
+    _impute_closed_vocabulary_modes(predictions)
+    _repair_rare_arrival_years(predictions)
     _repair_single_disputed_imputed_purpose(pdfs, predictions)
     for case_id, (adjudication, confidence) in terminal_outputs.items():
         predictions[case_id]["adjudication"] = adjudication

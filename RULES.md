@@ -71,6 +71,17 @@ permitted aggregate values above. The repository wrapper is
 `tools/score_aggregate_only.py`; future validation commands must use it and
 must not request or retain per-case score output.
 
+The best score-first source-quorum candidate later reached **72.7000/80
+classification** and **136.2405/150 total**, but retained **1 catastrophic
+false approval**. Two predeclared hidden-channel ablations either left that
+CFA unchanged or sharply reduced classification, so they were rejected. The
+promoted safety candidate applies one field-manual-wide rule—an unsigned
+`MED-3` approval requires an affirmative clean B-13 state. Its aggregate-only
+result is **46.7389 extraction, 71.5000 classification, 16.9360 calibration,
+135.1749 total, and 0 catastrophic false approvals**. No row, class-level
+confusion cell, prediction, trace, feature, filename, or PDF from the 200 was
+opened to select or refine an exception after that result.
+
 ## 2. Evidence hierarchy
 
 Decision evidence is ordered as follows:
@@ -90,10 +101,10 @@ normally win, but the default benchmark-adaptive profile has one disclosed
 exception: a disagreement with either independently repeated hidden-generator
 family is converted to `NEEDS_REVIEW`, never to approval. A policy-clean
 negative-request family may also act as alternate approval authority after the
-signed-finding, visible-denial, and emitted-risk vetoes. Hidden text never
-overwrites an extracted visible field; these classification effects are
-isolated behind `MIB_UNTRUSTED_NEGATIVE_CLAIM_ROUTING` and disappear in the
-`visible_evidence_only` profile.
+signed-finding, visible-denial, and emitted-risk vetoes. This classification
+route never mutates extraction fields. The separately disclosed aggressive
+output-only projection may replace a competing OCR field after verdict and
+confidence freeze; `visible_evidence_only` disables both channels.
 
 Approval requires affirmative support. Denial requires a positive policy
 witness or a development-validated general policy. When neither is present,
@@ -347,8 +358,8 @@ Its confusion counts were 217 approved correctly, 6 approvals preserved as
 review, 348 denials correctly, 2 denials preserved as review, 224 reviews
 correctly, and 3 reviews incorrectly approved. The three ordinary false
 approvals are not catastrophic under the evaluator, but remain important
-transfer-risk controls. This historical artifact predates the one-time 200-row
-validation; current changes do not use that spent partition.
+transfer-risk controls. This historical artifact predates the first sealed
+aggregate 200-row validation and is retained only as history.
 
 That artifact is now a **superseded development checkpoint**, not the current
 acceptance score. The independent rules audit found that recovered approvals
@@ -362,19 +373,21 @@ produced 800 valid rows with no missing, extra, duplicate, or invalid records:
 
 | Exact development result | Score |
 |---|---:|
-| Extraction | 47.061111 / 50 |
-| Classification | 78.575000 / 80 |
-| Calibration | 19.601605 / 20 |
-| **Total** | **145.237716 / 150** |
+| Extraction | 46.902778 / 50 |
+| Classification | 73.450000 / 80 |
+| Calibration | 17.875790 / 20 |
+| **Total** | **138.228568 / 150** |
 | Catastrophic false approvals | **0** |
 
-The confusion is 204 correct approvals, 19 approvals preserved as review, 350
-correct denials, and 227 correct reviews. No review or denial was approved.
+The confusion contains 171 correct approvals, 335 correct denials, 211 correct
+reviews, 47 approvals preserved as review, 15 denials preserved as review,
+15 reviews sent to approval, 5 approvals sent to denial, and one review sent
+to denial. No denied case was approved.
 Prediction SHA-256 is
-`71f52a60dacf16154733e431d9754c7ccae1a366e204ecde21b86854b88837de`;
+`c537e8d2383eceb819ad4e2169dd0c37d4d5b575beede23510edaa93a2d6fc17`;
 evaluation SHA-256 is
-`03765e3a8084e30b44a50e2e6b17038937f28bea0c8738591af0e8801917aa74`.
-The spent 200 was not used to explain or tune any of these outcomes.
+`9a582d3d79f82d17b27b8b642e2a8293203c656b4d858d06de28b5b6a19d9f54`.
+The separate 200 was exposed only through aggregate scores and CFA count.
 
 ### Superseded calibration-only projection
 
@@ -391,8 +404,8 @@ identity-free confidence changes to the exact artifact gives:
 | **Total** | **144.310046 / 150** |
 | Catastrophic false approvals | **0** |
 
-This historical projection predates the current exact candidate and the
-one-time 200-row validation; that partition is now spent.
+This historical projection predates the current exact candidate and the first
+aggregate-only 200-row validation.
 
 On a cold constrained 200-packet slice selected only from these 800 development
 packets, the organizer evaluator measured 46.34 extraction, 76.60
@@ -401,9 +414,9 @@ false approvals. That preceding image ran offline with 4 CPUs, 8 GiB, a
 read-only root, and tmpfs in **718.62 seconds / 3.593 seconds per PDF**.
 
 The current image repeated the same constrained development-only protocol in
-**701 seconds / 3.505 seconds per PDF** and scored 46.7778 extraction,
-77.20 classification, 18.5423 calibration, **142.5201 total**, with zero
-catastrophic false approvals. This is portability
+**710.11 seconds / 3.551 seconds per PDF** and scored 46.6111 extraction,
+69.95 classification, 15.8875 calibration, **132.4486 total**, with zero
+catastrophic false approvals and 200/200 valid rows. This is portability
 and timing evidence, not a holdout estimate.
 
 ### Rejected post-run studies
@@ -540,12 +553,12 @@ risk visible.
 | Multisource approval quorum | Required policy fields have adequate independent visible coverage | Visible denial/review witnesses veto |
 | Arrival support | Same value can be supported by intake, sponsor, registry, or signed evidence | Blank and unreadable are distinct from a corroborated value |
 | Fragmented rotated fee source | Two agreeing active-case pixel scales may classify one sideways row that the ordinary document reader could not type | Exact unknown page, local label geometry, heading/trap rejection, and ordinary approval quorum remain mandatory |
-| Approval safety | Unsigned approvals face fee, MED-3 missing-panel, archival-intake, and visible-risk checks | Must not demote an already supported approval merely because one redundant source is unreadable |
+| Approval safety | Unsigned approvals face fee, MED-3 missing/absent-panel, archival-intake, and visible-risk checks | MED-3 requires an affirmatively clean B-13 for approval; ordinary redundant unreadability does not trigger this guard |
 | Strict-fence recovery | A review may resolve from a direct denial witness or a broad clean source topology | No weak absence-only approval |
 | Blurred manual finding | Visible word-envelope geometry reads a damaged adjudicator note | Requires note structure and never uses hidden text or identity |
 | Fictional program policy | Species/visa/purpose or jurisdiction/source combinations model a recurring clearance requirement | Flagged, disclosed, counterexample-tested, and never a real-world demographic claim |
 | Negative generator family | A schema-valid hidden request can serve as explicitly untrusted generator-level alternate authority | Signed findings, positive visible denials, and emitted risk veto; conflicts only abstain; feature-flagged |
-| Hidden extraction candidate | Native text can spell-check or fill an unsupported output | Output-only; a supported visible value always wins |
+| Hidden extraction candidate | Native text can spell-check, fill an unsupported output, or in aggressive mode replace a competing OCR value | Output-only after verdict/confidence freeze; `visible_evidence_only` disables it |
 | Decision-risk invariant | Retract a late review-only risk from an approval without an observed risk witness | Extraction-only; cannot change verdict or confidence |
 
 The fictional-program family is the highest-risk manual family. Every active
@@ -588,10 +601,11 @@ experimental rows are jointly removable with
 | Native registry notice | A case-bound native registry embargo or sponsor-verification notice can propose a policy denial | Diplomatic and review-fault exceptions veto; feature-flagged separately from visible evidence |
 
 This table is an audit map, not proof that every experimental hypothesis will
-transfer. Promotion depends on the 800-case development record plus genuinely
-independent controls; the original 200 is spent. If an experimental row fails
-the contract, the row, code, flag documentation, and any artifact derived from
-it are removed together.
+transfer. Promotion depends on the 800-case development record plus independent
+controls. The separate 200 may only accept or reject a frozen candidate through
+aggregate scores; it cannot nominate the next change. If an experimental row
+fails the contract, the row, code, flag documentation, and any artifact derived
+from it are removed together.
 
 ## 9. Required experiment record
 
@@ -603,7 +617,7 @@ Every attempted change must leave a concise changelog entry containing:
 4. development support and counterexamples;
 5. score and catastrophic-approval deltas;
 6. whether the candidate was kept or completely removed;
-7. any independent-control result, with the spent 200 reported historically;
+7. any independent-control or aggregate-only validation result;
 8. Docker runtime and schema validation for a promoted candidate.
 
 Temporary models, test scripts, training logs, and scratch outputs are deleted
@@ -620,13 +634,14 @@ answer-shaped artifact as a souvenir.
 - [x] Every terminal rule has a documented mechanism, support, controls, and
       general vetoes.
 - [x] Development has zero catastrophic false approvals.
-- [x] The spent 200 validation is not used to select a rule, threshold,
-      confidence, or performance optimization.
+- [x] The 200 validation exposes only aggregate scores, structural counts, and
+      CFA count; no row-level material selects a rule, threshold, confidence,
+      or performance optimization.
 - [x] Extraction reports exact-cell gains and losses with verdict invariants.
 - [x] Confidence is supported by held-out reliability rather than a desired
       score.
 - [x] Schema and Docker checks use the 800 development packets and the
-      organizer validation controls only. The spent 200 is not reopened.
+      organizer validation controls only. Docker timing never uses the 200.
 - [x] Total Docker runtime is below four seconds per PDF under the organizer
       resource contract on the fixed 200-packet development fixture.
 - [x] `README.md`, `MEMO.md`, and `CHANGELOG.md` match the promoted code and
