@@ -7551,10 +7551,11 @@ def main(input_dir: str, output_path: str) -> None:
     benchmark_fit_predictions: dict[str, dict] | None = None
     if enabled("MIB_BENCHMARK_FIT_CLASSIFIER"):
         # Engine B receives the same extracted fields, but not Engine A's
-        # decision. Preserve A's pre-safety direction as an explicit lean and
-        # reset B to abstention so the two branches actually classify
-        # independently. The final arbiter may use B only when it corroborates
-        # that A lean; it cannot manufacture a direction of its own.
+        # decision. Preserve A's pre-safety direction as confidence evidence
+        # and reset B to abstention so the two branches actually classify
+        # independently. A decisive B result may resolve an A review only
+        # after the final arbiter's evidence and safety vetoes; the saved lean
+        # is not a direction-matching gate.
         benchmark_fit_predictions = {
             case_id: {
                 **prediction,

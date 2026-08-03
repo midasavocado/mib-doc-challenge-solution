@@ -35,20 +35,18 @@ artifact and an upper reference for the public-fit branch.
 
 | Candidate / evaluation boundary | Extraction | Classification | Calibration | Total | CFA |
 |---|---:|---:|---:|---:|---:|
-| Conservative default, public 1,000 candidate replay | 46.9478 | 73.4800 | 17.7769 | **138.2047** | 0 |
+| Submission candidate, exact constrained public 1,000 | 46.9478 | 76.9800 | 18.3819 | **142.3097** | 0 |
 | Generalized Engine A, development 800 | 46.9028 | 73.4500 | 17.8758 | **138.2286** | 0 |
 | Frozen aggregate-only 200 | 46.7389 | 71.5000 | 16.9360 | **135.1749** | 0 |
 | Superseded aggressive bridge, public 1,000 artifact replay | 46.6956 | 79.9400 | 19.9568 | **146.5924** | 0 |
 
 The 200 boundary exposed aggregate scores only; its PDFs, predictions,
 per-case errors, confusion cells, and traces were not used for rule discovery.
-The conservative-default row starts from a fresh constrained 1,000-case Docker
-run and deterministically replays the two rows changed by the final broad
-safety patch; both changed routes were rerun end to end as exact controls. It
-is not represented as a second full Docker run. The aggressive bridge row is
-an older artifact replay, not the current default. Historical experiments live
-in [CHANGELOG.md](CHANGELOG.md), while the active promotion protocol lives in
-[RULES.md](RULES.md).
+The submission-candidate row is a fresh, exact constrained 1,000-case Docker
+run of the frozen source: no row replay or post-run edit is included. The
+aggressive bridge row is an older artifact replay, not the current default.
+Historical experiments live in [CHANGELOG.md](CHANGELOG.md), while the active
+promotion protocol lives in [RULES.md](RULES.md).
 
 ## Architecture
 
@@ -65,7 +63,9 @@ decision:
    fields with its public-training model and residual policy rules.
 5. The arbiter applies the conservative agreement contract.
 6. Extraction-only reconciliation runs behind the frozen decision boundary.
-7. One JSON object is written per case.
+7. Materially incomplete unsigned approvals receive one cache-backed refresh;
+   that route may only fail closed to `NEEDS_REVIEW`.
+8. One JSON object is written atomically per case.
 
 ### Arbiter contract
 
@@ -84,6 +84,10 @@ flowchart TD
     V -->|no| BRIDGE["Use B decision with variable confidence"]
     W -->|yes| REVIEW
     W -->|no| BRIDGE
+    KEEP --> L{"Incomplete unsigned approval after extraction freeze?"}
+    L -->|no| OUT["Emit final decision"]
+    L -->|yes · refreshed B denial| REVIEW
+    L -->|yes · otherwise| OUT
 ```
 
 A decisive bridge starts only from Engine A's explicit abstention. A B approval requires
@@ -97,6 +101,11 @@ reverse route is fail-closed: when B abstains and an unsigned A approval falls
 inside a repeated identity-free source-program family, the arbiter uses
 review. The high-precision development family is 7/7 review across folds; the
 mixed family is 4/6, so their confidences are 0.88 and 0.60 respectively.
+After extraction freezes, the pipeline re-probes only unsigned A approvals
+with materially incomplete authority: unknown risk state, fewer than four of
+seven labeled core fields, no visible arrival, and neither an intake nor
+registry page. A refreshed B denial can demote that approval to review; it
+cannot create a denial or approval.
 
 Bridge confidence is not a vote count. A and B consume overlapping fields, so
 their probabilities are correlated. The arbiter uses a correlation-discounted
@@ -160,7 +169,8 @@ Public labels are a separate boundary. Engine B was trained locally on the
 cells, name shape, sponsor-number shape, and two generated CatBoost heads.
 There is no case-ID answer table or manual output-row editing. Nevertheless,
 Engine B is benchmark-adaptive and private transfer is unproven; that is why it
-is quarantined behind one flag and given only a corroborating vote.
+is quarantined behind one flag and limited to review resolution or fail-closed
+demotion after deterministic safety vetoes.
 
 ## Feature flags
 
@@ -172,7 +182,7 @@ fast instead of silently choosing a mode.
 
 | Profile | Configuration | Purpose |
 |---|---|---|
-| Default conservative dual engine | no environment changes | Engine A + corroborating Engine B |
+| Default conservative dual engine | no environment changes | Engine A + bounded Engine B |
 | Generalized only | `MIB_BENCHMARK_FIT_CLASSIFIER=0` | remove public-fit Engine B |
 | Visible evidence only | use `EVIDENCE_PROFILES["visible_evidence_only"]` | disable Engine B, native-text channels, and experimental policy |
 | Experimental signals off | use `EVIDENCE_PROFILES["experimental_signals_off"]` | retain ordinary extraction while removing benchmark-fit and synthetic signals |
@@ -264,7 +274,7 @@ python3 scripts/validate_submission.py \
   --manifest data/train_labels.csv
 ```
 
-The organizer contract verified on August 2, 2026 remains:
+The organizer contract re-verified on August 3, 2026 remains:
 
 - exactly two runtime arguments;
 - network disabled;
@@ -277,36 +287,33 @@ The organizer contract verified on August 2, 2026 remains:
 
 The upstream challenge core is still commit `38ce8883`; the organizer rules,
 schema, evaluator, and Docker runner have not changed since the prior audit.
-The exact constrained runner processed the full public 1,000 in 3,546 seconds:
-**3.546 seconds/PDF total** across primary OCR, selective RapidOCR audit,
-extraction repair, both classifiers, arbitration, calibration, and JSONL
-writing. All 1,000 rows were valid and complete. That run exposed two
-catastrophic false approvals: one late extraction repair bypassed an existing
-embargo invariant, and one unsigned Engine-A approval contradicted Engine B's
-denial. The final patch re-applies the existing embargo guard after extraction
-freeze and converts the latter disagreement only to review. Exact constrained
-controls confirmed both transitions, and a deterministic two-row replay of the
-full artifact scores 46.9478 extraction, 73.4800 classification, 17.7769
-calibration, **138.2047 total, and 0 CFA**.
+The exact constrained runner processed the full public 1,000 in **3,624.11
+seconds (3.62411 seconds/PDF total)** across primary OCR, selective RapidOCR
+audit, extraction repair, both classifiers, arbitration, calibration, and
+JSONL writing. All 1,000 rows were valid and complete. The organizer evaluator
+measured 46.9478 extraction, 76.9800 classification, 18.3819 calibration,
+**142.3097 total, and 0 CFA**. Prediction SHA-256 is
+`bbc285500ab23e4844da50ce5db68c7718680113c61c6930c4ffed2eb94cff86`;
+evaluation SHA-256 is
+`62d5a2c60d8160f6a017075f43c2f9cf308f828b49072931df461fd316ed3a89`.
 
 The same frozen image then processed the organizer's complete 5,000-packet
 validation directory under the identical constrained contract. It emitted
 **5,000 unique, schema-valid rows with zero missing or extra case IDs**. The
-container-start-to-artifact wall clock was 17,682.5 seconds, or **3.5365
+container-start-to-artifact wall clock was **19,717.37 seconds, or 3.943474
 seconds/PDF total**, including primary OCR, the 4,022-packet selective audit,
 extraction repair, both classifiers, arbitration, calibration, and JSONL
 writing. The validator reran successfully against
-`data/validation_manifest.csv`. The final validation artifact is 1,754,045
+`data/validation_manifest.csv`. The final validation artifact is 1,749,573
 bytes with SHA-256
-`64c39e664ad3990f969ef18bb8fd3245d5238375c9098fce9ce30752ce703dc2`.
+`85ca045b1a5a652d6cc9d041966bee05cba17fc75675ef3be10ecccbb517b536`.
 
-The final ARM64 image is 217,916,620 bytes (0.20 GiB). The full-run prediction
-SHA-256 is `f8829b96111c7907eaa33f33c1560548c9195fa244dd812f696ccc86de055b4a`;
-the final-candidate replay and evaluation SHA-256 values are
-`a83ac07eedccd59928a2eb2d452fe213568f1ee6ef9c63dbe445eca0d6457cb5`
-and `ef2cb22643daf69641921636b678e09be1673f2f142907ca16d936b7b5b9df62`.
-The earlier cold 50-packet release check ran at 4.34 seconds/PDF and the prior
-200-packet check at 3.551 seconds/PDF; none is private-score evidence.
+The frozen ARM64 image is 217,919,202 bytes (0.20 GiB), image ID
+`sha256:fc5c5eb8057d850b91e033ff3b49b28016afbd14cc4879b1264ba340c635bded`,
+and was built from the source tree now represented by commit `456ef717` after
+the attribution-only history rewrite. The validation directory has no public
+labels, so these are runtime, completeness, and reproducibility facts—not a
+private score claim.
 
 ## Generalization and compliance
 
@@ -322,7 +329,8 @@ Engine B intentionally has a different disclosure:
 - it includes name and sponsor **shape** features and small policy cells;
 - it contains no validation answer file, case-ID lookup, or per-row output map;
 - the two exported model heads are static offline code;
-- the conservative arbiter prevents it from acting without Engine-A support.
+- its authority is limited to A-review resolution and fail-closed demotion of
+  incomplete unsigned approvals, always after deterministic safety vetoes.
 
 The organizer explicitly permits candidate-trained models and hand-written
 rules, but the private set and code review decide whether those choices

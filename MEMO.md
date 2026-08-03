@@ -99,34 +99,36 @@ instead of being fixed at 0.90.
 | Engine B | Kept behind one flag | Useful benchmark-adaptive second opinion; transfer remains uncertain |
 | Fixed bridge confidence of 0.90 | Removed in candidate | Discarded real variation in evidence and model agreement |
 
-## Current checkpoint
+## Submission checkpoint
 
-The last frozen conservative public replay scored 46.9478 extraction, 73.4800
-classification, 17.7769 calibration, and **138.2047 total**, with zero CFA.
-Its exact image processed all 5,000 validation packets in 17,682.5 seconds
-(3.5365 seconds/PDF), producing 5,000 unique complete rows. The new
-evidence-dependent bridge is being compared against that checkpoint before it
-can replace it; final measurements and artifact hashes will be inserted only
-after the exact constrained runs finish.
+The frozen candidate completed an exact constrained public 1,000 run at
+46.9478 extraction, 76.9800 classification, 18.3819 calibration, and
+**142.3097 total**, with zero CFA. End-to-end runtime was 3,624.11 seconds
+(3.62411 seconds/PDF). This is the current source's measured score, not an
+artifact replay.
+
+The same 217,919,202-byte ARM64 image then processed all 5,000 unlabeled
+validation packets under the organizer's offline 4-vCPU/8-GiB contract. It
+emitted 5,000 unique complete rows in 19,717.37 seconds (3.943474 seconds/PDF).
+The organizer validator and an independent manifest/schema audit both passed.
+Artifact SHA-256 is
+`85ca045b1a5a652d6cc9d041966bee05cba17fc75675ef3be10ecccbb517b536`.
 
 ## Roadmap from here
 
-1. **Submission freeze.** Accept the bridge only if the public 1,000 improves
-   without a CFA. Rebuild Docker, repeat the constrained 1,000, then run the
-   5,000 once and record runtime, completeness, image, and artifact hashes.
-2. **Replace public-fit B.** Train identity-free B heads inside nested 800-side
+1. **Replace public-fit B.** Train identity-free B heads inside nested 800-side
    folds using source state, evidence completeness, and document damage—not
    names, exact sponsor values, or residual lookup cells.
-3. **Calibrate the final arbiter jointly.** Learn agreement, disagreement, and
+2. **Calibrate the final arbiter jointly.** Learn agreement, disagreement, and
    abstention reliability out of fold. Confidence should express correctness,
    not serve as a leaderboard knob.
-4. **Share expensive vision work.** Fuse the primary and audit schedulers
+3. **Share expensive vision work.** Fuse the primary and audit schedulers
    around one immutable raster cache, then add region-local biometric recovery
    without expanding whole-page OCR cost.
-5. **Remove batch dependence.** Replace submission-wide name and year modes
+4. **Remove batch dependence.** Replace submission-wide name and year modes
    with a fixed development vocabulary so singleton and large-batch decisions
    remain identical.
-6. **Build new controls.** Generate unseen damage/layout variants and require
+5. **Build new controls.** Generate unseen damage/layout variants and require
    zero-CFA transfer before any broader approval authority is enabled.
 
 The central lesson from the changelog is pleasantly unglamorous: the durable

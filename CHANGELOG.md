@@ -1,10 +1,12 @@
 # MIB Document Challenge — Development Changelog
 
-This file preserves the detailed experiment history in chronological form.
-For the current architecture, measured result, and engineering rationale, see
-[`MEMO.md`](MEMO.md).
+This archival file preserves the detailed experiment history in chronological
+form; it is not the reviewer entry point or the current behavior contract. For
+the current architecture, measured result, and engineering rationale, see
+[`README.md`](README.md) and [`MEMO.md`](MEMO.md). For promotion constraints
+and the reviewer index, see [`RULES.md`](RULES.md).
 
-Last updated: 2026-08-01
+Last updated: 2026-08-03
 
 ## 2026-08-01 — prospective zero-CFA candidate replaces public-fit checkpoint
 

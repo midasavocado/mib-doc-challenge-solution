@@ -1,5 +1,10 @@
 # MIB Generalization and Evidence Rules
 
+> Reviewer index: sections 1–3 define the evidence and split boundaries;
+> section 5 records confidence policy; section 8 records accepted/rejected
+> experiments; section 10 is the release checklist. This is an archival audit
+> contract, not a second runtime README.
+
 > Historical generalized-mode protocol. The user explicitly reopened the
 > 1,000 public training rows for the separately flagged
 > `MIB_BENCHMARK_FIT_CLASSIFIER` experiment. The prohibitions and 800/200 seal
@@ -676,8 +681,12 @@ answer-shaped artifact as a souvenir.
       desired score.
 - [x] The exact organizer-style Docker runner completed all 1,000 public
       packets with 1,000 valid rows under the published resource controls.
-- [x] Total end-to-end Docker runtime is 3.546 seconds per PDF under the
-      organizer resource contract on that full 1,000-packet run.
+- [x] Total end-to-end Docker runtime is 3.62411 seconds per PDF under the
+      organizer resource contract on the exact full 1,000-packet run; it
+      scores 142.3097/150 with 0 CFA.
+- [x] The identical frozen image completed all 5,000 validation packets in
+      19,717.37 seconds (3.943474 seconds/PDF), with 5,000 unique complete
+      rows and manifest/schema validation passing.
 - [x] `README.md`, `MEMO.md`, and `CHANGELOG.md` distinguish generalized
       Engine-A results, aggregate-only validation, public-fit Engine B, and
       deterministic artifact replay.
