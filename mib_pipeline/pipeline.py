@@ -4544,20 +4544,11 @@ def _process(pdf: Path) -> dict:
     except Exception as error:
         with _PRINT_LOCK:
             print(f"warning: {pdf.stem}: {type(error).__name__}: {error}", file=sys.stderr)
-        return {
-            "case_id": pdf.stem,
-            "applicant_name": "unknown",
-            "species_code": "unknown",
-            "home_world": "unknown",
-            "visa_class": "unknown",
-            "sponsor_id": "SPN-0000",
-            "arrival_date": "1900-01-01",
-            "declared_purpose": "unknown",
-            "risk_flags": "none",
-            "fee_status": "unknown",
-            "adjudication": "NEEDS_REVIEW",
-            "confidence": 0.15,
-        }
+        fallback = _parse_packet(pdf.stem, [])
+        fallback["adjudication"] = "NEEDS_REVIEW"
+        fallback["confidence"] = 0.0
+        fallback["_initial_processing_failed"] = True
+        return fallback
 
 
 def _apply_output_policy_guard(pdf: Path, result: dict) -> None:
@@ -7440,6 +7431,7 @@ def main(input_dir: str, output_path: str) -> None:
     )
     started = time.monotonic()
     predictions: dict[str, dict] = {}
+    failed_case_ids: set[str] = set()
     # Threads, not processes.  A process pool was measured under the real
     # grading contract (4 vCPU container, 200 packets) at 494.4 s against the
     # thread pool's 490.3 s: the run is bound by the OCR subprocesses saturating
@@ -7451,6 +7443,11 @@ def main(input_dir: str, output_path: str) -> None:
             pdf = futures[future]
             try:
                 predictions[pdf.stem] = future.result()
+                if predictions[pdf.stem].pop(
+                    "_initial_processing_failed",
+                    False,
+                ):
+                    failed_case_ids.add(pdf.stem)
             except Exception as error:
                 # One malformed or unexpectedly unreadable PDF must not erase
                 # every completed result. The ordinary empty-page parser gives
@@ -7459,6 +7456,7 @@ def main(input_dir: str, output_path: str) -> None:
                 predictions[pdf.stem] = _parse_packet(pdf.stem, [])
                 predictions[pdf.stem]["adjudication"] = "NEEDS_REVIEW"
                 predictions[pdf.stem]["confidence"] = 0.0
+                failed_case_ids.add(pdf.stem)
                 with _PRINT_LOCK:
                     print(
                         f"warning: initial packet read {pdf.stem}: "
@@ -7475,6 +7473,17 @@ def main(input_dir: str, output_path: str) -> None:
                     flush=True,
                 )
 
+    processable_pdfs = [
+        pdf for pdf in pdfs if pdf.stem not in failed_case_ids
+    ]
+    if failed_case_ids:
+        print(
+            f"[packet-quarantine] count={len(failed_case_ids)} "
+            "reason=initial_pdf_read_failed",
+            file=sys.stderr,
+            flush=True,
+        )
+
     from .evidence_audit import (
         audit_required,
         compute_evidence_rows,
@@ -7488,13 +7497,13 @@ def main(input_dir: str, output_path: str) -> None:
     evidence_pdfs = (
         [
             pdf
-            for pdf in pdfs
+            for pdf in processable_pdfs
             if audit_required(predictions[pdf.stem])
         ]
         if enabled("MIB_PIXEL_EVIDENCE_AUDIT", True)
         else []
     )
-    skipped_audit = len(pdfs) - len(evidence_pdfs)
+    skipped_audit = len(processable_pdfs) - len(evidence_pdfs)
     if skipped_audit:
         print(
             f"[evidence-audit] skipped={skipped_audit} "
@@ -7523,7 +7532,11 @@ def main(input_dir: str, output_path: str) -> None:
     apply_evidence_adjudication(predictions, evidence_rows)
     from .terminal_approval import apply_terminal_evidence_rules
 
-    apply_terminal_evidence_rules(pdfs, predictions, evidence_rows)
+    apply_terminal_evidence_rules(
+        processable_pdfs,
+        predictions,
+        evidence_rows,
+    )
     # The terminal quorum may recover a weak review, but it must not outrank a
     # packet-local finding, hard risk, or uncertainty fence. Reapplying the
     # already-computed audit is cheap and restores that evidence precedence.
@@ -7531,7 +7544,7 @@ def main(input_dir: str, output_path: str) -> None:
     from .claim_signal import apply_untrusted_negative_claim_routing
 
     apply_untrusted_negative_claim_routing(
-        pdfs,
+        processable_pdfs,
         predictions,
         evidence_rows,
     )
@@ -7558,7 +7571,7 @@ def main(input_dir: str, output_path: str) -> None:
             )
 
             apply_benchmark_fit_classifier(
-                pdfs,
+                processable_pdfs,
                 benchmark_fit_predictions,
             )
         except Exception as error:
@@ -7586,28 +7599,46 @@ def main(input_dir: str, output_path: str) -> None:
     # Last adjudication stage: experimental generator signals may propose an
     # approval, but no unsigned result leaves the pipeline without the same
     # general evidence-sufficiency check.
-    apply_strict_approval_safety(pdfs, predictions, evidence_rows)
-    apply_strict_fence_recovery(pdfs, predictions, evidence_rows)
+    apply_strict_approval_safety(
+        processable_pdfs,
+        predictions,
+        evidence_rows,
+    )
+    apply_strict_fence_recovery(
+        processable_pdfs,
+        predictions,
+        evidence_rows,
+    )
     # Recovery is allowed to reconsider a review, but it is not allowed to
     # bypass the approval requirements that created the review. This second
     # pass is the final fail-closed gate for every recovered approval.
-    apply_strict_approval_safety(pdfs, predictions, evidence_rows)
-    _repair_closed_six_arrival_months(pdfs, predictions)
+    apply_strict_approval_safety(
+        processable_pdfs,
+        predictions,
+        evidence_rows,
+    )
+    _repair_closed_six_arrival_months(processable_pdfs, predictions)
     # These repairs are intentionally after every adjudication stage.  They can
     # improve emitted extraction fields, but they cannot create a new policy
     # premise or change a verdict during this battery-friendly experiment.
     _repair_supporting_name_consensus(predictions)
     _repair_authenticated_attestation_applicants(predictions)
-    _repair_high_resolution_attestation_applicants(pdfs, predictions)
+    _repair_high_resolution_attestation_applicants(
+        processable_pdfs,
+        predictions,
+    )
     _repair_registry_attestation_name_conflict(predictions, evidence_rows)
     _repair_evidence_core_disagreements(
-        pdfs,
+        processable_pdfs,
         predictions,
         evidence_rows,
     )
     _apply_post_adjudication_extraction_repairs(predictions)
-    _apply_authenticated_fee_source_repair(pdfs, predictions)
-    _repair_rapid_review_flag_rows(pdfs, predictions)
+    _apply_authenticated_fee_source_repair(
+        processable_pdfs,
+        predictions,
+    )
+    _repair_rapid_review_flag_rows(processable_pdfs, predictions)
     _apply_post_extraction_review_safeguard(predictions)
     _apply_final_output_embargo_safeguard(predictions)
     # Terminal recovery is intentionally allowed to reconsider an unsigned
@@ -7616,7 +7647,7 @@ def main(input_dir: str, output_path: str) -> None:
     # existing public-policy invariant after every recovery and field repair,
     # immediately before freezing adjudication. This is source precedence,
     # not a new case or identity rule.
-    for pdf in pdfs:
+    for pdf in processable_pdfs:
         _apply_output_policy_guard(pdf, predictions[pdf.stem])
     # Freeze terminal outputs before any untrusted/native extraction reader.
     # The restore below makes this boundary structural even if a future
@@ -7632,24 +7663,40 @@ def main(input_dir: str, output_path: str) -> None:
     }
     # Last by design: untrusted-text spelling repair cannot become a premise
     # for policy or trigger a second adjudication transition.
-    _apply_payload_guided_extraction(pdfs, predictions)
-    _apply_non_template_payload_reconciliation(pdfs, predictions)
-    _apply_untrusted_payload_projection(pdfs, predictions)
-    _repair_untrusted_native_supporting_names(pdfs, predictions)
+    _apply_payload_guided_extraction(processable_pdfs, predictions)
+    _apply_non_template_payload_reconciliation(
+        processable_pdfs,
+        predictions,
+    )
+    _apply_untrusted_payload_projection(processable_pdfs, predictions)
+    _repair_untrusted_native_supporting_names(
+        processable_pdfs,
+        predictions,
+    )
     # A decision-consistent guess is weaker than any accepted field candidate,
     # so it runs only after payload reconciliation and fills only what remains
     # unresolved. Adjudication has already finished.
-    _apply_decision_consistent_risk_projection(pdfs, predictions)
+    _apply_decision_consistent_risk_projection(
+        processable_pdfs,
+        predictions,
+    )
     _project_registry_identity_conflict(predictions, evidence_rows)
-    _retract_unsupported_review_risk(pdfs, predictions, evidence_rows)
+    _retract_unsupported_review_risk(
+        processable_pdfs,
+        predictions,
+        evidence_rows,
+    )
     # Exact pixel-verified source text gets final field precedence over every
     # OCR and untrusted-payload hypothesis. These remain extraction-only.
     from .evidence_audit import repair_source_corroborated_fields
 
     repair_source_corroborated_fields(evidence_rows, predictions)
     _repair_authenticated_attestation_visas(predictions)
-    _fill_final_unresolved_dip1_from_payload(pdfs, predictions)
-    _repair_near_native_intake_names(pdfs, predictions)
+    _fill_final_unresolved_dip1_from_payload(
+        processable_pdfs,
+        predictions,
+    )
+    _repair_near_native_intake_names(processable_pdfs, predictions)
     # Batch modes and dominant-year repair are output-only guesses. Running
     # them before adjudication made policy depend on the size and composition
     # of the input directory, despite the helpers' documented extraction-only
@@ -7657,7 +7704,10 @@ def main(input_dir: str, output_path: str) -> None:
     # shard and a 5,000-case submission use the same packet-local evidence.
     _impute_closed_vocabulary_modes(predictions)
     _repair_rare_arrival_years(predictions)
-    _repair_single_disputed_imputed_purpose(pdfs, predictions)
+    _repair_single_disputed_imputed_purpose(
+        processable_pdfs,
+        predictions,
+    )
     for case_id, (adjudication, confidence) in terminal_outputs.items():
         predictions[case_id]["adjudication"] = adjudication
         predictions[case_id]["confidence"] = confidence
@@ -7673,7 +7723,7 @@ def main(input_dir: str, output_path: str) -> None:
     )
     _apply_post_blend_platt_confidence_calibration(predictions)
     _project_sparse_review_risk_fault(
-        pdfs,
+        processable_pdfs,
         predictions,
         evidence_rows,
     )
@@ -7684,7 +7734,7 @@ def main(input_dir: str, output_path: str) -> None:
         )
 
         refresh_incomplete_approval_second_opinions(
-            pdfs,
+            processable_pdfs,
             predictions,
             benchmark_fit_predictions,
         )
