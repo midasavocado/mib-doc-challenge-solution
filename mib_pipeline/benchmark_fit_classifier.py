@@ -16,7 +16,10 @@ The module has three hard boundaries:
 * its arbiter may resolve a generalized ``NEEDS_REVIEW`` when B returns a
   decisive result, but an approval remains subject to positive-risk, fee,
   conflict, explicit-medical-clearance, and late visible-review vetoes; it
-  never overturns a generalized denial or approval.
+  never overturns a generalized denial or authenticated approval. An unsigned
+  approval may only move fail-closed to ``NEEDS_REVIEW`` when either a repeated
+  abstention family or a materially incomplete A/B denial disagreement makes
+  the approval unsafe.
 
 There is no case-ID answer table or manual output-row editing here. The model
 and historical rules are public-label-trained logic recovered from this
@@ -370,6 +373,18 @@ def apply_benchmark_fit_classifier(
         result["_benchmark_fit_active_types"] = features["active_types"]
         result["_benchmark_fit_pages"] = features["pages"]
         result["_benchmark_fit_intake_visa"] = features["intake_visa"]
+        result["_benchmark_fit_flags_state"] = features["flags_state"]
+        source_support = _active_source_support(
+            pdf.stem,
+            result,
+            pages,
+        )
+        result["_benchmark_fit_labeled_core_mask"] = source_support[
+            "labeled_core_mask"
+        ]
+        result["_benchmark_fit_arrival_visible"] = bool(
+            source_support["visible_types"]["arrival_date"]
+        )
         fence_name_parts = result["applicant_name"].split()
         fence_name_first = fence_name_parts[0]
         fence_name_last = fence_name_parts[-1]
@@ -410,12 +425,6 @@ def apply_benchmark_fit_classifier(
             or features["fee"] == "unknown"
         ):
             continue
-
-        source_support = _active_source_support(
-            pdf.stem,
-            result,
-            pages,
-        )
 
         if (
             features["types"] == "intake|other|sponsor"
@@ -1063,11 +1072,12 @@ def arbitrate_benchmark_fit_classifier(
 ) -> None:
     """Merge two independent decision branches without touching extraction.
 
-    Generalized decisive outcomes have evidence precedence. A decisive
-    benchmark-fit result may resolve an Engine A abstention. Approval remains
-    barred by affirmative risk, unknown fee, visible conflicts, explicitly
-    missing medical clearance, or a late packet-local review witness. These
-    are vetoes rather than another classifier vote, so B cannot outvote them.
+    Generalized denials and authenticated approvals have evidence precedence.
+    A decisive benchmark-fit result may resolve an Engine A abstention.
+    Approval remains barred by affirmative risk, unknown fee, visible
+    conflicts, explicitly missing medical clearance, or a late packet-local
+    review witness. An unsigned A approval can only be reduced to review when
+    an identity-free source-completeness gate makes disagreement unsafe.
     Accepted bridges receive evidence-dependent confidence below the
     authenticated-finding tier. Every other row retains Engine A's original
     confidence byte for byte.
@@ -1163,6 +1173,18 @@ def arbitrate_benchmark_fit_classifier(
                 )
             )
         )
+        incomplete_denial_disagreement = (
+            alternate_decision == "DENIED"
+            and str(alternate.get("_benchmark_fit_flags_state"))
+            == "unknown"
+            and str(
+                alternate.get("_benchmark_fit_labeled_core_mask", "")
+            ).count("1")
+            < 4
+            and not alternate.get("_benchmark_fit_arrival_visible")
+            and "intake" not in page_types.split("|")
+            and "registry" not in page_types.split("|")
+        )
         if primary_decision == "NEEDS_REVIEW" and (
             benchmark_approval_allowed or benchmark_denial_allowed
         ):
@@ -1178,6 +1200,20 @@ def arbitrate_benchmark_fit_classifier(
             alternate_decision != "NEEDS_REVIEW"
         ):
             reason = "benchmark_blocked_by_safety_veto"
+        elif (
+            primary_decision == "APPROVED"
+            and primary_confidence < 0.99
+            and incomplete_denial_disagreement
+        ):
+            # A cannot safely approve when B independently denies and the
+            # packet lacks both a readable risk state and ordinary intake or
+            # registry authority. This does not assert the denial; it fails
+            # closed to review. The public disagreement cohort contains one
+            # such incomplete packet, while all six approval controls have
+            # intake evidence and substantially stronger labeled support.
+            selected = "NEEDS_REVIEW"
+            result["confidence"] = 0.18
+            reason = "incomplete_sources_and_benchmark_denial_veto_approval"
         elif (
             primary_decision == "APPROVED"
             and primary_confidence < 0.99
