@@ -7449,7 +7449,23 @@ def main(input_dir: str, output_path: str) -> None:
         futures = {executor.submit(_process, pdf): pdf for pdf in pdfs}
         for completed, future in enumerate(concurrent.futures.as_completed(futures), 1):
             pdf = futures[future]
-            predictions[pdf.stem] = future.result()
+            try:
+                predictions[pdf.stem] = future.result()
+            except Exception as error:
+                # One malformed or unexpectedly unreadable PDF must not erase
+                # every completed result. The ordinary empty-page parser gives
+                # this case a schema-valid, fail-closed review row; the later
+                # evidence audit may still recover it independently.
+                predictions[pdf.stem] = _parse_packet(pdf.stem, [])
+                predictions[pdf.stem]["adjudication"] = "NEEDS_REVIEW"
+                predictions[pdf.stem]["confidence"] = 0.0
+                with _PRINT_LOCK:
+                    print(
+                        f"warning: initial packet read {pdf.stem}: "
+                        f"{type(error).__name__}; fail-closed row retained",
+                        file=sys.stderr,
+                        flush=True,
+                    )
             with _PRINT_LOCK:
                 elapsed = time.monotonic() - started
                 print(
@@ -7664,8 +7680,14 @@ def main(input_dir: str, output_path: str) -> None:
     if benchmark_fit_predictions is not None:
         from .benchmark_fit_classifier import (
             arbitrate_benchmark_fit_classifier,
+            refresh_incomplete_approval_second_opinions,
         )
 
+        refresh_incomplete_approval_second_opinions(
+            pdfs,
+            predictions,
+            benchmark_fit_predictions,
+        )
         arbitrate_benchmark_fit_classifier(
             predictions,
             benchmark_fit_predictions,
@@ -7713,11 +7735,20 @@ def main(input_dir: str, output_path: str) -> None:
             print(f"[local-cache] {summary}", file=sys.stderr, flush=True)
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
-    with output.open("w", encoding="utf-8") as handle:
-        for pdf in pdfs:
-            prediction = predictions[pdf.stem]
-            submission_row = {
-                field: prediction[field]
-                for field in _SUBMISSION_FIELDS
-            }
-            handle.write(json.dumps(submission_row, sort_keys=True) + "\n")
+    temporary = output.with_name(f".{output.name}.tmp-{os.getpid()}")
+    try:
+        with temporary.open("w", encoding="utf-8") as handle:
+            for pdf in pdfs:
+                prediction = predictions[pdf.stem]
+                submission_row = {
+                    field: prediction[field]
+                    for field in _SUBMISSION_FIELDS
+                }
+                handle.write(
+                    json.dumps(submission_row, sort_keys=True) + "\n"
+                )
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, output)
+    finally:
+        temporary.unlink(missing_ok=True)

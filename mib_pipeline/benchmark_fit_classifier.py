@@ -1066,6 +1066,81 @@ def apply_benchmark_fit_classifier(
         )
 
 
+def _incomplete_approval_authority(alternate: dict) -> bool:
+    """Return whether ordinary approval authority is materially incomplete."""
+
+    page_types = set(
+        str(alternate.get("_benchmark_fit_active_types", "none")).split("|")
+    )
+    return (
+        str(alternate.get("_benchmark_fit_flags_state")) == "unknown"
+        and str(
+            alternate.get("_benchmark_fit_labeled_core_mask", "")
+        ).count("1")
+        < 4
+        and not alternate.get("_benchmark_fit_arrival_visible")
+        and not ({"intake", "registry"} & page_types)
+    )
+
+
+def refresh_incomplete_approval_second_opinions(
+    pdfs: list[Path],
+    generalized: dict[str, dict],
+    benchmark_fit: dict[str, dict] | None,
+) -> None:
+    """Refresh B only where a final unsigned approval lacks normal authority.
+
+    Engine B is first evaluated before late extraction-only reconciliation so
+    it remains independent of Engine A's terminal decision. A materially
+    incomplete unsigned approval is the one safe exception: re-reading only
+    that small fail-closed cohort after extraction freezes lets B account for
+    repaired fields. The refreshed result can only help the arbiter demote an
+    approval to review; it still cannot create an approval or denial.
+    """
+
+    if benchmark_fit is None or not enabled("MIB_BENCHMARK_FIT_CLASSIFIER"):
+        return
+    pdf_by_case = {pdf.stem: pdf for pdf in pdfs}
+    refreshed: dict[str, dict] = {}
+    refreshed_pdfs: list[Path] = []
+    for case_id, primary in generalized.items():
+        alternate = benchmark_fit.get(case_id)
+        pdf = pdf_by_case.get(case_id)
+        if (
+            alternate is None
+            or pdf is None
+            or primary.get("adjudication") != "APPROVED"
+            or float(primary.get("confidence", 0.0)) >= 0.99
+            or not _incomplete_approval_authority(alternate)
+        ):
+            continue
+        refreshed[case_id] = {
+            **primary,
+            "_bridge_primary_lean_decision": alternate.get(
+                "_bridge_primary_lean_decision",
+                "NEEDS_REVIEW",
+            ),
+            "_bridge_primary_lean_confidence": alternate.get(
+                "_bridge_primary_lean_confidence",
+                0.0,
+            ),
+            "adjudication": "NEEDS_REVIEW",
+            "confidence": 0.18,
+        }
+        refreshed_pdfs.append(pdf)
+    if not refreshed:
+        return
+    apply_benchmark_fit_classifier(refreshed_pdfs, refreshed)
+    benchmark_fit.update(refreshed)
+    _pipeline._trace_decision(
+        "*",
+        "benchmark_fit_late_incomplete_approval_refresh",
+        candidates=len(refreshed),
+        identity_features=False,
+        authority="review_only",
+    )
+
+
 def arbitrate_benchmark_fit_classifier(
     generalized: dict[str, dict],
     benchmark_fit: dict[str, dict] | None,
@@ -1175,15 +1250,7 @@ def arbitrate_benchmark_fit_classifier(
         )
         incomplete_denial_disagreement = (
             alternate_decision == "DENIED"
-            and str(alternate.get("_benchmark_fit_flags_state"))
-            == "unknown"
-            and str(
-                alternate.get("_benchmark_fit_labeled_core_mask", "")
-            ).count("1")
-            < 4
-            and not alternate.get("_benchmark_fit_arrival_visible")
-            and "intake" not in page_types.split("|")
-            and "registry" not in page_types.split("|")
+            and _incomplete_approval_authority(alternate)
         )
         if primary_decision == "NEEDS_REVIEW" and (
             benchmark_approval_allowed or benchmark_denial_allowed
