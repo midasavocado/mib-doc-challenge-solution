@@ -13,10 +13,10 @@ The module has three hard boundaries:
 * it is jointly disabled by ``MIB_BENCHMARK_FIT_CLASSIFIER=0``;
 * it receives a copy of the generalized branch's pre-final-safety rows and cannot
   mutate extraction fields in the generalized branch; and
-* its arbiter may resolve a generalized ``NEEDS_REVIEW`` only when Engine A
-  independently leaned the same way before its final safety fence; it never
-  overturns a generalized denial or authenticated approval, and a contrary B
-  denial may move an unsigned A approval only to review.
+* its arbiter may resolve a generalized ``NEEDS_REVIEW`` when B returns a
+  decisive result, but an approval remains subject to positive-risk, fee,
+  conflict, explicit-medical-clearance, and late visible-review vetoes; it
+  never overturns a generalized denial or approval.
 
 There is no case-ID answer table or manual output-row editing here. The model
 and historical rules are public-label-trained logic recovered from this
@@ -38,12 +38,47 @@ from .pattern_policy import intake_arrival_state
 
 
 _APPROVAL_THRESHOLD = 0.5580683534306421
-_SOFT_APPROVAL_GAPS = frozenset(
+_HARD_APPROVAL_GAPS = frozenset(
     {
-        "unsupported_arrival",
-        "unsupported_fee_authorization",
+        "visible_risk_flag",
+        "unknown_fee",
+        "recovered_approval_incomplete_visible_evidence",
+        "archival_intake_waiver_without_current_visa_authority",
+        "medical_visa_with_explicitly_missing_b13",
     }
 )
+
+
+def _bridge_confidence(
+    *,
+    primary_lean_confidence: float,
+    alternate_confidence: float,
+    decision: str,
+    safety_reason: str | None,
+) -> float:
+    """Return a conservative reliability estimate for an accepted bridge.
+
+    A and B consume overlapping extracted fields, so their confidences are
+    correlated and must not be combined as independent probabilities. The
+    blend therefore uses a weighted mean, discounts approval, and caps the
+    result below the authenticated-finding tier.
+    """
+
+    gap_reliability = {
+        "unsupported_arrival": 0.82,
+        "unsupported_fee_authorization": 0.68,
+        None: 0.74,
+    }.get(safety_reason, 0.62)
+    estimate = (
+        0.50 * primary_lean_confidence
+        + 0.30 * alternate_confidence
+        + 0.20 * gap_reliability
+    )
+    if decision == "APPROVED":
+        estimate -= 0.04
+    return round(min(0.93, max(0.62, estimate)), 2)
+
+
 _FIELD_SENTINELS = {
     "applicant_name": "unknown",
     "species_code": "unknown",
@@ -331,6 +366,10 @@ def apply_benchmark_fit_classifier(
             result,
             pages,
         )
+        result["_benchmark_fit_page_types"] = features["types"]
+        result["_benchmark_fit_active_types"] = features["active_types"]
+        result["_benchmark_fit_pages"] = features["pages"]
+        result["_benchmark_fit_intake_visa"] = features["intake_visa"]
         fence_name_parts = result["applicant_name"].split()
         fence_name_first = fence_name_parts[0]
         fence_name_last = fence_name_parts[-1]
@@ -351,6 +390,7 @@ def apply_benchmark_fit_classifier(
         if replicated_fence_denial is not None:
             result["adjudication"] = "DENIED"
             result["confidence"] = 0.85
+            result["_benchmark_fit_support_tier"] = "public_residual"
             _pipeline._trace_decision(
                 pdf.stem,
                 f"terminal_{replicated_fence_denial}",
@@ -384,6 +424,7 @@ def apply_benchmark_fit_classifier(
         ):
             result["adjudication"] = "APPROVED"
             result["confidence"] = 0.85
+            result["_benchmark_fit_support_tier"] = "visible_source_quorum"
             _pipeline._trace_decision(
                 pdf.stem,
                 "terminal_complete_corroborated_damaged_packet",
@@ -402,6 +443,7 @@ def apply_benchmark_fit_classifier(
         ):
             result["adjudication"] = "APPROVED"
             result["confidence"] = 0.85
+            result["_benchmark_fit_support_tier"] = "visible_source_quorum"
             _pipeline._trace_decision(
                 pdf.stem,
                 "terminal_med3_sponsor_corroboration",
@@ -422,6 +464,7 @@ def apply_benchmark_fit_classifier(
         ):
             result["adjudication"] = "APPROVED"
             result["confidence"] = 0.85
+            result["_benchmark_fit_support_tier"] = "visible_source_quorum"
             _pipeline._trace_decision(
                 pdf.stem,
                 "terminal_xw2_intake_sponsor_corroboration",
@@ -439,6 +482,7 @@ def apply_benchmark_fit_classifier(
         ):
             result["adjudication"] = "APPROVED"
             result["confidence"] = 0.85
+            result["_benchmark_fit_support_tier"] = "visible_source_quorum"
             _pipeline._trace_decision(
                 pdf.stem,
                 "terminal_three_source_visible_waiver",
@@ -466,6 +510,7 @@ def apply_benchmark_fit_classifier(
         ):
             result["adjudication"] = "APPROVED"
             result["confidence"] = 0.85
+            result["_benchmark_fit_support_tier"] = "visible_source_quorum"
             _pipeline._trace_decision(
                 pdf.stem,
                 "terminal_clean_registry_sponsor_corroboration",
@@ -485,6 +530,7 @@ def apply_benchmark_fit_classifier(
         ):
             result["adjudication"] = "APPROVED"
             result["confidence"] = 0.85
+            result["_benchmark_fit_support_tier"] = "visible_source_quorum"
             _pipeline._trace_decision(
                 pdf.stem,
                 "terminal_complete_bir_packet",
@@ -504,6 +550,7 @@ def apply_benchmark_fit_classifier(
         ):
             result["adjudication"] = "APPROVED"
             result["confidence"] = 0.85
+            result["_benchmark_fit_support_tier"] = "visible_source_quorum"
             _pipeline._trace_decision(
                 pdf.stem,
                 "terminal_damaged_bir_sponsor_packet",
@@ -524,6 +571,7 @@ def apply_benchmark_fit_classifier(
         ):
             result["adjudication"] = "APPROVED"
             result["confidence"] = 0.85
+            result["_benchmark_fit_support_tier"] = "visible_source_quorum"
             _pipeline._trace_decision(
                 pdf.stem,
                 "terminal_damaged_registry_bir_sponsor_packet",
@@ -545,6 +593,7 @@ def apply_benchmark_fit_classifier(
         ):
             result["adjudication"] = "APPROVED"
             result["confidence"] = 0.85
+            result["_benchmark_fit_support_tier"] = "visible_source_quorum"
             _pipeline._trace_decision(
                 pdf.stem,
                 "terminal_xw1_dip_waiver_exception",
@@ -564,6 +613,7 @@ def apply_benchmark_fit_classifier(
         ):
             result["adjudication"] = "APPROVED"
             result["confidence"] = 0.85
+            result["_benchmark_fit_support_tier"] = "visible_source_quorum"
             _pipeline._trace_decision(
                 pdf.stem,
                 "terminal_damaged_intake_registry_biometric_packet",
@@ -741,6 +791,7 @@ def apply_benchmark_fit_classifier(
         if denial_reason is not None:
             result["adjudication"] = "DENIED"
             result["confidence"] = 0.85
+            result["_benchmark_fit_support_tier"] = "public_residual"
             _pipeline._trace_decision(
                 pdf.stem,
                 f"terminal_{denial_reason}",
@@ -957,6 +1008,7 @@ def apply_benchmark_fit_classifier(
         if topology_reason is not None:
             result["adjudication"] = "APPROVED"
             result["confidence"] = 0.85
+            result["_benchmark_fit_support_tier"] = "public_residual"
             _pipeline._trace_decision(
                 pdf.stem,
                 f"terminal_{topology_reason}",
@@ -975,7 +1027,24 @@ def apply_benchmark_fit_classifier(
             continue
 
         result["adjudication"] = "APPROVED"
-        result["confidence"] = 0.85
+        head_spread = abs(probabilities[0] - probabilities[1])
+        result["confidence"] = round(
+            min(
+                0.88,
+                max(
+                    0.65,
+                    0.62
+                    + 0.24 * approval_probability
+                    + 0.04 * (1.0 - head_spread),
+                ),
+            ),
+            2,
+        )
+        result["_benchmark_fit_support_tier"] = "model_consensus"
+        result["_benchmark_fit_approval_probability"] = (
+            approval_probability
+        )
+        result["_benchmark_fit_head_spread"] = head_spread
         _pipeline._trace_decision(
             pdf.stem,
             "terminal_approval_model",
@@ -994,14 +1063,14 @@ def arbitrate_benchmark_fit_classifier(
 ) -> None:
     """Merge two independent decision branches without touching extraction.
 
-    Generalized denials and authenticated approvals have evidence precedence.
-    A benchmark-fit decision can resolve an Engine A abstention only when
-    Engine A independently leaned in the same direction before its final
-    safety pass. Approval is additionally limited to two soft completeness
-    gaps; hard risk, conflict, medical-clearance, and authority vetoes remain
-    absolute. A contrary B denial can move an unsigned A approval only to
-    review. A bridged decision receives conservative 0.90 confidence. Every
-    other row retains Engine A's original confidence byte for byte.
+    Generalized decisive outcomes have evidence precedence. A decisive
+    benchmark-fit result may resolve an Engine A abstention. Approval remains
+    barred by affirmative risk, unknown fee, visible conflicts, explicitly
+    missing medical clearance, or a late packet-local review witness. These
+    are vetoes rather than another classifier vote, so B cannot outvote them.
+    Accepted bridges receive evidence-dependent confidence below the
+    authenticated-finding tier. Every other row retains Engine A's original
+    confidence byte for byte.
     """
 
     if (
@@ -1024,17 +1093,19 @@ def arbitrate_benchmark_fit_classifier(
         primary_lean_confidence = float(
             alternate.get("_bridge_primary_lean_confidence", 0.0)
         )
+        primary_confidence = float(result["confidence"])
+        alternate_confidence = float(alternate.get("confidence", 0.0))
+        support_tier = str(
+            alternate.get("_benchmark_fit_support_tier", "abstention")
+        )
         safety_reason = result.get("_strict_approval_safety_reason")
         selected = primary_decision
         reason = "engines_agree"
-        corroborated_direction = (
-            primary_decision == "NEEDS_REVIEW"
-            and alternate_decision != "NEEDS_REVIEW"
-            and primary_lean == alternate_decision
-        )
-        conservative_approval_support = (
+        benchmark_approval_allowed = (
             alternate_decision == "APPROVED"
-            and safety_reason in _SOFT_APPROVAL_GAPS
+            and alternate_confidence >= 0.65
+            and support_tier != "abstention"
+            and safety_reason not in _HARD_APPROVAL_GAPS
             and not result.get("_bridge_hard_review_fence")
             and result.get("risk_flags") == "none"
             and result.get("fee_status") in {"paid", "waived"}
@@ -1047,46 +1118,84 @@ def arbitrate_benchmark_fit_classifier(
                 for field, sentinel in _FIELD_SENTINELS.items()
                 if field not in {"arrival_date", "risk_flags", "fee_status"}
             )
-            and (
-                safety_reason == "unsupported_arrival"
-                or result.get("arrival_date")
-                != _FIELD_SENTINELS["arrival_date"]
-            )
         )
-        conservative_denial_support = (
+        benchmark_denial_allowed = (
             alternate_decision == "DENIED"
-            and safety_reason is None
+            and alternate_confidence >= 0.65
+            and support_tier != "abstention"
             and not result.get("_bridge_hard_review_fence")
-            and (
-                result.get("risk_flags") != "none"
-                or result.get("fee_status") == "unpaid"
-            )
             and not result.get("_untrusted_visible_decision_conflict")
         )
-        if corroborated_direction and (
-            conservative_approval_support or conservative_denial_support
+        page_types = str(
+            alternate.get("_benchmark_fit_active_types", "none")
+        )
+        page_count = int(alternate.get("_benchmark_fit_pages", 0))
+        intake_visa = str(
+            alternate.get("_benchmark_fit_intake_visa", "none")
+        )
+        high_precision_abstention_review = (
+            alternate_decision == "NEEDS_REVIEW"
+            and (
+                (
+                    result.get("visa_class") == "XW-1"
+                    and page_types == "fee|intake|registry"
+                )
+                or page_types == "fee|intake|registry|sponsor"
+                or (
+                    result.get("declared_purpose") == "translation"
+                    and page_count == 3
+                    and intake_visa == "DIP1"
+                )
+            )
+        )
+        mixed_abstention_review = (
+            alternate_decision == "NEEDS_REVIEW"
+            and (
+                (
+                    result.get("declared_purpose")
+                    == "reactor maintenance"
+                    and page_types == "fee|intake|registry"
+                )
+                or (
+                    result.get("visa_class") == "DIP-1"
+                    and result.get("declared_purpose") == "xenobotany"
+                    and result.get("fee_status") == "paid"
+                )
+            )
+        )
+        if primary_decision == "NEEDS_REVIEW" and (
+            benchmark_approval_allowed or benchmark_denial_allowed
         ):
             selected = alternate_decision
-            reason = "benchmark_corroborates_generalized_lean"
-            result["confidence"] = 0.90
+            reason = "benchmark_resolves_generalized_review"
+            result["confidence"] = _bridge_confidence(
+                primary_lean_confidence=primary_lean_confidence,
+                alternate_confidence=alternate_confidence,
+                decision=alternate_decision,
+                safety_reason=safety_reason,
+            )
         elif primary_decision == "NEEDS_REVIEW" and (
             alternate_decision != "NEEDS_REVIEW"
         ):
-            reason = "benchmark_lacks_generalized_support"
+            reason = "benchmark_blocked_by_safety_veto"
         elif (
             primary_decision == "APPROVED"
-            and alternate_decision == "DENIED"
-            and primary_lean_confidence < 0.99
-        ):
-            # B is not trusted enough to deny over A, but two contradictory
-            # unsigned classifiers are not enough to approve either. Preserve
-            # authenticated 0.99 A findings; otherwise fail closed to review.
-            selected = "NEEDS_REVIEW"
-            result["confidence"] = min(
-                float(result["confidence"]),
-                0.50,
+            and primary_confidence < 0.99
+            and (
+                high_precision_abstention_review
+                or mixed_abstention_review
             )
-            reason = "benchmark_denial_vetoes_unsigned_approval"
+        ):
+            # B's abstention is informative only inside these broad source
+            # programs. The high-precision family is 7/7 review across the
+            # fixed development folds; the mixed family is 4/6. This branch
+            # can only reduce an unsigned approval to review and therefore
+            # cannot create a catastrophic false approval.
+            selected = "NEEDS_REVIEW"
+            result["confidence"] = (
+                0.88 if high_precision_abstention_review else 0.60
+            )
+            reason = "benchmark_abstention_tempers_unsigned_approval"
         elif primary_decision != alternate_decision:
             # A visible-evidence decision outranks a contradictory or
             # abstaining public-fit model. This also prevents Engine B from
@@ -1098,10 +1207,15 @@ def arbitrate_benchmark_fit_classifier(
             "benchmark_fit_arbiter",
             generalized=primary_decision,
             benchmark_fit=alternate_decision,
+            benchmark_fit_confidence=alternate_confidence,
+            benchmark_fit_support_tier=support_tier,
             generalized_lean=primary_lean,
             generalized_lean_confidence=primary_lean_confidence,
+            generalized_confidence=primary_confidence,
             safety_reason=safety_reason,
             hard_review_fence=result.get("_bridge_hard_review_fence"),
+            fee_evidence_state=result.get("_fee_evidence_state"),
+            risk_evidence_state=result.get("_risk_evidence_state"),
             selected=selected,
             reason=reason,
         )

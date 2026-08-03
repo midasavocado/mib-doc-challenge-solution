@@ -86,12 +86,15 @@ EVIDENCE_FLAGS = (
         "MIB_BENCHMARK_FIT_CLASSIFIER",
         "1",
         "Run the quarantined public-training classifier as a second decision "
-        "branch. It may resolve a generalized NEEDS_REVIEW only when it "
-        "corroborates Engine A's independent pre-safety lean and no hard "
-        "evidence veto applies; a contrary B denial may demote an unsigned A "
-        "approval only to review. It uses public-label-trained topology, "
-        "identity-shape, sponsor-shape, and document-profile features; "
-        "disable for generalized-only behavior.",
+        "branch. A decisive B result may resolve an Engine-A NEEDS_REVIEW, "
+        "and B abstention may demote an unsigned A approval to review only "
+        "inside repeated identity-free source-program families. It cannot "
+        "override an A denial or authenticated approval. Positive risk, "
+        "unknown fee, explicit missing medical clearance, visible conflict, "
+        "and late packet-local review evidence veto a B approval. The branch "
+        "uses public-label-trained topology, identity-shape, sponsor-shape, "
+        "and document-profile features; disable for generalized-only "
+        "behavior.",
     ),
     # Hidden/native PDF text boundary. The first flag exposes the one
     # classification use: an independently repeated negative-polarity

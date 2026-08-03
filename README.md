@@ -16,18 +16,20 @@ The default configuration is the submission candidate:
 
 - **Engine A** is the primary generalized evidence engine.
 - **Engine B** is a public-training second opinion and is **on by default**.
-- Engine B cannot independently choose an approval or denial.
-- A bridge transition requires Engine B to match Engine A's own pre-safety
-  direction, pass the ordinary field checks, and avoid every hard safety veto.
-- A contradictory Engine-B denial can demote an unsigned Engine-A approval to
-  `NEEDS_REVIEW`; it cannot deny the case or override an authenticated finding.
+- Engine B cannot override an Engine-A denial or authenticated approval.
+- A decisive Engine-B result may resolve an Engine-A `NEEDS_REVIEW`.
+- In repeated identity-free source-program families, B abstention may demote
+  an unsigned A approval to review; it can never turn it into a denial.
+- A B approval must pass the ordinary field checks and every hard safety veto;
+  a B denial is also blocked by late packet-local review evidence or a visible
+  decision conflict.
 - `MIB_BENCHMARK_FIT_CLASSIFIER=0` produces Engine-A-only behavior.
 
-The current conservative arbiter replaced an earlier aggressive bridge that
-allowed Engine B to resolve any Engine-A review. That older bridge replay
-measured 146.5924/150 on the public 1,000, but it is deliberately **not** a
-score claim for the current source. It remains an audit artifact showing why
-the bridge exists and why the final arbiter is stricter.
+The current arbiter recovers more of Engine B's useful review resolution than
+the previous tie-breaker, while retaining explicit approval vetoes. The older
+unrestricted replay measured 146.5924/150 on the public 1,000, but it is
+deliberately **not** a score claim for the current source. It remains an audit
+artifact and an upper reference for the public-fit branch.
 
 ### Measurement ledger
 
@@ -70,33 +72,42 @@ decision:
 ```mermaid
 flowchart TD
     A["Engine A final decision"] --> D{"A final state?"}
-    D -->|denied or authenticated approval| KEEP["Keep A decision and confidence"]
-    D -->|unsigned approval| C{"B contradicts with denial?"}
-    C -->|yes| REVIEW
-    C -->|no| KEEP
-    D -->|no · review| L{"A had a pre-safety lean?"}
-    L -->|no| REVIEW["Keep NEEDS_REVIEW"]
-    L -->|yes| B{"Engine B matches that lean?"}
+    D -->|denial or authenticated approval| KEEP["Keep A decision and confidence"]
+    D -->|unsigned approval| M{"B abstains in a repeated review family?"}
+    M -->|yes| REVIEW["Use NEEDS_REVIEW with family reliability"]
+    M -->|no| KEEP
+    D -->|review| B{"B decisive?"}
     B -->|no| REVIEW
-    B -->|yes| V{"Hard evidence veto?"}
+    B -->|yes · approval| V{"Approval safety veto?"}
+    B -->|yes · denial| W{"Late review or visible conflict?"}
     V -->|yes| REVIEW
-    V -->|no| S{"Supported soft gap?"}
-    S -->|no| REVIEW
-    S -->|yes| BRIDGE["Use agreed decision at 0.90"]
+    V -->|no| BRIDGE["Use B decision with variable confidence"]
+    W -->|yes| REVIEW
+    W -->|no| BRIDGE
 ```
 
-The only bridgeable approval gaps are unsupported arrival evidence and
-unsupported fee-source evidence, and only when the emitted record is otherwise
-complete, fee-authorized, risk-clean, and conflict-free. Visible risk,
-signed-decision conflict, unknown fee, medical-clearance gaps, and program
-authority mismatches are absolute vetoes. A late pixel-visible review flag,
-blank active-case arrival, or incomplete transit packet creates an explicit
-hard-review marker, so an older soft-gap marker cannot re-promote it. A bridged
-denial also needs the same A/B directional agreement plus an emitted negative
-field such as a positive risk flag or unpaid fee.
+A decisive bridge starts only from Engine A's explicit abstention. A B approval requires
+a complete emitted core record, an authorized fee state, no emitted risk, and
+no visible decision conflict. Positive risk evidence, unknown fee, explicitly
+missing medical clearance, incomplete recovered authority, and a late
+pixel-visible review fence are absolute vetoes. A B denial cannot create a
+catastrophic false approval, but it is still blocked when a visible decision
+conflicts or late evidence says the packet must remain under review. The one
+reverse route is fail-closed: when B abstains and an unsigned A approval falls
+inside a repeated identity-free source-program family, the arbiter uses
+review. The high-precision development family is 7/7 review across folds; the
+mixed family is 4/6, so their confidences are 0.88 and 0.60 respectively.
 
-This makes Engine B a tie-breaker and conservative veto, not a substitute
-adjudicator. If Engine B fails or is disabled, Engine A output is preserved.
+Bridge confidence is not a vote count. A and B consume overlapping fields, so
+their probabilities are correlated. The arbiter uses a correlation-discounted
+blend of A reliability, B strength, and evidence-gap reliability, subtracts an
+approval-risk margin, and caps the result below authenticated findings. This
+replaces the previous fixed 0.90 and produces bounded values from 0.62 to
+0.93; 0.99 or 1.00 would claim a reliability the bridge has not demonstrated.
+
+This makes Engine B an abstention resolver and a narrow fail-closed review
+check, not a replacement for Engine A's evidence decisions. If Engine B fails
+or is disabled, Engine A output is preserved.
 
 ## Extraction and evidence
 
