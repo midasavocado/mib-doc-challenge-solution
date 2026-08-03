@@ -1092,17 +1092,18 @@ def refresh_incomplete_approval_second_opinions(
 
     Engine B is first evaluated before late extraction-only reconciliation so
     it remains independent of Engine A's terminal decision. A materially
-    incomplete unsigned approval is the one safe exception: re-reading only
-    that small fail-closed cohort after extraction freezes lets B account for
-    repaired fields. The refreshed result can only help the arbiter demote an
-    approval to review; it still cannot create an approval or denial.
+    incomplete unsigned approval is the one safe exception: re-evaluating the
+    final unsigned-approval cohort after extraction freezes lets B account for
+    repaired fields, after which only materially incomplete rows are retained.
+    The refreshed result can only help the arbiter demote an approval to
+    review; it still cannot create an approval or denial.
     """
 
     if benchmark_fit is None or not enabled("MIB_BENCHMARK_FIT_CLASSIFIER"):
         return
     pdf_by_case = {pdf.stem: pdf for pdf in pdfs}
-    refreshed: dict[str, dict] = {}
-    refreshed_pdfs: list[Path] = []
+    probes: dict[str, dict] = {}
+    probe_pdfs: list[Path] = []
     for case_id, primary in generalized.items():
         alternate = benchmark_fit.get(case_id)
         pdf = pdf_by_case.get(case_id)
@@ -1111,10 +1112,9 @@ def refresh_incomplete_approval_second_opinions(
             or pdf is None
             or primary.get("adjudication") != "APPROVED"
             or float(primary.get("confidence", 0.0)) >= 0.99
-            or not _incomplete_approval_authority(alternate)
         ):
             continue
-        refreshed[case_id] = {
+        probes[case_id] = {
             **primary,
             "_bridge_primary_lean_decision": alternate.get(
                 "_bridge_primary_lean_decision",
@@ -1127,14 +1127,25 @@ def refresh_incomplete_approval_second_opinions(
             "adjudication": "NEEDS_REVIEW",
             "confidence": 0.18,
         }
-        refreshed_pdfs.append(pdf)
+        probe_pdfs.append(pdf)
+    if not probes:
+        return
+    # Late extraction repair can change both B's verdict and the source mask,
+    # so eligibility must be recomputed from the frozen row rather than from
+    # B's earlier snapshot. Rendering is cache-backed inside the same run.
+    apply_benchmark_fit_classifier(probe_pdfs, probes)
+    refreshed = {
+        case_id: alternate
+        for case_id, alternate in probes.items()
+        if _incomplete_approval_authority(alternate)
+    }
     if not refreshed:
         return
-    apply_benchmark_fit_classifier(refreshed_pdfs, refreshed)
     benchmark_fit.update(refreshed)
     _pipeline._trace_decision(
         "*",
         "benchmark_fit_late_incomplete_approval_refresh",
+        probed=len(probes),
         candidates=len(refreshed),
         identity_features=False,
         authority="review_only",
