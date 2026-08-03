@@ -6,6 +6,7 @@ __pycache__
 **/*.py[cod]
 .pytest_cache/
 tests/
+work/
 predictions.jsonl
 evaluation.json
 case-scores.jsonl
